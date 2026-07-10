@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bathymetry Studio — Abyss</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/css/theme.css">
+<link rel="stylesheet" href="/libs/abyss-theme.css">
+<link rel="stylesheet" href="/libs/maplibre-gl.css">
+<link rel="stylesheet" href="/libs/maplibre-gl-draw.css">
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--font-ui);
+         overflow: hidden; }
+
+  /* ── top bar ── */
+  .top { position: fixed; top: 0; left: 0; right: 0; height: 56px; z-index: 30;
+         display: flex; align-items: center; gap: 16px; padding: 0 18px;
+         background: linear-gradient(180deg, rgba(7,7,11,.94), rgba(7,7,11,.6));
+         backdrop-filter: blur(14px); border-bottom: 1px solid var(--border); }
+  :root[data-theme="light"] .top { background: linear-gradient(180deg, rgba(255,255,255,.94), rgba(255,255,255,.6)); }
+  .top .nav { margin-left: 8px; display: flex; gap: 4px; }
+  .top .nav a { color: var(--text-dim); text-decoration: none; font-size: 13px;
+                padding: 7px 12px; border-radius: 8px; }
+  .top .nav a:hover { color: var(--text); background: rgba(255,255,255,.05); }
+  .top .nav a.active { color: var(--accent); background: var(--accent-dim); }
+  .top .spacer { flex: 1; }
+  .iconbtn { width: 34px; height: 34px; border-radius: 9px; border: 1px solid var(--border);
+             background: rgba(255,255,255,.04); color: var(--text); cursor: pointer;
+             display: flex; align-items: center; justify-content: center; }
+  .iconbtn:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* ── layout ── */
+  .stage { position: fixed; top: 56px; left: 0; right: 0; bottom: 0; display: flex; }
+  .rail { width: 372px; flex: none; overflow-y: auto; padding: 18px;
+          border-right: 1px solid var(--border);
+          background: linear-gradient(180deg, rgba(12,13,22,.6), rgba(8,9,16,.6)); }
+  :root[data-theme="light"] .rail { background: rgba(255,255,255,.5); }
+  .viz { flex: 1; position: relative; min-width: 0; }
+
+  /* ── workflow steps ── */
+  .step { margin-bottom: 16px; border: 1px solid var(--border); border-radius: 14px;
+          background: var(--glass-bg); backdrop-filter: var(--glass-blur); overflow: hidden; }
+  .step-h { display: flex; align-items: center; gap: 10px; padding: 12px 14px;
+            font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--accent);
+            border-bottom: 1px solid var(--border); }
+  .step-n { width: 22px; height: 22px; border-radius: 50%; background: var(--accent-dim);
+            color: var(--accent); display: flex; align-items: center; justify-content: center;
+            font-size: 11px; font-weight: 700; }
+  .step-b { padding: 14px; }
+  .h1 { display:flex; align-items:center; gap:8px; font-size: 16px; font-weight: 800; margin: 2px 0 16px;
+        letter-spacing:.01em; }
+  .h1 .sub { font-size: 11px; color: var(--text-dim); font-weight: 500; letter-spacing:.18em; text-transform:uppercase; }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 7px; }
+  .chip { font-size: 12px; padding: 7px 11px; border-radius: 999px; cursor: pointer;
+          border: 1px solid var(--border); background: rgba(255,255,255,.03); color: var(--text); }
+  .chip:hover { border-color: var(--accent); }
+  .chip.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+  .field { margin-top: 12px; }
+  .field label { display: block; font-size: 11px; color: var(--text-dim); margin-bottom: 5px;
+                 text-transform: uppercase; letter-spacing: .1em; }
+  .field input, .field select { width: 100%; padding: 9px 10px; border-radius: 9px; font: inherit;
+        font-size: 13px; background: var(--bg-input, rgba(255,255,255,.05)); color: var(--text);
+        border: 1px solid var(--border); }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .bbox { font-family: var(--font-mono); font-size: 11px; color: var(--text-dim);
+          background: rgba(0,0,0,.25); border: 1px solid var(--border); border-radius: 8px;
+          padding: 8px 10px; margin-top: 10px; word-break: break-all; }
+  .method { display:flex; align-items:center; gap:10px; padding:10px 12px; border:1px solid var(--border);
+            border-radius:11px; margin-bottom:8px; cursor:pointer; }
+  .method.active { border-color: var(--accent); background: var(--accent-dim); }
+  .method.soon { opacity:.45; cursor:not-allowed; }
+  .method .nm { font-weight:600; font-size:13px; }
+  .method .ds { font-size:11px; color: var(--text-dim); }
+  .method .tag { margin-left:auto; font-size:10px; color: var(--text-dim); border:1px solid var(--border);
+                 padding:2px 7px; border-radius:999px; }
+
+  .btn { width: 100%; padding: 12px; border: none; border-radius: 11px; font: inherit; font-weight: 700;
+         font-size: 14px; cursor: pointer; background: linear-gradient(92deg, var(--accent), var(--accent2));
+         color: #03121a; display:flex; align-items:center; justify-content:center; gap:8px; }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .btn.ghost { background: rgba(255,255,255,.05); color: var(--text); border: 1px solid var(--border); }
+  .prog { margin-top: 12px; font-size: 12px; color: var(--text-dim); display: none; }
+  .prog.show { display:block; }
+  .bar { height: 4px; border-radius: 4px; background: rgba(255,255,255,.08); overflow: hidden; margin-top:8px; }
+  .bar > i { display:block; height:100%; width:30%; background: var(--accent);
+             animation: slide 1.4s var(--ease) infinite; border-radius:4px; }
+  @keyframes slide { 0%{margin-left:-30%} 100%{margin-left:100%} }
+
+  .result { display:none; margin-top:14px; }
+  .result.show { display:block; }
+  .rgrid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .rcard { background: rgba(255,255,255,.03); border:1px solid var(--border); border-radius:11px; padding:11px; }
+  .rcard .v { font-size:21px; font-weight:800; color: var(--accent); font-family: var(--font-mono); }
+  .rcard .l { font-size:10px; letter-spacing:.1em; text-transform:uppercase; color: var(--text-dim); margin-top:2px; }
+
+  /* ── viz tabs + panes ── */
+  .tabs { position:absolute; top:14px; left:50%; transform:translateX(-50%); z-index:12; display:flex;
+          gap:4px; padding:5px; border-radius:12px; background: rgba(7,7,11,.7); backdrop-filter: blur(10px);
+          border:1px solid var(--border); }
+  :root[data-theme="light"] .tabs { background: rgba(255,255,255,.8); }
+  .tab { font-size:12px; padding:7px 14px; border-radius:8px; cursor:pointer; color: var(--text-dim);
+         border:none; background:none; font:inherit; }
+  .tab.active { background: var(--accent-dim); color: var(--accent); }
+  .pane { position:absolute; inset:0; display:none; }
+  .pane.active { display:block; }
+  #map { position:absolute; inset:0; }
+  #c3d, #cprofile { width:100%; height:100%; display:block; }
+  .pane.padded { padding: 70px 28px 28px; overflow-y:auto; }
+
+  .legend { position:absolute; left:16px; bottom:16px; z-index:12; background: rgba(7,7,11,.72);
+            border:1px solid var(--border); border-radius:10px; padding:10px 12px; backdrop-filter: blur(10px);
+            font-size:11px; color: var(--text-dim); display:none; }
+  .legend.show { display:block; }
+  .legend .ramp { width:160px; height:10px; border-radius:3px; margin:6px 0 3px;
+     background: linear-gradient(90deg,#7df9ff,#21d4d4,#1f8fd1,#1d5fb0,#173a86,#0b1f56); }
+  .legend .lr { display:flex; justify-content:space-between; font-family: var(--font-mono); }
+  .hint { position:absolute; top:62px; left:50%; transform:translateX(-50%); z-index:11; font-size:12px;
+          color: var(--text-dim); background: rgba(7,7,11,.7); padding:7px 14px; border-radius:999px;
+          border:1px solid var(--border); }
+  .empty3d { position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+             color: var(--text-dim); font-size:13px; text-align:center; padding:40px; }
+  .statcards { display:grid; grid-template-columns: repeat(auto-fit,minmax(150px,1fr)); gap:12px; max-width:1000px; }
+  .statcards .c { background: var(--glass-bg); border:1px solid var(--border); border-radius:14px; padding:16px; }
+  .statcards .c .v { font-size:26px; font-weight:800; color: var(--accent); font-family: var(--font-mono); }
+  .statcards .c .l { font-size:11px; color: var(--text-dim); text-transform:uppercase; letter-spacing:.1em; margin-top:4px; }
+  .ihobar { display:flex; align-items:center; gap:10px; margin:7px 0; font-size:12px; }
+  .ihobar .nm { width:90px; color: var(--text-dim); }
+  .ihobar .track { flex:1; height:8px; border-radius:4px; background: rgba(255,255,255,.07); overflow:hidden; }
+  .ihobar .fill { height:100%; background: linear-gradient(90deg,var(--accent2),var(--accent)); border-radius:4px; }
+  .ihobar .pct { width:48px; text-align:right; font-family: var(--font-mono); }
+  h2.sec { font-size:13px; letter-spacing:.14em; text-transform:uppercase; color: var(--accent); margin:22px 0 12px; }
+  .prof-ctrl { position:absolute; left:50%; transform:translateX(-50%); bottom:18px; z-index:12;
+        background: rgba(7,7,11,.7); border:1px solid var(--border); border-radius:10px; padding:10px 14px;
+        backdrop-filter: blur(10px); display:flex; align-items:center; gap:10px; font-size:12px; color: var(--text-dim); }
+  .prof-ctrl input { width:240px; }
+</style>
+</head>
+<body class="abyss-depth-bg">
+<div class="top">
+  <span id="brand"></span>
+  <nav class="nav">
+    <a href="master-home.html">Home</a>
+    <a href="collections-browse.html">Collections</a>
+    <a class="active" href="bathymetry-studio.html">Studio</a>
+    <a href="reports-browse.html">Reports</a>
+  </nav>
+  <span class="spacer"></span>
+  <button class="iconbtn" id="themeBtn" title="Day / night">◐</button>
+</div>
+
+<div class="stage">
+  <!-- WORKFLOW RAIL -->
+  <aside class="rail">
+    <div class="h1">Bathymetry Studio <span class="sub">SDB</span></div>
+
+    <div class="step">
+      <div class="step-h"><span class="step-n">1</span> Survey Area</div>
+      <div class="step-b">
+        <div class="chips" id="presets"></div>
+        <button class="btn ghost" id="drawBtn" style="margin-top:12px">✎ Draw area on map</button>
+        <div class="bbox" id="bboxOut">No area selected — pick a preset or draw on the map.</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-h"><span class="step-n">2</span> Method &amp; Parameters</div>
+      <div class="step-b">
+        <div class="method active" data-m="dl-pro-v3">
+          <div><div class="nm">DL-Pro v3</div><div class="ds">Turbidity-aware MLP · RMSE 2.84 m</div></div>
+          <span class="tag">production</span>
+        </div>
+        <div class="method soon"><div><div class="nm">Empirical SDB</div><div class="ds">Stumpf / Lyzenga log-ratio</div></div><span class="tag">soon</span></div>
+        <div class="method soon"><div><div class="nm">Smart Blend</div><div class="ds">Multi-source fusion</div></div><span class="tag">soon</span></div>
+        <div class="row2">
+          <div class="field"><label>Start date</label><input type="date" id="sd" value="2023-01-01"></div>
+          <div class="field"><label>End date</label><input type="date" id="ed" value="2024-12-31"></div>
+        </div>
+        <div class="field"><label>Max cloud cover: <span id="ccv">20</span>%</label>
+          <input type="range" id="cc" min="5" max="80" value="20" style="width:100%"></div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-h"><span class="step-n">3</span> Generate</div>
+      <div class="step-b">
+        <button class="btn" id="genBtn" disabled>⚡ Generate Bathymetry</button>
+        <div class="prog" id="prog"><span id="progTxt">Fetching Sentinel-2 &amp; running DL-Pro…</span><div class="bar"><i></i></div></div>
+        <div class="result" id="result">
+          <div class="rgrid">
+            <div class="rcard"><div class="v" id="rMean">—</div><div class="l">Mean depth (m)</div></div>
+            <div class="rcard"><div class="v" id="rMax">—</div><div class="l">Max depth (m)</div></div>
+            <div class="rcard"><div class="v" id="rCov">—</div><div class="l">Coverage %</div></div>
+            <div class="rcard"><div class="v" id="rIho">—</div><div class="l">IHO Order-1a</div></div>
+          </div>
+          <a class="btn ghost" id="reportLink" style="margin-top:10px;text-decoration:none" href="#">📄 Open full report</a>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- VISUALIZATION -->
+  <section class="viz">
+    <div class="tabs">
+      <button class="tab active" data-v="map">Map</button>
+      <button class="tab" data-v="d3">3D Surface</button>
+      <button class="tab" data-v="prof">Cross-section</button>
+      <button class="tab" data-v="metrics">Metrics</button>
+    </div>
+
+    <div class="pane active" data-v="map">
+      <div id="map"></div>
+      <div class="hint" id="mapHint">Pick a preset or draw an area, then Generate.</div>
+      <div class="legend" id="legend"><div>Depth</div><div class="ramp"></div><div class="lr"><span>0 m</span><span id="legMax">25 m</span></div></div>
+    </div>
+    <div class="pane" data-v="d3"><canvas id="c3d"></canvas><div class="empty3d" id="empty3d">Generate a survey to explore the seafloor in 3D.</div></div>
+    <div class="pane" data-v="prof"><canvas id="cprofile"></canvas>
+      <div class="prof-ctrl"><span>Transect</span><input type="range" id="profRow" min="0" max="100" value="50"><span id="profLbl">—</span></div>
+    </div>
+    <div class="pane padded" data-v="metrics"><div id="metrics"><div class="empty3d" style="position:static">No survey yet.</div></div></div>
+  </section>
+</div>
+
+<script src="/libs/maplibre-gl.js"></script>
+<script src="/libs/maplibre-gl-draw.js"></script>
+<script src="/libs/three.min.js"></script>
+<script src="/libs/abyss-logo.js"></script>
+<script>
+// ───────────────────────── theme + brand ─────────────────────────
+(function(){ var t=localStorage.getItem('glyph_theme'); if(t) document.documentElement.setAttribute('data-theme',t); })();
+document.getElementById('themeBtn').onclick=function(){ var c=document.documentElement.getAttribute('data-theme');
+  var n=c==='light'?'dark':'light'; document.documentElement.setAttribute('data-theme',n); localStorage.setItem('glyph_theme',n);
+  if(map){ map.setStyle(cartoStyle()); } };
+document.getElementById('brand').innerHTML = AbyssLogo.lockup({ size: 28, href:'master-home.html' });
+
+function authHeaders(){ var t=localStorage.getItem('intel_globe_token'); return t?{'Authorization':'Bearer '+t}:{}; }
+
+// ───────────────────────── colormap ─────────────────────────
+var RAMP=[[125,249,255],[33,212,212],[31,143,209],[29,95,176],[23,58,134],[11,31,86]];
+function cmap(t){ t=Math.max(0,Math.min(1,t)); var p=t*(RAMP.length-1), i=Math.floor(p), f=p-i, a=RAMP[i], b=RAMP[Math.min(i+1,RAMP.length-1)];
+  return [a[0]+(b[0]-a[0])*f, a[1]+(b[1]-a[1])*f, a[2]+(b[2]-a[2])*f]; }
+
+// ───────────────────────── map ─────────────────────────
+function cartoStyle(){ var th=document.documentElement.getAttribute('data-theme')==='light'?'light_all':'dark_all';
+  return {version:8,sources:{c:{type:'raster',tiles:['https://a.basemaps.cartocdn.com/'+th+'/{z}/{x}/{y}.png','https://b.basemaps.cartocdn.com/'+th+'/{z}/{x}/{y}.png','https://c.basemaps.cartocdn.com/'+th+'/{z}/{x}/{y}.png'],tileSize:256,attribution:'© OpenStreetMap © CARTO'}},
+    layers:[{id:'bg',type:'background',paint:{'background-color':document.documentElement.getAttribute('data-theme')==='light'?'#eef2f7':'#0a0a0f'}},{id:'c',type:'raster',source:'c'}]}; }
+
+var map=new maplibregl.Map({container:'map',style:cartoStyle(),center:[54.66,24.81],zoom:11});
+var draw=new MapboxDraw({displayControlsDefault:false});
+map.addControl(draw);
+
+var state={bbox:null, grid:null, maxDepth:25, code:null};
+var PRESETS=[
+  ['Khalifa Port',[54.643,24.792,54.681,24.835]],
+  ['Saadiyat / Lulu',[54.33,24.40,54.45,24.48]],
+  ['Abu Al Abyad',[53.59,24.20,53.69,24.30]],
+  ['Abu Dhabi',[54.30,24.46,54.42,24.54]],
+];
+var pc=document.getElementById('presets');
+PRESETS.forEach(function(p,i){ var b=document.createElement('button'); b.className='chip'; b.textContent=p[0];
+  b.onclick=function(){ document.querySelectorAll('#presets .chip').forEach(x=>x.classList.remove('active')); b.classList.add('active'); setBbox(p[1]); }; pc.appendChild(b); });
+
+function setBbox(bb){ state.bbox=bb; document.getElementById('bboxOut').textContent='W '+bb[0].toFixed(3)+'  S '+bb[1].toFixed(3)+'  E '+bb[2].toFixed(3)+'  N '+bb[3].toFixed(3);
+  document.getElementById('genBtn').disabled=false; drawRoi(bb); map.fitBounds([[bb[0],bb[1]],[bb[2],bb[3]]],{padding:60,duration:600}); }
+
+function drawRoi(bb){ var gj={type:'Feature',geometry:{type:'Polygon',coordinates:[[[bb[0],bb[1]],[bb[2],bb[1]],[bb[2],bb[3]],[bb[0],bb[3]],[bb[0],bb[1]]]]}};
+  if(map.getLayer('roi')) map.removeLayer('roi'); if(map.getLayer('roi-l')) map.removeLayer('roi-l'); if(map.getSource('roi')) map.removeSource('roi');
+  map.addSource('roi',{type:'geojson',data:gj});
+  map.addLayer({id:'roi',type:'fill',source:'roi',paint:{'fill-color':'#00f5ff','fill-opacity':.08}});
+  map.addLayer({id:'roi-l',type:'line',source:'roi',paint:{'line-color':'#00f5ff','line-width':1.5,'line-dasharray':[2,1]}}); }
+
+document.getElementById('drawBtn').onclick=function(){ draw.changeMode('draw_polygon'); document.getElementById('mapHint').textContent='Click to draw a polygon around your area; double-click to finish.'; document.getElementById('mapHint').style.display='block'; };
+map.on('draw.create',function(e){ var c=e.features[0].geometry.coordinates[0]; var xs=c.map(p=>p[0]),ys=c.map(p=>p[1]);
+  document.querySelectorAll('#presets .chip').forEach(x=>x.classList.remove('active'));
+  setBbox([Math.min.apply(null,xs),Math.min.apply(null,ys),Math.max.apply(null,xs),Math.max.apply(null,ys)]); draw.deleteAll(); });
+
+document.getElementById('cc').oninput=function(){ document.getElementById('ccv').textContent=this.value; };
+
+// ───────────────────────── generate ─────────────────────────
+document.getElementById('genBtn').onclick=async function(){
+  if(!state.bbox) return;
+  var name=(document.querySelector('#presets .chip.active')||{}).textContent||'Survey area';
+  this.disabled=true; document.getElementById('prog').classList.add('show'); document.getElementById('result').classList.remove('show');
+  document.getElementById('mapHint').style.display='none';
+  try{
+    var r=await fetch('/api/bathymetry/roi',{method:'POST',headers:Object.assign({'Content-Type':'application/json'},authHeaders()),credentials:'include',
+      body:JSON.stringify({bbox:{west:state.bbox[0],south:state.bbox[1],east:state.bbox[2],north:state.bbox[3]},name:name,
+        start_date:document.getElementById('sd').value,end_date:document.getElementById('ed').value})});
+    var j=await r.json(); if(!j.job_id) throw new Error(j.detail||'failed to start');
+    var code=await poll(j.job_id);
+    await loadReport(code);
+  }catch(e){ document.getElementById('progTxt').textContent='Error: '+e.message; }
+  finally{ document.getElementById('genBtn').disabled=false; }
+};
+
+function poll(jobId){ return new Promise(function(res,rej){ var n=0;
+  var t=setInterval(async function(){ n++;
+    try{ var r=await fetch('/api/bathymetry/jobs/'+jobId,{headers:authHeaders(),credentials:'include'}); var j=await r.json();
+      document.getElementById('progTxt').textContent='Running DL-Pro… ('+(n*3)+'s)';
+      if(j.status==='done'){ clearInterval(t); res(j.report_code); }
+      else if(j.status==='failed'){ clearInterval(t); rej(new Error(j.error||'inference failed')); }
+    }catch(e){}
+    if(n>80){ clearInterval(t); rej(new Error('timeout')); }
+  },3000); }); }
+
+async function loadReport(code){
+  var r=await fetch('/api/reports/'+code,{headers:authHeaders(),credentials:'include'}); var rep=await r.json();
+  var st=rep.statistics||{}; var grid=st.grid||{};
+  state.grid=grid.depth||null; state.maxDepth=grid.max_depth_m||25; state.sigma=grid.sigma||null; state.code=code;
+  state.bounds=grid.bounds||{west:state.bbox[0],south:state.bbox[1],east:state.bbox[2],north:state.bbox[3]};
+  document.getElementById('prog').classList.remove('show');
+  document.getElementById('rMean').textContent=st.mean_m!=null?st.mean_m:'—';
+  document.getElementById('rMax').textContent=st.max_m!=null?st.max_m:'—';
+  document.getElementById('rCov').textContent=st.coverage_pct!=null?st.coverage_pct:'—';
+  var iho=st.iho_s44_pct||{}; document.getElementById('rIho').textContent=(iho.Order_1a!=null?iho.Order_1a+'%':'—');
+  document.getElementById('reportLink').href='report-view.html?id='+code;
+  document.getElementById('result').classList.add('show');
+  document.getElementById('legMax').textContent=state.maxDepth+' m';
+  document.getElementById('legend').classList.add('show');
+  renderMapOverlay(); renderMetrics(st); render3D(); renderProfile();
+}
+
+// ───────────────────────── grid → canvas ─────────────────────────
+function gridToCanvas(grid,maxD){ var R=grid.length,C=grid[0].length; var cv=document.createElement('canvas'); cv.width=C; cv.height=R;
+  var ctx=cv.getContext('2d'); var img=ctx.createImageData(C,R);
+  for(var i=0;i<R;i++)for(var j=0;j<C;j++){ var v=grid[i][j],o=(i*C+j)*4;
+    if(v==null){ img.data[o+3]=0; continue; } var c=cmap(v/maxD); img.data[o]=c[0]; img.data[o+1]=c[1]; img.data[o+2]=c[2]; img.data[o+3]=235; } ctx.putImageData(img,0,0); return cv; }
+
+function renderMapOverlay(){ if(!state.grid) return; var cv=gridToCanvas(state.grid,state.maxDepth); var url=cv.toDataURL();
+  var b=state.bounds, coords=[[b.west,b.north],[b.east,b.north],[b.east,b.south],[b.west,b.south]];
+  if(map.getLayer('depth')) map.removeLayer('depth'); if(map.getSource('depth')) map.removeSource('depth');
+  map.addSource('depth',{type:'image',url:url,coordinates:coords});
+  map.addLayer({id:'depth',type:'raster',source:'depth',paint:{'raster-opacity':0.85,'raster-resampling':'linear'}});
+  map.fitBounds([[b.west,b.south],[b.east,b.north]],{padding:60,duration:600}); }
+
+// ───────────────────────── metrics ─────────────────────────
+function renderMetrics(st){ var iho=st.iho_s44_pct||{}; var hold=st.holdout_metrics||{};
+  var cards=[['min_m','Min depth'],['mean_m','Mean depth'],['max_m','Max depth'],['std_m','Std dev'],['coverage_pct','Coverage %']];
+  var html='<h2 class="sec">Depth statistics</h2><div class="statcards">';
+  cards.forEach(c=>html+='<div class="c"><div class="v">'+(st[c[0]]!=null?st[c[0]]:'—')+'</div><div class="l">'+c[1]+'</div></div>');
+  html+='</div><h2 class="sec">IHO S-44 compliance (model baseline)</h2><div style="max-width:520px">';
+  ['Special','Order_1a','Order_1b','Order_2','Order_2b'].forEach(function(k){ var v=iho[k]; if(v==null) return;
+    html+='<div class="ihobar"><span class="nm">'+k.replace('_',' ')+'</span><span class="track"><span class="fill" style="width:'+v+'%"></span></span><span class="pct">'+v+'%</span></div>'; });
+  html+='</div><h2 class="sec">Model & scene</h2><div class="statcards">';
+  [['hold-out RMSE',(hold.rmse!=null?hold.rmse+' m':'—')],['hold-out MAE',(hold.mae!=null?hold.mae+' m':'—')],['S2 scene',st.scene_id||'—']].forEach(c=>
+    html+='<div class="c"><div class="v" style="font-size:14px;word-break:break-all">'+c[1]+'</div><div class="l">'+c[0]+'</div></div>');
+  html+='</div>';
+  document.getElementById('metrics').innerHTML=html; }
+
+// ───────────────────────── 3D surface (three.js r128) ─────────────────────────
+var three={};
+function render3D(){ if(!state.grid){return;} document.getElementById('empty3d').style.display='none';
+  var R=state.grid.length,C=state.grid[0].length, cv=document.getElementById('c3d');
+  if(!three.r){ three.r=new THREE.WebGLRenderer({canvas:cv,antialias:true,alpha:true});
+    three.scene=new THREE.Scene(); three.cam=new THREE.PerspectiveCamera(45,1,0.1,100);
+    three.grp=new THREE.Group(); three.scene.add(three.grp);
+    three.scene.add(new THREE.AmbientLight(0xffffff,0.9));
+    var dl=new THREE.DirectionalLight(0xffffff,0.5); dl.position.set(1,2,1.5); three.scene.add(dl);
+    three.rotX=-0.9; three.rotZ=0; three.dist=2.6; bindControls(cv); animate(); }
+  if(three.mesh){ three.grp.remove(three.mesh); three.mesh.geometry.dispose(); }
+  var aspect=C/R, w=2.0*aspect, h=2.0;
+  var geo=new THREE.PlaneGeometry(w,h,C-1,R-1); var pos=geo.attributes.position; var col=new Float32Array(pos.count*3);
+  var zScale=0.9;
+  for(var i=0;i<R;i++)for(var j=0;j<C;j++){ var idx=i*C+j; var v=state.grid[i][j];
+    var t=(v==null)?null:v/state.maxDepth;
+    pos.setZ(idx, t==null? -0.001 : -t*zScale);   // deeper → lower
+    var c=t==null?[16,18,26]:cmap(t); col[idx*3]=c[0]/255; col[idx*3+1]=c[1]/255; col[idx*3+2]=c[2]/255; }
+  geo.setAttribute('color',new THREE.BufferAttribute(col,3)); geo.computeVertexNormals();
+  var mat=new THREE.MeshStandardMaterial({vertexColors:true,side:THREE.DoubleSide,roughness:0.85,metalness:0.05,flatShading:false});
+  three.mesh=new THREE.Mesh(geo,mat); three.grp.add(three.mesh);
+  resize3D();
+}
+function bindControls(cv){ var dragging=false,px=0,py=0;
+  cv.addEventListener('mousedown',e=>{dragging=true;px=e.clientX;py=e.clientY;});
+  window.addEventListener('mouseup',()=>dragging=false);
+  window.addEventListener('mousemove',e=>{ if(!dragging)return; three.rotZ+=(e.clientX-px)*0.008; three.rotX+=(e.clientY-py)*0.008;
+    three.rotX=Math.max(-1.5,Math.min(-0.1,three.rotX)); px=e.clientX;py=e.clientY; });
+  cv.addEventListener('wheel',e=>{ e.preventDefault(); three.dist=Math.max(1.3,Math.min(6,three.dist+e.deltaY*0.002)); },{passive:false}); }
+function resize3D(){ if(!three.r)return; var cv=document.getElementById('c3d'); var w=cv.clientWidth||cv.parentElement.clientWidth, h=cv.clientHeight||cv.parentElement.clientHeight;
+  three.r.setPixelRatio(window.devicePixelRatio||1); three.r.setSize(w,h,false); three.cam.aspect=w/h; three.cam.updateProjectionMatrix(); }
+function animate(){ requestAnimationFrame(animate); if(!three.r)return;
+  three.grp.rotation.x=three.rotX; three.grp.rotation.z=three.rotZ;
+  var d=three.dist; three.cam.position.set(0,-d*0.05,d); three.cam.lookAt(0,0,-0.3);
+  three.r.render(three.scene,three.cam); }
+
+// ───────────────────────── cross-section ─────────────────────────
+function renderProfile(){ if(!state.grid)return; var R=state.grid.length; var rs=document.getElementById('profRow');
+  rs.max=R-1; rs.value=Math.floor(R/2); rs.oninput=drawProfile; drawProfile(); }
+function drawProfile(){ var cv=document.getElementById('cprofile'); var W=cv.clientWidth,H=cv.clientHeight; cv.width=W; cv.height=H;
+  var ctx=cv.getContext('2d'); ctx.clearRect(0,0,W,H); if(!state.grid)return;
+  var row=parseInt(document.getElementById('profRow').value), data=state.grid[row], C=data.length, pad=46;
+  document.getElementById('profLbl').textContent='row '+row+' / '+(state.grid.length-1);
+  var maxD=state.maxDepth; function X(j){return pad+j/(C-1)*(W-2*pad);} function Y(v){return pad+ v/maxD*(H-2*pad);}
+  ctx.strokeStyle='rgba(255,255,255,.12)'; ctx.beginPath(); ctx.moveTo(pad,pad); ctx.lineTo(pad,H-pad); ctx.lineTo(W-pad,H-pad); ctx.stroke();
+  // area fill
+  var grad=ctx.createLinearGradient(0,pad,0,H-pad); grad.addColorStop(0,'rgba(125,249,255,.5)'); grad.addColorStop(1,'rgba(11,31,86,.85)');
+  ctx.beginPath(); var started=false; for(var j=0;j<C;j++){ var v=data[j]; if(v==null){continue;} var x=X(j),y=Y(v); if(!started){ctx.moveTo(x,H-pad);ctx.lineTo(x,y);started=true;} else ctx.lineTo(x,y); }
+  if(started){ ctx.lineTo(X(C-1),H-pad); ctx.closePath(); ctx.fillStyle=grad; ctx.fill(); }
+  ctx.beginPath(); started=false; for(var j2=0;j2<C;j2++){ var v2=data[j2]; if(v2==null){started=false;continue;} var x2=X(j2),y2=Y(v2); if(!started){ctx.moveTo(x2,y2);started=true;}else ctx.lineTo(x2,y2);}
+  ctx.strokeStyle='#00f5ff'; ctx.lineWidth=2; ctx.stroke();
+  ctx.fillStyle='rgba(255,255,255,.5)'; ctx.font='11px monospace'; ctx.fillText('0 m',6,pad+4); ctx.fillText(maxD+' m (deepest)',6,H-pad+4); }
+
+// ───────────────────────── tabs ─────────────────────────
+document.querySelectorAll('.tab').forEach(function(t){ t.onclick=function(){
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active')); t.classList.add('active');
+  var v=t.dataset.v; document.querySelectorAll('.pane').forEach(p=>p.classList.toggle('active',p.dataset.v===(v==='d3'?'d3':v==='prof'?'prof':v)));
+  if(v==='d3'){ resize3D(); } if(v==='prof'){ drawProfile(); } if(v==='map'){ map.resize(); } }; });
+window.addEventListener('resize',function(){ resize3D(); if(state.grid) drawProfile(); });
+
+// dev auto-login forward (mirror other apps): nothing needed — DEV_NO_AUTH bypass.
+</script>
+</body>
+</html>

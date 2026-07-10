@@ -1,0 +1,10 @@
+# Keep the single-image build context small.
+.git
+*.png
+_pre-polish-backup-2026-07-01
+**/__pycache__
+**/*.pyc
+docker
+nginx
+fastapi/tests
+*.log

@@ -1,0 +1,113 @@
+# Abyss by Orbion — single-container "everything" image for RunPod.
+# Merges the 8 compose services (Postgres/PostGIS, 2x Redis, MinIO, FastAPI,
+# Celery worker+beat, bathymetry inference, nginx) into one image managed by
+# supervisord. Operational hardening (enforced JWT login, file-based secrets,
+# Redis rate limiting, MinIO SSE) is preserved; TLS is terminated by RunPod's
+# edge proxy, so nginx serves plain HTTP on :80.
+#
+# Base = python:3.11-slim (Debian trixie): Python 3.11 + GDAL 3.10.3 (the exact
+# version FastAPI's osgeo bindings pin to). Postgres 17 + PostGIS 3.5 come from
+# the stock trixie repos.
+FROM python:3.11-slim
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# ---- System packages (Postgres/PostGIS, GDAL, Redis, nginx, supervisor) -----
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    postgresql-17 postgresql-17-postgis-3 postgresql-client-17 \
+    gdal-bin libgdal-dev libgeos-dev libproj-dev libpq-dev \
+    libopenjp2-7 libopenjp2-tools libtiff-tools libmagic1 \
+    gcc g++ make \
+    redis-server nginx supervisor \
+    curl wget ca-certificates openssl procps \
+    && rm -rf /var/lib/apt/lists/*
+
+# GDAL headers for the osgeo python bindings build.
+ENV GDAL_CONFIG=/usr/bin/gdal-config \
+    CPLUS_INCLUDE_PATH=/usr/include/gdal \
+    C_INCLUDE_PATH=/usr/include/gdal
+
+# ---- MinIO server + client binaries ----------------------------------------
+RUN wget -q https://dl.min.io/server/minio/release/linux-amd64/minio -O /usr/local/bin/minio \
+    && wget -q https://dl.min.io/client/mc/release/linux-amd64/mc -O /usr/local/bin/mc \
+    && chmod +x /usr/local/bin/minio /usr/local/bin/mc
+
+# Pin numpy<2 across both venvs (GDAL 3.10 bindings built here + CPU torch expect
+# the numpy 1.x ABI).
+RUN echo "numpy<2" > /tmp/constraints.txt
+
+# ---- FastAPI python env (/opt/venv-api) -------------------------------------
+# Build the osgeo GDAL bindings against the system libgdal (3.10.3), with numpy<2
+# already present (no build isolation → gdal_array links the 1.x ABI). Then the
+# remaining deps (GDAL line dropped since it is already installed).
+COPY fastapi/requirements.txt /tmp/req-api.txt
+RUN python3 -m venv /opt/venv-api \
+    && /opt/venv-api/bin/pip install --no-cache-dir -U pip setuptools wheel \
+    && /opt/venv-api/bin/pip install --no-cache-dir -c /tmp/constraints.txt "numpy<2" \
+    && /opt/venv-api/bin/pip install --no-cache-dir --no-build-isolation "GDAL==$(gdal-config --version)" \
+    && grep -viE '^GDAL==' /tmp/req-api.txt > /tmp/req-api.clean.txt \
+    && /opt/venv-api/bin/pip install --no-cache-dir -c /tmp/constraints.txt -r /tmp/req-api.clean.txt
+
+# ---- Bathymetry python env (/opt/venv-bathy) --------------------------------
+# CPU-only torch (separate index → no CUDA wheel), then the service deps.
+COPY bathymetry-service/requirements.txt /tmp/req-bathy.txt
+RUN python3 -m venv /opt/venv-bathy \
+    && /opt/venv-bathy/bin/pip install --no-cache-dir -U pip setuptools wheel \
+    && /opt/venv-bathy/bin/pip install --no-cache-dir -c /tmp/constraints.txt "numpy<2" \
+    && /opt/venv-bathy/bin/pip install --no-cache-dir torch==2.2.2 --index-url https://download.pytorch.org/whl/cpu \
+    && /opt/venv-bathy/bin/pip install --no-cache-dir -c /tmp/constraints.txt -r /tmp/req-bathy.txt
+
+# ---- Application code --------------------------------------------------------
+WORKDIR /app
+COPY fastapi/ /app/fastapi/
+COPY bathymetry-service/ /app/bathymetry-service/
+COPY migrations/ /app/migrations/
+COPY secure-config/keys/GENERATE.sh /app/secure-config/keys/GENERATE.sh
+
+# ---- Static web assets (served by nginx) ------------------------------------
+COPY apps/ /var/www/apps/
+COPY libs/ /var/www/libs/
+COPY css/ /var/www/css/
+COPY fonts/ /var/www/fonts/
+COPY fonts.css /var/www/fonts.css
+
+# ---- Process manager + nginx + entrypoint -----------------------------------
+COPY runpod/supervisord.conf /etc/supervisor/conf.d/abyss.conf
+COPY runpod/nginx.conf /etc/nginx/conf.d/default.conf
+COPY runpod/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN rm -f /etc/nginx/sites-enabled/default \
+    && mkdir -p /var/cache/nginx/tiles /app/secure-config/keys \
+    && sed -i 's/\r$//' /usr/local/bin/entrypoint.sh /app/secure-config/keys/GENERATE.sh /app/migrations/run_migrations.sh \
+    && chmod +x /usr/local/bin/entrypoint.sh
+
+# ---- Shared backend env (single-host: everything on localhost) --------------
+ENV PG_HOST=127.0.0.1 \
+    PG_PORT=5432 \
+    PG_DATABASE=gis \
+    PG_USER=postgres \
+    REDIS_HOST=127.0.0.1 \
+    REDIS_PORT=6379 \
+    MINIO_ENDPOINT=127.0.0.1:9000 \
+    MINIO_ACCESS_KEY=admin \
+    MINIO_SECURE=false \
+    BATHYMETRY_SERVICE_URL=http://127.0.0.1:8002 \
+    SW_TILE_CACHE=1 \
+    SW_REDIS_URL=redis://127.0.0.1:6380/0 \
+    DEV_NO_AUTH=false \
+    COOKIE_SECURE=true \
+    COOKIE_SAMESITE=lax \
+    RATE_LIMIT_DEFAULT=120/minute \
+    RATE_LIMIT_LOGIN=5/minute \
+    SEED_FORCE=true \
+    GDAL_CACHEMAX=1024 \
+    GDAL_NUM_THREADS=4 \
+    PYTHONUNBUFFERED=1 \
+    OMP_NUM_THREADS=8 \
+    OPENBLAS_NUM_THREADS=8 \
+    MKL_NUM_THREADS=8 \
+    NUMEXPR_NUM_THREADS=8 \
+    VECLIB_MAXIMUM_THREADS=8 \
+    TORCH_NUM_THREADS=8
+
+EXPOSE 80
+CMD ["/usr/local/bin/entrypoint.sh"]

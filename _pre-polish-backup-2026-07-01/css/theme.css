@@ -1,0 +1,196 @@
+/* Abyss by Orbion — Design System Theme
+   Shared variables, typography, base styles (Stella-derived). */
+
+/* ── Fonts (variable weight, unicode-range subsetted) ── */
+@import url('/fonts/host-grotesk/host-grotesk.css');
+@import url('/fonts/geist-mono/geist-mono.css');
+@import url('/fonts/outfit/outfit.css');
+@import url('/fonts/noto-sans-arabic/noto-sans-arabic.css');
+
+/* ── Design Tokens ── */
+:root {
+    /* Backgrounds */
+    --bg-dark: #0a0a0f;
+    --bg-card: rgba(15, 15, 25, 0.9);
+    --bg-card-hover: rgba(20, 20, 35, 0.95);
+    --bg-input: rgba(255, 255, 255, 0.05);
+    --bg-overlay: rgba(0, 0, 0, 0.6);
+
+    /* Accents */
+    --accent-cyan: #00f5ff;
+    --accent-purple: #a855f7;
+    --accent-orange: #f59e0b;
+    --accent-green: #22c55e;
+    --accent-pink: #ec4899;
+
+    /* Text */
+    --text-primary: rgba(255, 255, 255, 0.9);
+    --text-secondary: rgba(255, 255, 255, 0.6);
+    --text-muted: rgba(255, 255, 255, 0.3);
+
+    /* Borders */
+    --border-subtle: rgba(255, 255, 255, 0.08);
+    --border-hover: rgba(255, 255, 255, 0.15);
+    --border-focus: var(--accent-cyan);
+
+    /* Status */
+    --status-online: #22c55e;
+    --status-pending: #f59e0b;
+    --status-error: #ef4444;
+
+    /* Typography (Stella) */
+    --font-primary: 'Host Grotesk', 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-arabic: 'Noto Sans Arabic', 'Host Grotesk', 'Outfit', sans-serif;
+    --font-mono: 'Geist Mono', 'JetBrains Mono', 'Fira Code', monospace;
+
+    --text-xs: clamp(0.625rem, 0.6rem + 0.15vw, 0.75rem);     /* 10-12px */
+    --text-sm: clamp(0.75rem, 0.7rem + 0.2vw, 0.875rem);      /* 12-14px */
+    --text-base: clamp(0.8125rem, 0.78rem + 0.2vw, 0.9375rem); /* 13-15px */
+    --text-lg: clamp(1rem, 0.95rem + 0.25vw, 1.125rem);        /* 16-18px */
+    --text-xl: clamp(1.125rem, 1.05rem + 0.35vw, 1.375rem);    /* 18-22px */
+    --text-2xl: clamp(1.5rem, 1.35rem + 0.5vw, 1.875rem);      /* 24-30px */
+
+    /* Spacing */
+    --space-xs: 4px;
+    --space-sm: 8px;
+    --space-md: 12px;
+    --space-lg: 16px;
+    --space-xl: 24px;
+    --space-2xl: 32px;
+
+    /* Radii */
+    --radius-sm: 6px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --radius-xl: 16px;
+
+    /* Shadows */
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.5);
+
+    /* Transitions */
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --transition-fast: 150ms var(--ease-out);
+    --transition-normal: 250ms var(--ease-out);
+}
+
+/* ── Base Styles ── */
+*, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html {
+    font-size: 16px;
+    -webkit-text-size-adjust: 100%;
+}
+
+body {
+    font-family: var(--font-primary);
+    font-size: var(--text-base);
+    line-height: 1.5;
+    letter-spacing: 0.01em;
+    color: var(--text-primary);
+    background: var(--bg-dark);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow: hidden;
+}
+
+/* RTL override */
+body[dir="rtl"] {
+    font-family: var(--font-arabic);
+    letter-spacing: 0;
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.25);
+}
+
+/* Firefox scrollbar */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+}
+
+/* ── Selection ── */
+::selection {
+    background: rgba(0, 245, 255, 0.25);
+    color: #fff;
+}
+
+/* ── Typography ── */
+h1, h2, h3, h4, h5, h6 {
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    line-height: 1.2;
+}
+
+a {
+    color: var(--accent-cyan);
+    text-decoration: none;
+    transition: color var(--transition-fast);
+}
+a:hover {
+    color: #fff;
+}
+
+/* ── Utility ── */
+.text-muted { color: var(--text-muted); }
+.text-secondary { color: var(--text-secondary); }
+.text-cyan { color: var(--accent-cyan); }
+.text-green { color: var(--accent-green); }
+.text-orange { color: var(--accent-orange); }
+.text-error { color: var(--status-error); }
+.text-sm { font-size: var(--text-sm); }
+.text-xs { font-size: var(--text-xs); }
+
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+}
+
+/* ── Day (light) theme tokens — authored for Abyss. The base set above is the
+   night default; [data-theme="light"] re-skins every token. ── */
+:root[data-theme="light"] {
+    --bg-dark: #eef2f7;
+    --bg-card: rgba(255, 255, 255, 0.86);
+    --bg-card-hover: rgba(255, 255, 255, 0.95);
+    --bg-input: rgba(15, 30, 50, 0.05);
+    --bg-overlay: rgba(20, 30, 45, 0.45);
+    --accent-cyan: #0091a8;
+    --accent-purple: #7c3aed;
+    --accent-orange: #b9760a;
+    --accent-green: #0a8f4d;
+    --accent-pink: #db2777;
+    --text-primary: rgba(20, 30, 45, 0.92);
+    --text-secondary: rgba(20, 30, 45, 0.62);
+    --text-muted: rgba(20, 30, 45, 0.38);
+    --border-subtle: rgba(15, 30, 50, 0.12);
+    --border-hover: rgba(15, 30, 50, 0.2);
+    --status-online: #0a8f4d;
+    --status-pending: #b9760a;
+    --status-error: #d11d3c;
+}
+:root[data-theme="light"] ::selection { background: rgba(0,145,168,0.22); color: #06121f; }

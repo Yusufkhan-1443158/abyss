@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Login — Abyss</title>
+<link rel="stylesheet" href="/fonts.css">
+<style>
+/* === DESIGN TOKENS === */
+:root {
+    --bg-dark: #0a0a0f;
+    --bg-card: rgba(15, 15, 25, 0.95);
+    --bg-card-hover: rgba(20, 20, 35, 0.95);
+    --bg-input: rgba(255,255,255,0.04);
+    --accent-cyan: #00f5ff;
+    --accent-green: #22c55e;
+    --accent-red: #ef4444;
+    --text-primary: rgba(255,255,255,0.9);
+    --text-secondary: rgba(255,255,255,0.6);
+    --text-muted: rgba(255,255,255,0.3);
+    --border-subtle: rgba(255,255,255,0.08);
+    --border-accent: rgba(0,245,255,0.3);
+    --font-sans: 'Host Grotesk', 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-mono: 'Geist Mono', 'JetBrains Mono', 'Fira Code', monospace;
+    --radius-sm: 6px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --shadow-lg: 0 8px 32px rgba(0,0,0,0.5);
+    --transition-fast: 0.15s ease;
+}
+
+/* === RESET === */
+.logo-globe { margin-right: 8px; vertical-align: middle; filter: drop-shadow(0 0 4px rgba(0,245,255,0.5)); animation: logoSpin 30s linear infinite; }
+@keyframes logoSpin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body {
+    background: var(--bg-dark);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    overflow: hidden;
+}
+
+/* === SCROLLBAR === */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
+
+/* === CLASSIFICATION BANNER === */
+.classification-banner {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 24px;
+    background: rgba(34, 197, 94, 0.15);
+    border-bottom: 1px solid rgba(34, 197, 94, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-family: var(--font-mono);
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    color: var(--accent-green);
+    z-index: 1000;
+    text-transform: uppercase;
+}
+
+/* === BACKGROUND GRID ANIMATION === */
+.bg-grid {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    overflow: hidden;
+}
+
+.bg-grid::before {
+    content: '';
+    position: absolute;
+    inset: -50%;
+    background-image:
+        linear-gradient(rgba(0, 245, 255, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 245, 255, 0.03) 1px, transparent 1px);
+    background-size: 60px 60px;
+    animation: gridDrift 20s linear infinite;
+}
+
+.bg-grid::after {
+    content: '';
+    position: absolute;
+    inset: -50%;
+    background-image:
+        linear-gradient(rgba(0, 245, 255, 0.015) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 245, 255, 0.015) 1px, transparent 1px);
+    background-size: 20px 20px;
+    animation: gridDrift 30s linear infinite reverse;
+}
+
+@keyframes gridDrift {
+    0% { transform: translate(0, 0) rotate(0deg); }
+    100% { transform: translate(60px, 60px) rotate(0.5deg); }
+}
+
+/* === GLOBE WIREFRAME (full breathing version) === */
+.globe-wireframe {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 600px;
+    height: 600px;
+    border-radius: 50%;
+    border: 1.5px solid rgba(0, 245, 255, 0.35);
+    box-shadow: 0 0 14px rgba(0,245,255,0.15), 0 0 36px rgba(0,245,255,0.05), inset 0 0 12px rgba(0,245,255,0.035);
+    z-index: 0;
+    animation: globeRotate 60s linear infinite, cyanBreath 11s ease-in-out infinite;
+}
+
+.globe-wireframe::before,
+.globe-wireframe::after {
+    content: '';
+    position: absolute;
+    border-radius: 50%;
+    border: 1px solid rgba(0, 245, 255, 0.35);
+    box-shadow: 0 0 14px rgba(0,245,255,0.15), 0 0 36px rgba(0,245,255,0.05), inset 0 0 12px rgba(0,245,255,0.035);
+}
+
+.globe-wireframe::before {
+    top: 10%; left: 25%; width: 50%; height: 80%;
+    animation: cyanBreath 13s ease-in-out infinite 2s;
+}
+
+.globe-wireframe::after {
+    top: 25%; left: 10%; width: 80%; height: 50%;
+    animation: cyanBreath 17s ease-in-out infinite 4s;
+}
+
+.globe-ring {
+    position: absolute;
+    border-radius: 50%;
+    border: 1px solid rgba(0, 245, 255, 0.35);
+    box-shadow: 0 0 14px rgba(0,245,255,0.15), 0 0 36px rgba(0,245,255,0.05), inset 0 0 12px rgba(0,245,255,0.035);
+}
+
+.globe-ring:nth-child(1) { top: 5%; left: 30%; width: 40%; height: 90%; animation: cyanBreath 7s ease-in-out infinite 1s; }
+.globe-ring:nth-child(2) { top: 15%; left: 35%; width: 30%; height: 70%; animation: cyanBreath 19s ease-in-out infinite 3s; }
+.globe-ring:nth-child(3) { top: 35%; left: 5%; width: 90%; height: 30%; animation: cyanBreath 23s ease-in-out infinite 5s; }
+.globe-ring:nth-child(4) { top: 20%; left: 8%; width: 84%; height: 60%; animation: cyanBreath 29s ease-in-out infinite 2.5s; }
+
+@keyframes globeRotate {
+    0% { transform: translate(-50%, -50%) rotate(0deg); }
+    100% { transform: translate(-50%, -50%) rotate(360deg); }
+}
+@keyframes cyanBreath {
+    0%   { border-color: rgba(0,245,255,0.35); box-shadow: 0 0 14px rgba(0,245,255,0.15), 0 0 36px rgba(0,245,255,0.05), inset 0 0 12px rgba(0,245,255,0.035); }
+    25%  { border-color: rgba(0,245,255,0.30); box-shadow: 0 0 12px rgba(0,245,255,0.13), 0 0 30px rgba(0,245,255,0.045), inset 0 0 11px rgba(0,245,255,0.03); }
+    50%  { border-color: rgba(0,245,255,0.24); box-shadow: 0 0 10px rgba(0,245,255,0.10), 0 0 24px rgba(0,245,255,0.035), inset 0 0 10px rgba(0,245,255,0.025); }
+    75%  { border-color: rgba(0,245,255,0.30); box-shadow: 0 0 12px rgba(0,245,255,0.13), 0 0 30px rgba(0,245,255,0.045), inset 0 0 11px rgba(0,245,255,0.03); }
+    100% { border-color: rgba(0,245,255,0.35); box-shadow: 0 0 14px rgba(0,245,255,0.15), 0 0 36px rgba(0,245,255,0.05), inset 0 0 12px rgba(0,245,255,0.035); }
+}
+
+/* === FLOATING PARTICLES === */
+.particles {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+}
+
+.particle {
+    position: absolute;
+    width: 2px;
+    height: 2px;
+    background: var(--accent-cyan);
+    border-radius: 50%;
+    opacity: 0;
+    animation: particleFloat linear infinite;
+}
+
+.particle:nth-child(1)  { left: 10%; animation-duration: 18s; animation-delay: 0s; }
+.particle:nth-child(2)  { left: 20%; animation-duration: 22s; animation-delay: 2s; }
+.particle:nth-child(3)  { left: 30%; animation-duration: 16s; animation-delay: 4s; }
+.particle:nth-child(4)  { left: 40%; animation-duration: 24s; animation-delay: 1s; }
+.particle:nth-child(5)  { left: 50%; animation-duration: 20s; animation-delay: 3s; }
+.particle:nth-child(6)  { left: 60%; animation-duration: 19s; animation-delay: 5s; }
+.particle:nth-child(7)  { left: 70%; animation-duration: 21s; animation-delay: 2.5s; }
+.particle:nth-child(8)  { left: 80%; animation-duration: 17s; animation-delay: 0.5s; }
+.particle:nth-child(9)  { left: 15%; animation-duration: 23s; animation-delay: 3.5s; }
+.particle:nth-child(10) { left: 85%; animation-duration: 25s; animation-delay: 1.5s; }
+.particle:nth-child(11) { left: 45%; animation-duration: 19s; animation-delay: 4.5s; }
+.particle:nth-child(12) { left: 75%; animation-duration: 21s; animation-delay: 6s; }
+
+@keyframes particleFloat {
+    0%   { transform: translateY(100vh) scale(0); opacity: 0; }
+    10%  { opacity: 0.6; }
+    90%  { opacity: 0.6; }
+    100% { transform: translateY(-100px) scale(1); opacity: 0; }
+}
+
+/* === GRADIENT ORB === */
+.gradient-orb {
+    position: fixed;
+    width: 500px;
+    height: 500px;
+    border-radius: 50%;
+    filter: blur(120px);
+    opacity: 0.08;
+    z-index: 0;
+    animation: orbFloat 12s ease-in-out infinite;
+}
+
+.gradient-orb.orb-1 {
+    top: -150px;
+    right: -100px;
+    background: var(--accent-cyan);
+}
+
+.gradient-orb.orb-2 {
+    bottom: -200px;
+    left: -150px;
+    background: #a855f7;
+    animation-delay: 6s;
+}
+
+@keyframes orbFloat {
+    0%, 100% { transform: translate(0, 0); }
+    50% { transform: translate(-30px, 20px); }
+}
+
+/* (Dead .login-trigger reveal-button styles removed — card is shown directly.) */
+
+/* === LOGIN CONTAINER === */
+.login-container {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 24px;
+    padding-top: 48px;
+}
+
+/* === LOGIN CARD === */
+.login-card {
+    width: 100%;
+    max-width: 400px;
+    background: rgba(15, 15, 25, 0.75);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border: 1px solid var(--border-subtle);
+    border-radius: 16px;
+    padding: 40px 36px 32px;
+    box-shadow:
+        0 8px 32px rgba(0, 0, 0, 0.5),
+        0 0 0 1px rgba(0, 245, 255, 0.05),
+        inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    /* Shown directly with a one-shot entrance animation. */
+    animation: fadeSlideUp 0.5s ease-out both;
+}
+
+@keyframes fadeSlideUp {
+    0% { opacity: 0; transform: translateY(40px); }
+    100% { opacity: 1; transform: translateY(0); }
+}
+
+/* === LOGO === */
+.login-logo {
+    text-align: center;
+    margin-bottom: 6px;
+}
+
+.login-logo-text {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    letter-spacing: 2px;
+}
+
+.login-subtitle {
+    text-align: center;
+    font-size: 12px;
+    color: var(--text-muted);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 36px;
+}
+
+/* === FORM === */
+.login-form {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.input-label {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+.input-field {
+    width: 100%;
+    padding: 12px 16px;
+    background: var(--bg-input);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    outline: none;
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.input-field::placeholder {
+    color: var(--text-muted);
+}
+
+.input-field:focus {
+    border-color: var(--accent-cyan);
+    box-shadow: 0 0 0 3px rgba(0, 245, 255, 0.08);
+}
+
+/* === REMEMBER ME === */
+.remember-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.remember-checkbox {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 3px;
+    background: var(--bg-input);
+    cursor: pointer;
+    position: relative;
+    transition: all var(--transition-fast);
+    flex-shrink: 0;
+}
+
+.remember-checkbox:checked {
+    background: var(--accent-cyan);
+    border-color: var(--accent-cyan);
+}
+
+.remember-checkbox:checked::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 5px;
+    width: 4px;
+    height: 8px;
+    border: solid #0a0a0f;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+
+.remember-label {
+    font-size: 12px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    user-select: none;
+}
+
+/* === SIGN IN BUTTON === */
+.signin-btn {
+    width: 100%;
+    padding: 12px;
+    background: var(--accent-cyan);
+    color: #0a0a0f;
+    border: none;
+    border-radius: var(--radius-md);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.signin-btn:hover {
+    background: #33f7ff;
+    box-shadow: 0 0 20px rgba(0, 245, 255, 0.25);
+    transform: translateY(-1px);
+}
+
+.signin-btn:active {
+    transform: translateY(0);
+}
+
+.signin-btn.loading {
+    pointer-events: none;
+    opacity: 0.85;
+}
+
+.signin-spinner {
+    display: none;
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(10, 10, 15, 0.3);
+    border-top-color: #0a0a0f;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+}
+
+.signin-btn.loading .signin-spinner {
+    display: block;
+}
+
+.signin-btn.loading .signin-text {
+    display: none;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* === ERROR MESSAGE === */
+.error-msg {
+    display: none;
+    padding: 10px 14px;
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    border-radius: var(--radius-sm);
+    color: var(--accent-red);
+    font-size: 12px;
+    text-align: center;
+    animation: errorShake 0.4s ease;
+}
+
+.error-msg.visible {
+    display: block;
+}
+
+@keyframes errorShake {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-6px); }
+    40% { transform: translateX(6px); }
+    60% { transform: translateX(-4px); }
+    80% { transform: translateX(4px); }
+}
+
+/* === DIVIDER === */
+.login-divider {
+    height: 1px;
+    background: var(--border-subtle);
+    margin: 20px 0 16px;
+}
+
+/* === VERSION TAG === */
+.version-tag {
+    text-align: center;
+    font-size: 10px;
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+    letter-spacing: 1px;
+}
+
+/* === RESPONSIVE === */
+@media (max-width: 480px) {
+    .login-card {
+        padding: 32px 24px 24px;
+        border-radius: 12px;
+    }
+
+    .login-logo-text {
+        font-size: 18px;
+    }
+
+    .globe-wireframe {
+        width: 400px;
+        height: 400px;
+    }
+}
+
+@media (max-height: 600px) {
+    .login-card {
+        padding: 24px 28px 20px;
+    }
+
+    .login-subtitle {
+        margin-bottom: 24px;
+    }
+}
+</style>
+<link rel="stylesheet" href="/fonts/host-grotesk/host-grotesk.css">
+<link rel="stylesheet" href="/fonts/geist-mono/geist-mono.css">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<script src="/libs/abyss-auth.js"></script>
+<script>
+// Skip the form only for a genuine existing session. Honour an explicit logout
+// (flag set by AbyssAuth.logout) so a freshly logged-out user is NOT bounced
+// straight back in. With real auth enforced, /api/auth/me is 401 when signed out.
+(function () {
+  try {
+    if (sessionStorage.getItem('abyss_logged_out')) { sessionStorage.removeItem('abyss_logged_out'); return; }
+  } catch (e) {}
+  fetch('/api/auth/me', { credentials: 'include' })
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (u) {
+      if (!u) return;
+      try {
+        // Seed a cookie-backed sentinel token + identity so app pages initialise.
+        // AbyssAuth upgrades it to a real JWT on first refresh; handleLogin sets a
+        // real JWT directly for fresh logins. (Also covers the DEV_NO_AUTH bypass.)
+        if (!localStorage.getItem('intel_globe_token')) localStorage.setItem('intel_globe_token', 'cookie');
+        localStorage.setItem('intel_globe_user', JSON.stringify(u));
+        sessionStorage.setItem('intel_globe_alive', '1');
+      } catch (e) {}
+      window.location.replace('master-home.html');
+    })
+    .catch(function () {});
+})();
+</script>
+</head>
+<body>
+
+<!-- Classification Banner -->
+<div class="classification-banner">
+    UNCLASSIFIED
+</div>
+
+<!-- Background Effects -->
+<div class="bg-grid"></div>
+
+<div class="globe-wireframe">
+    <div class="globe-ring"></div>
+    <div class="globe-ring"></div>
+    <div class="globe-ring"></div>
+    <div class="globe-ring"></div>
+</div>
+
+<div class="gradient-orb orb-1"></div>
+<div class="gradient-orb orb-2"></div>
+
+<div class="particles">
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+</div>
+
+<!-- Login Container (shown directly — no reveal gate) -->
+<div class="login-container" id="loginContainer">
+    <div class="login-card">
+
+        <!-- Logo -->
+        <div class="login-logo">
+            <div class="login-logo-text" id="abyss-brand" style="font-size:26px"></div>
+        </div>
+        <script src="/libs/abyss-logo.js"></script>
+        <script>document.getElementById('abyss-brand').innerHTML = AbyssLogo.lockup({ size: 44 });</script>
+        <div class="login-subtitle">Bathymetric Intelligence · by Orbion Maritime</div>
+
+        <!-- Form -->
+        <form class="login-form" id="loginForm">
+            <div class="input-group">
+                <label class="input-label" for="username">Username</label>
+                <input type="text" id="username" name="username" class="input-field" placeholder="Enter username" autocomplete="username">
+            </div>
+
+            <div class="input-group">
+                <label class="input-label" for="password">Password</label>
+                <input type="password" id="password" name="password" class="input-field" placeholder="Enter password" autocomplete="current-password">
+            </div>
+
+            <div class="remember-row">
+                <input type="checkbox" id="remember" class="remember-checkbox">
+                <label for="remember" class="remember-label">Remember me</label>
+            </div>
+
+            <!-- Error -->
+            <div class="error-msg" id="errorMsg"></div>
+
+            <!-- Submit -->
+            <button type="submit" class="signin-btn" id="signinBtn">
+                <span class="signin-text">Sign In</span>
+                <div class="signin-spinner"></div>
+            </button>
+        </form>
+
+        <!-- Divider -->
+        <div class="login-divider"></div>
+
+        <!-- Version -->
+        <div class="version-tag">Abyss · v1.0</div>
+
+    </div>
+</div>
+
+<script>
+// ============================================================
+// FOCUS USERNAME ON LOAD
+// (existing-session redirect is handled by the head auto-forward)
+// ============================================================
+(function focusUsername() {
+    var u = document.getElementById('username');
+    if (u) setTimeout(function () { u.focus(); }, 350);
+})();
+
+// ============================================================
+// LOGIN HANDLER
+// ============================================================
+
+var form = document.getElementById('loginForm');
+var usernameInput = document.getElementById('username');
+var passwordInput = document.getElementById('password');
+var errorMsg = document.getElementById('errorMsg');
+var signinBtn = document.getElementById('signinBtn');
+
+function showError(msg) {
+    errorMsg.textContent = msg;
+    errorMsg.classList.add('visible');
+}
+
+function hideError() {
+    errorMsg.classList.remove('visible');
+}
+
+// REMOVED: createFallbackToken — generating unsigned client-side JWTs
+// is a critical security vulnerability (authentication bypass).
+// If the backend is unreachable, the user must wait or retry.
+
+function handleLogin(e) {
+    e.preventDefault();
+    hideError();
+
+    var username = usernameInput.value.trim();
+    var password = passwordInput.value.trim();
+
+    if (!username || !password) {
+        showError('Please enter username and password');
+        return;
+    }
+
+    // Show loading state
+    signinBtn.classList.add('loading');
+
+    // Call real auth API — server sets HttpOnly cookie automatically
+    fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ username: username, password: password })
+    })
+    .then(function(res) {
+        if (!res.ok) {
+            return res.json().then(function(data) {
+                throw new Error(data.detail || 'Invalid credentials');
+            }).catch(function(parseErr) {
+                if (parseErr.message && parseErr.message !== 'Invalid credentials') throw parseErr;
+                throw new Error('Login failed (HTTP ' + res.status + ')');
+            });
+        }
+        return res.json();
+    })
+    .then(function(data) {
+        // Server sets HttpOnly cookie for the token. We also store
+        // it in localStorage so that all app pages (which read from
+        // localStorage for auth headers and token-expiry checks) work
+        // correctly. The HttpOnly cookie provides defence-in-depth for
+        // same-origin API calls even if localStorage is cleared.
+        var token = data.access_token || data.token;
+        var jwtPayload = {};
+        try { if (token) jwtPayload = JSON.parse(atob(token.split('.')[1])); } catch(e) {}
+        var rememberEl = document.getElementById('remember');
+        var remember = !!(rememberEl && rememberEl.checked);
+        var userObj = {
+            username: jwtPayload.username || data.username || username,
+            role: jwtPayload.role || data.role || 'user',
+            loginTime: new Date().toISOString()
+        };
+        // Clear any stale logout flag so the post-login redirect isn't blocked.
+        try { sessionStorage.removeItem('abyss_logged_out'); } catch(e) {}
+        // Arm the brand intro to play once on the dashboard (the "welcome" moment).
+        try { sessionStorage.setItem('abyss_intro', '1'); } catch(e) {}
+        // Persist via the shared lib (honours Remember-me); fall back if absent.
+        if (window.AbyssAuth) {
+            AbyssAuth.setSession(token, userObj, remember);
+        } else {
+            if (token) localStorage.setItem('intel_globe_token', token);
+            localStorage.setItem('intel_globe_user', JSON.stringify(userObj));
+        }
+        window.location.href = 'master-home.html';
+    })
+    .catch(function(err) {
+        console.warn('API login failed:', err.message);
+        signinBtn.classList.remove('loading');
+        // If backend is unreachable, show a clear network error
+        if (err.message && (err.message.indexOf('Failed to fetch') !== -1 || err.message.indexOf('NetworkError') !== -1)) {
+            showError('Server unreachable. Please check your connection and try again.');
+            return;
+        }
+        // Real error from API — show it
+        showError(err.message || 'Login failed');
+    });
+}
+
+form.addEventListener('submit', handleLogin);
+
+// Hide error on input
+usernameInput.addEventListener('input', hideError);
+passwordInput.addEventListener('input', hideError);
+</script>
+<script src="/libs/classification-banner.js"></script>
+</body>
+</html>

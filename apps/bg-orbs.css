@@ -1,0 +1,13 @@
+/* Abyss decorative background orbs — subtle depth glow behind app shells.
+   (Glyph referenced /bg-orbs.css from a deployment layer; provided here so the
+   MIME/404 error is gone and shells get a faint bathymetric ambience.) */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(620px 480px at 12% -8%, rgba(0, 200, 255, 0.06), transparent 60%),
+    radial-gradient(560px 420px at 92% 108%, rgba(167, 139, 250, 0.05), transparent 60%);
+}

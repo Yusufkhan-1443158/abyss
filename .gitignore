@@ -1,0 +1,26 @@
+# =============================================================================
+# Abyss — secrets, certs, and build cruft. NEVER commit operational credentials.
+# =============================================================================
+
+# Generated Docker-secret files (secure-config/keys/GENERATE.sh output).
+secure-config/keys/*.txt
+# Keep the always-present empty dev placeholder + the .gitkeep so the dev overlay
+# and the keys/ dir survive a fresh clone (dev-empty-secret has no .txt suffix,
+# but list it explicitly for clarity).
+!secure-config/keys/dev-empty-secret
+!secure-config/keys/.gitkeep
+
+# TLS certificates / private keys (self-signed demo or real).
+secure-config/certs/*.crt
+secure-config/certs/*.key
+secure-config/certs/*.pem
+!secure-config/certs/.gitkeep
+
+# Python build artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Local env files
+.env
+.env.local

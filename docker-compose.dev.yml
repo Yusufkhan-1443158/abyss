@@ -1,0 +1,82 @@
+# Abyss — DEV overlay. Restores zero-friction local dev on top of the
+# operational baseline (docker-compose.yml). Usage:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+#
+# Restores: the DEV_NO_AUTH login bypass, plaintext credentials, HTTP-only nginx
+# (no TLS), cookies without Secure, and demo creds admin/abyss · analyst/analyst
+# · viewer/viewer. No Docker secrets or certs need generating.
+#
+# Compose can't *remove* the base's secret MOUNTS via an overlay, so every secret
+# is re-pointed at an always-present EMPTY placeholder; dev ignores the values —
+# services read the plaintext env below, the overridden redis command, or env-first
+# resolvers (config.py, run_migrations.sh, the bathymetry entrypoint).
+
+secrets:
+  jwt_secret:            { file: ./secure-config/keys/dev-empty-secret }
+  postgres_password:     { file: ./secure-config/keys/dev-empty-secret }
+  minio_password:        { file: ./secure-config/keys/dev-empty-secret }
+  minio_kms_key:         { file: ./secure-config/keys/dev-empty-secret }
+  redis_password:        { file: ./secure-config/keys/dev-empty-secret }
+  seed_admin_password:   { file: ./secure-config/keys/dev-empty-secret }
+  seed_analyst_password: { file: ./secure-config/keys/dev-empty-secret }
+  seed_viewer_password:  { file: ./secure-config/keys/dev-empty-secret }
+  # Dev: assistant unconfigured by default — set ANTHROPIC_API_KEY on the fastapi
+  # service env below (or here) to enable /api/chat in the dev overlay.
+  anthropic_api_key:     { file: ./secure-config/keys/dev-empty-secret }
+
+services:
+
+  globe-postgres:
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_PASSWORD_FILE: ""   # clear the operational secret-file pointer
+      POSTGRES_DB: gis
+
+  globe-redis:
+    # Back to unauthenticated for dev (the base requires a redis_password secret).
+    command: redis-server --save 60 1 --loglevel warning
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  globe-minio:
+    environment:
+      MINIO_ROOT_USER: admin
+      MINIO_ROOT_PASSWORD: minioadmin
+      MINIO_ROOT_PASSWORD_FILE: ""   # clear secret-file pointer
+      MINIO_KMS_SECRET_KEY_FILE: ""  # no KMS in dev (SSE-S3 calls degrade)
+
+  migrate:
+    environment:
+      POSTGRES_PASSWORD: postgres    # run_migrations.sh prefers env over the file
+
+  fastapi:
+    environment:
+      DEV_NO_AUTH: "true"
+      COOKIE_SECURE: "false"
+      CORS_ORIGINS: ""               # main.py falls back to allow-all (no creds)
+      JWT_SECRET: abyss-dev-secret-change-me
+      PG_PASSWORD: postgres
+      MINIO_SECRET_KEY: minioadmin
+      DEV_PASSWORD: abyss            # admin/abyss
+      SEED_ANALYST_PASSWORD: analyst # analyst/analyst
+      SEED_VIEWER_PASSWORD: viewer   # viewer/viewer
+
+  celery-worker:
+    environment:
+      PG_PASSWORD: postgres
+      MINIO_SECRET_KEY: minioadmin
+
+  celery-beat:
+    environment:
+      PG_PASSWORD: postgres
+
+  nginx:
+    # Swap the TLS config for the HTTP-only dev config (volumes merge by target,
+    # so this replaces /etc/nginx/conf.d; the unused certs mount stays harmless).
+    volumes:
+      - ./nginx/conf.dev.d:/etc/nginx/conf.d:ro

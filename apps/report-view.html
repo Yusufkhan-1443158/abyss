@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Report — Abyss</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/css/theme.css">
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; min-height: 100vh; overflow: auto;
+         background: var(--bg-dark); color: var(--text-primary);
+         font-family: var(--font-primary); }
+  .topbar { position: sticky; top: 0; z-index: 10; display: flex; align-items: center;
+            gap: 16px; padding: 12px 22px; backdrop-filter: blur(14px);
+            background: linear-gradient(180deg, rgba(7,7,11,.92), rgba(7,7,11,.55));
+            border-bottom: 1px solid var(--border-subtle); }
+  /* Light-theme topbar rule removed — Abyss is dark-only. */
+  .topbar .spacer { flex: 1; }
+  .btn { font: inherit; font-size: 13px; cursor: pointer; border-radius: 8px; padding: 8px 14px;
+         border: 1px solid var(--border-subtle); background: var(--bg-input); color: var(--text-primary);
+         transition: all .18s var(--ease-out); text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
+  .btn:hover { border-color: var(--accent-cyan); color: var(--accent-cyan); }
+  .btn-primary { background: linear-gradient(92deg, var(--accent-cyan), #00c8d4); color: #03121a; font-weight: 700; border: none; }
+  .wrap { max-width: 940px; margin: 0 auto; padding: 28px 22px 80px; }
+  .section { margin: 22px 0; padding: 22px 24px; border-radius: 16px;
+             background: var(--bg-card); border: 1px solid var(--border-subtle);
+             box-shadow: var(--shadow-md); }
+  .section h2 { font-size: 13px; letter-spacing: .14em; text-transform: uppercase;
+                color: var(--accent-cyan); margin: 0 0 14px; font-weight: 700; }
+  .cover { text-align: left; background:
+             radial-gradient(900px 360px at 80% -40%, rgba(0,200,255,.10), transparent 70%), var(--bg-card); }
+  .cover .code { font-family: var(--font-mono); font-size: 13px; color: var(--text-secondary); letter-spacing: .18em; }
+  .cover h1 { font-size: clamp(26px, 4vw, 40px); margin: 8px 0 6px; line-height: 1.05;
+              background: linear-gradient(92deg, var(--text-primary) 35%, var(--accent-cyan));
+              -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+  .cover .meta { color: var(--text-secondary); font-size: 13px; margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px 18px; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px;
+          border: 1px solid var(--border-subtle); font-size: 11px; font-family: var(--font-mono); }
+  .kv { width: 100%; border-collapse: collapse; }
+  .kv td { padding: 9px 8px; border-bottom: 1px solid var(--border-subtle); font-size: 14px; }
+  .kv td:first-child { color: var(--text-secondary); width: 38%; }
+  .kv td:last-child { font-family: var(--font-mono); }
+  .prose { line-height: 1.7; color: var(--text-primary); font-size: 15px; }
+  figure { margin: 0; } figure img { width: 100%; border-radius: 10px; border: 1px solid var(--border-subtle); display: block; }
+  .img-fallback { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; box-sizing: border-box;
+                  min-height: 120px; padding: 24px; border-radius: 10px; border: 1px dashed var(--border-subtle);
+                  background: var(--bg-input); color: var(--text-muted); font-size: 13px; }
+  figcaption { color: var(--text-muted); font-size: 12px; margin-top: 8px; }
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px,1fr)); gap: 12px; }
+  .stat { padding: 16px; border-radius: 12px; background: var(--bg-input); border: 1px solid var(--border-subtle); }
+  .stat .v { font-size: 26px; font-weight: 800; color: var(--accent-cyan); font-family: var(--font-mono); }
+  .stat .l { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--text-secondary); margin-top: 4px; }
+  .ramp { height: 14px; border-radius: 4px; margin: 10px 0 4px;
+          background: linear-gradient(90deg, #7df9ff, #21d4d4, #1f8fd1, #1d5fb0, #173a86, #0b1f56); }
+  .ramp-lbl { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-secondary); font-family: var(--font-mono); }
+  .banner { text-align: center; font-family: var(--font-mono); font-size: 10px; letter-spacing: 2px;
+            padding: 4px; background: rgba(34,197,94,.14); color: var(--accent-green);
+            border-bottom: 1px solid rgba(34,197,94,.3); text-transform: uppercase; }
+  .empty { text-align: center; color: var(--text-muted); padding: 80px 20px; }
+  @media print {
+    .topbar, .banner { display: none; }
+    body { background: #fff; color: #000; }
+    .section { break-inside: avoid; page-break-inside: avoid; box-shadow: none; border-color: #ccc; }
+    .cover { page-break-after: always; }
+  }
+</style>
+</head>
+<body>
+<div class="banner" id="banner">UNCLASSIFIED</div>
+<div class="topbar">
+  <span id="brand"></span>
+  <span class="spacer"></span>
+  <a class="btn" href="reports-browse.html">← Reports</a>
+  <button class="btn" id="langToggle" onclick="abyssToggleLang()" style="gap:4px" title="Switch language"><span aria-hidden="true" style="opacity:.7">🌐</span> <span id="langCode">AR</span></button>
+  <button class="btn btn-primary" onclick="window.print()">⤓ Export PDF</button>
+  <button class="btn" id="signout" onclick="abyssSignOut()" title="Sign out" aria-label="Sign out">Sign Out</button>
+</div>
+<div class="wrap" id="wrap"><div class="empty" id="status">Loading report…</div></div>
+
+<script src="/libs/abyss-logo.js"></script>
+<script>
+// Theme (shared key with the rest of Abyss)
+(function(){ document.documentElement.setAttribute('data-theme','dark'); try{localStorage.removeItem('glyph_theme');}catch(e){} })();
+// Day/night toggle removed — Abyss is dark-only.
+document.getElementById('brand').innerHTML = AbyssLogo.lockup({ size: 30, href: 'master-home.html' });
+
+// Language toggle (shared glyph_lang key). Reloads to apply dir/lang; report
+// body is data-driven English today, but the control stays consistent with the
+// rest of the platform and is ready for RTL/i18n.
+(function(){
+  var ar = localStorage.getItem('glyph_lang') === 'ar';
+  var code = document.getElementById('langCode');
+  var btn = document.getElementById('langToggle');
+  if (code) code.textContent = ar ? 'EN' : 'AR';
+  if (btn) btn.setAttribute('aria-label', ar ? 'Switch to English' : 'Switch to Arabic');
+})();
+function abyssToggleLang(){
+  var l = localStorage.getItem('glyph_lang') || 'en';
+  localStorage.setItem('glyph_lang', l === 'ar' ? 'en' : 'ar');
+  location.reload();
+}
+function abyssSignOut(){
+  try {
+    if (window.AbyssAuth && typeof AbyssAuth.logout === 'function') { AbyssAuth.logout(); return; }
+    localStorage.removeItem('intel_globe_token');
+    localStorage.removeItem('intel_globe_user');
+  } catch(e){}
+  location.href = 'login.html';
+}
+
+function esc(s){ return String(s == null ? '' : s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+function imgFail(img){
+  var fig = img.closest('figure');
+  var ph = document.createElement('div');
+  ph.className = 'img-fallback';
+  ph.textContent = '⚠ Image unavailable';
+  img.replaceWith(ph);
+  // Suppress the orphaned depth-ramp legend that follows a failed raster image.
+  if (fig && fig.getAttribute('data-raster') === '1'){
+    var el = fig.nextElementSibling;
+    while (el && (el.classList.contains('ramp') || el.classList.contains('ramp-lbl'))){
+      var nx = el.nextElementSibling; el.remove(); el = nx;
+    }
+  }
+}
+function qparam(k){ return new URLSearchParams(location.search).get(k); }
+function setBanner(level){
+  var el = document.getElementById('banner');
+  var text = String(level || 'UNCLASSIFIED');
+  el.textContent = text;
+  // Map classification level to a colour so the banner reflects the real level.
+  var key = text.toUpperCase();
+  var c;
+  if (key.indexOf('TOP SECRET') >= 0) c = ['255,140,0'];       // orange
+  else if (key.indexOf('SECRET') >= 0) c = ['239,68,68'];       // red
+  else if (key.indexOf('CONFIDENTIAL') >= 0) c = ['59,130,246'];// blue
+  else if (key.indexOf('RESTRICTED') >= 0) c = ['234,179,8'];   // amber
+  else c = ['34,197,94'];                                       // green (UNCLASSIFIED / default)
+  var rgb = c[0];
+  el.style.background = 'rgba(' + rgb + ',.14)';
+  el.style.color = 'rgb(' + rgb + ')';
+  el.style.borderBottom = '1px solid rgba(' + rgb + ',.3)';
+}
+
+function renderSection(s, idx){
+  var d = s.data || {};
+  switch (s.type) {
+    case 'cover':
+      return '<div class="section cover">' +
+        '<div class="code">' + esc(d.report_code) + '</div>' +
+        '<h1>' + esc(s.title) + '</h1>' +
+        '<div class="meta">' +
+          '<span class="pill">⬢ ' + esc(d.classification || 'UNCLASSIFIED') + '</span>' +
+          '<span class="pill">model · ' + esc(d.model) + '</span>' +
+          (d.generated_at ? '<span class="pill">' + esc(String(d.generated_at).split('T')[0]) + '</span>' : '') +
+        '</div></div>';
+    case 'kv':
+      return '<div class="section"><h2>' + esc(s.title) + '</h2><table class="kv"><tbody>' +
+        (d.rows||[]).map(function(r){ return '<tr><td>' + esc(r[0]) + '</td><td>' + esc(r[1]) + '</td></tr>'; }).join('') +
+        '</tbody></table></div>';
+    case 'prose':
+      return '<div class="section"><h2>' + esc(s.title) + '</h2><div class="prose">' + esc(d.text) + '</div></div>';
+    case 'image':
+      var imgAlt = d.caption || s.title || 'Report image';
+      return '<div class="section"><h2>' + esc(s.title) + '</h2><figure>' +
+        '<img src="' + esc(d.url) + '" alt="' + esc(imgAlt) + '" onerror="imgFail(this)">' +
+        (d.caption ? '<figcaption>' + esc(d.caption) + '</figcaption>' : '') + '</figure></div>';
+    case 'raster':
+      var max = d.max_depth_m != null ? d.max_depth_m : '';
+      var rastAlt = d.caption || s.title || 'Bathymetry raster';
+      return '<div class="section"><h2>' + esc(s.title) + '</h2><figure data-raster="1">' +
+        '<img src="' + esc(d.url) + '" alt="' + esc(rastAlt) + '" onerror="imgFail(this)">' +
+        (d.caption ? '<figcaption>' + esc(d.caption) + '</figcaption>' : '') + '</figure>' +
+        '<div class="ramp"></div><div class="ramp-lbl"><span>0 m</span><span>' + esc(max) + ' m</span></div></div>';
+    case 'chart':
+      return '<div class="section"><h2>' + esc(s.title) + '</h2>' + renderChart(d.profile || {}, idx) + '</div>';
+    case 'stats':
+      var st = d.stats || {};
+      var tiles = [['min_m','Min depth'],['max_m','Max depth'],['mean_m','Mean depth'],['std_m','Std dev'],['coverage_pct','Coverage %']];
+      return '<div class="section"><h2>' + esc(s.title) + '</h2><div class="stat-grid">' +
+        tiles.map(function(t){ var v = st[t[0]]; return '<div class="stat"><div class="v">' + esc(v == null ? '—' : v) + '</div><div class="l">' + t[1] + '</div></div>'; }).join('') +
+        '</div></div>';
+    default:
+      return '';
+  }
+}
+
+function renderChart(profile, idx){
+  var gid = 'dg-' + (idx == null ? 0 : idx);
+  var dist = profile.distance_m || [], dep = profile.depth_m || [];
+  var pts = []; for (var i=0;i<dep.length;i++){ if (dep[i] != null) pts.push([i, dep[i]]); }
+  if (pts.length < 2) return '<div class="prose" style="color:var(--text-muted)">No cross-section samples available.</div>';
+  var W = 880, H = 240, pad = 34;
+  var maxD = Math.max.apply(null, pts.map(function(p){return p[1];})); if (maxD <= 0) maxD = 1;
+  var n = dep.length - 1 || 1;
+  function X(i){ return pad + (i / n) * (W - 2*pad); }
+  function Y(v){ return pad + (v / maxD) * (H - 2*pad); }   // deeper = lower
+  var line = pts.map(function(p,i){ return (i?'L':'M') + X(p[0]).toFixed(1) + ' ' + Y(p[1]).toFixed(1); }).join(' ');
+  var area = 'M' + X(pts[0][0]).toFixed(1) + ' ' + Y(0).toFixed(1) + ' ' +
+             pts.map(function(p){ return 'L' + X(p[0]).toFixed(1) + ' ' + Y(p[1]).toFixed(1); }).join(' ') +
+             ' L' + X(pts[pts.length-1][0]).toFixed(1) + ' ' + Y(0).toFixed(1) + ' Z';
+  return '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;height:auto">' +
+    '<defs><linearGradient id="' + gid + '" x1="0" y1="0" x2="0" y2="1">' +
+      '<stop offset="0" stop-color="#7df9ff" stop-opacity="0.55"/>' +
+      '<stop offset="1" stop-color="#0b1f56" stop-opacity="0.85"/></linearGradient></defs>' +
+    '<line x1="'+pad+'" y1="'+pad+'" x2="'+pad+'" y2="'+(H-pad)+'" stroke="var(--border-subtle)"/>' +
+    '<line x1="'+pad+'" y1="'+(H-pad)+'" x2="'+(W-pad)+'" y2="'+(H-pad)+'" stroke="var(--border-subtle)"/>' +
+    '<path d="'+area+'" fill="url(#' + gid + ')"/>' +
+    '<path d="'+line+'" fill="none" stroke="#00f5ff" stroke-width="2"/>' +
+    '<text x="'+pad+'" y="16" fill="var(--text-secondary)" font-size="11" font-family="monospace">0 m</text>' +
+    '<text x="'+pad+'" y="'+(H-pad+16)+'" fill="var(--text-secondary)" font-size="11" font-family="monospace">'+maxD.toFixed(1)+' m (deepest)</text>' +
+    '<text x="'+(W-pad)+'" y="'+(H-pad+16)+'" text-anchor="end" fill="var(--text-secondary)" font-size="11" font-family="monospace">transect →</text>' +
+    '</svg>';
+}
+
+(async function(){
+  var ref = qparam('id') || qparam('report') || location.pathname.split('/').pop();
+  var statusEl = document.getElementById('status');
+  if (!ref || ref === 'report-view.html') { statusEl.textContent = 'No report specified. Add ?id=<report_code>.'; return; }
+  try {
+    var token = localStorage.getItem('intel_globe_token') || '';
+    var resp = await fetch('/api/reports/' + encodeURIComponent(ref), { headers: token ? { 'Authorization': 'Bearer ' + token } : {}, credentials: 'include' });
+    if (resp.status === 404) { statusEl.textContent = 'Report not found.'; return; }
+    if (!resp.ok) throw new Error('API ' + resp.status);
+    var r = await resp.json();
+    setBanner(r.classification_level || 'UNCLASSIFIED');
+    document.title = (r.title || 'Report') + ' — Abyss';
+    var sections = r.sections || [];
+    document.getElementById('wrap').innerHTML = sections.length
+      ? sections.map(renderSection).join('')
+      : '<div class="empty">This report has no sections yet (status: ' + esc(r.status) + ').</div>';
+  } catch (e) {
+    statusEl.textContent = 'Error loading report: ' + e.message;
+  }
+})();
+</script>
+</body>
+</html>

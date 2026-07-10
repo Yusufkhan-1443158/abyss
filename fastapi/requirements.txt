@@ -1,0 +1,37 @@
+fastapi==0.109.0
+uvicorn==0.27.0
+pyjwt==2.8.0
+psycopg2-binary==2.9.9
+bcrypt==4.1.2
+boto3==1.34.0
+python-multipart==0.0.6
+httpx==0.27.0
+Pillow>=10.0.0
+numpy>=1.24.0
+pyproj>=3.6.0
+# SQLAlchemy stack
+sqlalchemy>=2.0.0
+geoalchemy2>=0.14.0
+# Auth
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+# Rate limiting (Redis-backed, proxy-aware)
+slowapi>=0.1.9
+# Settings
+pydantic-settings>=2.0.0
+# LLM assistant (Anthropic Claude) — basic chat behind /api/chat
+anthropic>=0.40.0
+# Celery
+celery[redis]>=5.3.0
+redis>=5.0.0
+# MinIO
+minio>=7.2.0
+# Geo processing
+rasterio>=1.3.9
+shapely>=2.0.0
+fiona>=1.9.0
+GDAL==3.10.3
+# File detection
+python-magic>=0.4.27
+# Tests (auth suite — runs in-container against live PG/Redis)
+pytest>=8.0.0

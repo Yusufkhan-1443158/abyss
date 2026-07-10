@@ -1,0 +1,3135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<script>(function(){document.documentElement.setAttribute("data-theme","dark");try{localStorage.removeItem("glyph_theme");}catch(e){}var l=localStorage.getItem("glyph_lang")||"en";if(l==="ar"){document.documentElement.setAttribute("dir","rtl");document.documentElement.setAttribute("lang","ar");}})()</script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin Panel — Abyss</title>
+<link rel="stylesheet" href="/fonts/outfit.css">
+<link rel="stylesheet" href="/fonts/jbmono.css">
+<link rel="stylesheet" href="/libs/maplibre-gl.css">
+<link rel="stylesheet" href="bg-orbs.css">
+<style>
+/* === DESIGN TOKENS — aligned with abyss-theme.css === */
+:root {
+    --bg-dark: var(--bg, #0a0a0f);
+    --bg-card: var(--glass-bg, rgba(15, 15, 25, 0.7));
+    --bg-card-hover: rgba(20, 20, 35, 0.85);
+    --bg-input: rgba(255,255,255,0.04);
+    --bg-overlay: rgba(0,0,0,0.6);
+    --accent-cyan: var(--accent, #00f5ff);
+    --accent-purple: var(--purple, #a78bfa);
+    --accent-orange: var(--warn, #ffab00);
+    --accent-green: var(--success, #00e676);
+    --accent-pink: #ec4899;
+    --accent-red: var(--danger, #ff4060);
+    --text-primary: var(--text, #e0e0e0);
+    --text-secondary: var(--text-dim, rgba(255,255,255,0.45));
+    --text-muted: rgba(255,255,255,0.3);
+    --border-subtle: var(--glass-border, rgba(255,255,255,0.08));
+    --border-accent: var(--accent-dim, rgba(0,245,255,0.15));
+    --font-sans: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+    --radius-sm: 6px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --radius-full: 999px;
+    --shadow-lg: 0 8px 32px rgba(0,0,0,0.5);
+    --transition-fast: 0.15s ease;
+    --z-header: 100;
+    --z-modal: 1000;
+    --z-toast: 1100;
+}
+
+/* === RESET === */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body { background: var(--bg-dark); color: var(--text-primary); font-family: var(--font-sans); overflow: hidden; }
+.logo-globe { margin-right: 8px; vertical-align: middle; filter: drop-shadow(0 0 4px rgba(0,245,255,0.5)); animation: logoSpin 30s linear infinite; }
+@keyframes logoSpin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+/* === SCROLLBAR === */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.25); }
+
+/* === APP LAYOUT === */
+.app {
+    display: grid;
+    grid-template-rows: 48px 1fr;
+    height: 100vh;
+    overflow: hidden;
+}
+
+/* === HEADER === */
+.header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 48px;
+    padding: 0 12px;
+    background: var(--bg-card);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--border-subtle);
+    z-index: var(--z-header);
+}
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+.header-logo {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--accent-cyan);
+    text-decoration: none;
+    font-family: var(--font-mono);
+    letter-spacing: 1px;
+}
+.header-center {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+.nav-link {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 10px;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-secondary);
+    font-family: var(--font-sans);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    white-space: nowrap;
+    text-decoration: none;
+}
+.nav-link:hover { color: var(--text-primary); background: rgba(255,255,255,0.04); }
+.nav-link.active {
+    color: var(--accent-cyan);
+    border-bottom: 2px solid var(--accent-cyan);
+}
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+#userDisplay {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+.header-right button {
+    background: transparent;
+    border: 1px solid var(--border-subtle);
+    color: var(--text-secondary);
+    padding: 4px 10px;
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    cursor: pointer;
+    font-family: var(--font-sans);
+    transition: all var(--transition-fast);
+}
+.header-right button:hover { border-color: var(--accent-red); color: var(--accent-red); }
+.settings-btn { color: var(--text-secondary); font-size: 18px; cursor: pointer; transition: color 0.15s; text-decoration: none; }
+.settings-btn:hover { color: var(--accent-cyan); }
+.settings-btn.active { color: var(--accent-cyan); }
+
+/* === ADMIN LAYOUT: sidebar + content === */
+.admin-layout {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    height: calc(100vh - 48px);
+    overflow: hidden;
+}
+
+/* === SIDEBAR === */
+.admin-sidebar {
+    background: var(--bg-card);
+    border-right: 1px solid var(--border-subtle);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+}
+.sidebar-title {
+    padding: 20px 16px 8px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--text-muted);
+}
+.sidebar-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px;
+}
+.sidebar-link {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: var(--radius-md);
+    font-size: 13px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    border: none;
+    background: transparent;
+    font-family: var(--font-sans);
+    text-align: left;
+    width: 100%;
+}
+.sidebar-link:hover {
+    background: rgba(255,255,255,0.04);
+    color: var(--text-primary);
+}
+.sidebar-link.active {
+    background: rgba(0,245,255,0.08);
+    color: var(--accent-cyan);
+    border-left: 2px solid var(--accent-cyan);
+}
+.sidebar-link .sidebar-icon {
+    font-size: 16px;
+    width: 24px;
+    text-align: center;
+    flex-shrink: 0;
+}
+.sidebar-stats {
+    margin-top: auto;
+    padding: 16px;
+    border-top: 1px solid var(--border-subtle);
+}
+.sidebar-stat {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--text-muted);
+    padding: 4px 0;
+}
+.sidebar-stat-val {
+    color: var(--accent-cyan);
+    font-family: var(--font-mono);
+    font-weight: 600;
+}
+
+/* === MAIN CONTENT === */
+.admin-content {
+    overflow-y: auto;
+    padding: 24px 28px;
+}
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* === TOOLBAR === */
+.toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+.toolbar-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* === INPUTS === */
+.search-input, .form-input, .form-select, .form-textarea {
+    background: var(--bg-input);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    padding: 8px 14px;
+    font-family: var(--font-sans);
+    font-size: 13px;
+    color: var(--text-primary);
+    outline: none;
+    transition: border-color var(--transition-fast);
+}
+.search-input:focus, .form-input:focus, .form-select:focus, .form-textarea:focus {
+    border-color: var(--accent-cyan);
+}
+.search-input::placeholder, .form-input::placeholder, .form-textarea::placeholder {
+    color: var(--text-muted);
+}
+.search-input { width: 220px; }
+.form-select {
+    cursor: pointer;
+}
+.form-select option { background: #1a1f2e; color: #e0e0e0; }
+.form-textarea { resize: vertical; min-height: 60px; width: 100%; }
+
+.filter-select {
+    background: var(--bg-input);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    padding: 6px 10px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    font-family: var(--font-sans);
+    outline: none;
+    cursor: pointer;
+}
+.filter-select option { background: #1a1f2e; color: #e0e0e0; }
+
+/* === BUTTONS === */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    font-family: var(--font-sans);
+    border-radius: var(--radius-sm);
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    white-space: nowrap;
+}
+.btn-primary {
+    background: rgba(0,245,255,0.12);
+    color: var(--accent-cyan);
+    border-color: rgba(0,245,255,0.25);
+}
+.btn-primary:hover { background: rgba(0,245,255,0.2); border-color: rgba(0,245,255,0.4); }
+.btn-ghost {
+    background: transparent;
+    color: var(--text-secondary);
+    border-color: var(--border-subtle);
+}
+.btn-ghost:hover { color: var(--text-primary); border-color: rgba(255,255,255,0.15); background: rgba(255,255,255,0.03); }
+.btn-danger {
+    background: rgba(239,68,68,0.1);
+    color: var(--accent-red);
+    border-color: rgba(239,68,68,0.25);
+}
+.btn-danger:hover { background: rgba(239,68,68,0.2); border-color: rgba(239,68,68,0.4); }
+.btn-success {
+    background: rgba(34,197,94,0.1);
+    color: var(--accent-green);
+    border-color: rgba(34,197,94,0.25);
+}
+.btn-success:hover { background: rgba(34,197,94,0.2); border-color: rgba(34,197,94,0.4); }
+.btn-xs { padding: 4px 10px; font-size: 11px; }
+.btn-sm { padding: 6px 12px; font-size: 11px; }
+
+/* === DATA TABLE === */
+.card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+}
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+.data-table th {
+    text-align: left;
+    padding: 10px 14px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    border-bottom: 1px solid var(--border-subtle);
+    white-space: nowrap;
+}
+.data-table td {
+    padding: 10px 14px;
+    font-size: 13px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    color: var(--text-primary);
+    vertical-align: middle;
+}
+.data-table tr:hover td { background: rgba(255,255,255,0.02); }
+.data-table .actions { display: flex; gap: 6px; }
+
+/* === BADGES === */
+.badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    border-radius: var(--radius-full);
+    text-transform: uppercase;
+}
+.badge-admin { background: rgba(168,85,247,0.15); color: var(--accent-purple); }
+.badge-analyst { background: rgba(0,245,255,0.12); color: var(--accent-cyan); }
+.badge-viewer { background: rgba(245,158,11,0.12); color: var(--accent-orange); }
+.badge-active { background: rgba(34,197,94,0.12); color: var(--accent-green); }
+.badge-disabled { background: rgba(239,68,68,0.12); color: var(--accent-red); }
+.badge-ts { background: rgba(239,68,68,0.15); color: var(--accent-red); border: 1px solid rgba(239,68,68,0.3); }
+.badge-s { background: rgba(245,158,11,0.15); color: var(--accent-orange); border: 1px solid rgba(245,158,11,0.3); }
+.badge-c { background: rgba(245,221,50,0.15); color: #f5dd32; border: 1px solid rgba(245,221,50,0.3); }
+.badge-u { background: rgba(34,197,94,0.15); color: var(--accent-green); border: 1px solid rgba(34,197,94,0.3); }
+
+/* === GROUP CARDS === */
+.group-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+    gap: 16px;
+}
+.group-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    transition: border-color var(--transition-fast);
+    cursor: pointer;
+}
+.group-card:hover { border-color: rgba(255,255,255,0.12); }
+.group-card.selected { border-color: var(--accent-cyan); box-shadow: 0 0 16px rgba(0,245,255,0.08); }
+.group-card-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 10px;
+}
+.group-card-title { font-size: 16px; font-weight: 600; color: var(--text-primary); }
+.group-card-desc { font-size: 12px; color: var(--text-secondary); margin-bottom: 12px; line-height: 1.5; }
+.group-card-meta {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 12px;
+}
+.group-meta-item { font-size: 11px; color: var(--text-muted); }
+.group-meta-item span { color: var(--accent-cyan); font-weight: 600; font-family: var(--font-mono); }
+.chip-list { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 10px;
+    font-size: 11px;
+    font-weight: 500;
+    border-radius: var(--radius-full);
+}
+.chip-user { background: rgba(168,85,247,0.1); color: var(--accent-purple); border: 1px solid rgba(168,85,247,0.2); }
+.chip-aoi { background: rgba(0,245,255,0.1); color: var(--accent-cyan); border: 1px solid rgba(0,245,255,0.2); }
+.chip-none { background: transparent; color: var(--text-muted); font-style: italic; border: 1px dashed var(--border-subtle); }
+
+.section-label-sm {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 6px;
+}
+
+/* === GROUP DETAIL PANEL === */
+.group-detail {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    margin-top: 16px;
+}
+.group-detail-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--accent-cyan);
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border-subtle);
+}
+.detail-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+.detail-section-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 8px;
+}
+.member-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 200px;
+    overflow-y: auto;
+}
+.member-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    color: var(--text-secondary);
+    background: rgba(255,255,255,0.02);
+}
+.member-item:hover { background: rgba(255,255,255,0.04); }
+
+/* === AOI TAB === */
+.aoi-layout {
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    gap: 0;
+    height: calc(100vh - 140px);
+    min-height: 400px;
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    border: 1px solid var(--border-subtle);
+}
+.aoi-map {
+    position: relative;
+}
+.aoi-map #aoiMap { position: absolute; inset: 0; }
+.aoi-sidebar {
+    background: var(--bg-card);
+    border-left: 1px solid var(--border-subtle);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+.aoi-sidebar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border-subtle);
+    font-weight: 500;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+.aoi-sidebar-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+}
+.aoi-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    font-size: 13px;
+    cursor: pointer;
+    transition: background var(--transition-fast);
+    border-radius: var(--radius-sm);
+}
+.aoi-item:hover { background: rgba(255,255,255,0.04); }
+.aoi-item.selected { background: rgba(0,245,255,0.06); border-left: 2px solid var(--accent-cyan); }
+.aoi-item-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+.aoi-item-info { flex: 1; min-width: 0; }
+.aoi-item-name { font-weight: 500; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.aoi-item-sub { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+.aoi-legend {
+    display: flex;
+    gap: 12px;
+    padding: 10px 16px;
+    border-top: 1px solid var(--border-subtle);
+    font-size: 10px;
+    color: var(--text-muted);
+}
+.aoi-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.aoi-legend-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+
+/* === SETTINGS FORM === */
+.settings-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    max-width: 800px;
+}
+.form-group { margin-bottom: 16px; }
+.form-label {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 6px;
+}
+.toggle-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.toggle {
+    position: relative;
+    width: 40px;
+    height: 22px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 11px;
+    cursor: pointer;
+    transition: background var(--transition-fast);
+}
+.toggle.on { background: rgba(0,245,255,0.3); }
+.toggle-knob {
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--text-secondary);
+    transition: all var(--transition-fast);
+}
+.toggle.on .toggle-knob { left: 21px; background: var(--accent-cyan); }
+
+/* === AUDIT LOG === */
+.log-status-success { color: var(--accent-green); }
+.log-status-failed { color: var(--accent-red); }
+
+/* === MODAL === */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    backdrop-filter: blur(4px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: var(--z-modal);
+}
+.modal-overlay.active { display: flex; }
+.modal {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    padding: 24px;
+    width: 480px;
+    max-width: 90vw;
+    max-height: 85vh;
+    overflow-y: auto;
+    box-shadow: var(--shadow-lg);
+}
+.modal-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 20px;
+}
+.modal-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-top: 24px;
+}
+.checkbox-list {
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+}
+.checkbox-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    font-size: 13px;
+    color: var(--text-primary);
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+    cursor: pointer;
+    transition: background var(--transition-fast);
+}
+.checkbox-item:last-child { border-bottom: none; }
+.checkbox-item:hover { background: rgba(255,255,255,0.03); }
+.checkbox-item input[type="checkbox"] { accent-color: var(--accent-cyan); width: 16px; height: 16px; cursor: pointer; }
+
+/* === TOAST === */
+.toast-container {
+    position: fixed;
+    top: 60px;
+    right: 16px;
+    z-index: var(--z-toast);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    pointer-events: none;
+}
+.toast {
+    padding: 10px 16px;
+    border-radius: var(--radius-md);
+    background: var(--bg-card);
+    backdrop-filter: blur(12px);
+    border-left: 4px solid var(--accent-cyan);
+    color: var(--text-primary);
+    font-size: 13px;
+    pointer-events: auto;
+    animation: toastSlideIn 0.3s ease;
+    box-shadow: var(--shadow-lg);
+}
+.toast-success { border-left-color: var(--accent-green); }
+.toast-error { border-left-color: var(--accent-red); }
+.toast-warning { border-left-color: var(--accent-orange); }
+.toast-info { border-left-color: var(--accent-cyan); }
+@keyframes toastSlideIn {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+
+/* === MAPLIBRE OVERRIDES === */
+.maplibregl-popup-content {
+    background: rgba(15,15,30,0.95) !important;
+    border: 1px solid var(--border-subtle) !important;
+    border-radius: var(--radius-sm) !important;
+    color: var(--text-primary) !important;
+    font-family: var(--font-sans) !important;
+    font-size: 13px !important;
+    padding: 12px 16px !important;
+}
+.maplibregl-popup-close-button { color: var(--text-muted); font-size: 16px; padding: 4px 8px; }
+.maplibregl-popup-close-button:hover { color: var(--text-primary); background: none; }
+.maplibregl-popup-anchor-bottom .maplibregl-popup-tip { border-top-color: rgba(15,15,30,0.95); }
+.maplibregl-popup-anchor-top .maplibregl-popup-tip { border-bottom-color: rgba(15,15,30,0.95); }
+
+/* === SECTION TITLE === */
+.page-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+.page-subtitle {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 20px;
+}
+
+/* === AOI BASEMAP SWITCHER === */
+.aoi-basemap-trigger {
+    position: absolute;
+    bottom: 12px;
+    right: 12px;
+    z-index: 20;
+}
+.aoi-basemap-trigger .map-control-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: rgba(15, 15, 25, 0.85);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-secondary);
+    font-size: 14px;
+    cursor: pointer;
+    backdrop-filter: blur(10px);
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.aoi-basemap-trigger .map-control-btn:hover {
+    border-color: var(--accent-cyan);
+    color: var(--accent-cyan);
+}
+.aoi-basemap-popup {
+    position: absolute;
+    bottom: 44px;
+    right: 0;
+    width: 240px;
+    background: rgba(15, 15, 25, 0.95);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    padding: 12px;
+    backdrop-filter: blur(20px);
+    box-shadow: var(--shadow-lg);
+    display: none;
+    z-index: 25;
+}
+.aoi-basemap-popup.open { display: block; }
+.aoi-basemap-section-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+}
+.aoi-basemap-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+}
+.aoi-basemap-option {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    padding: 4px;
+    background: transparent;
+    border: 2px solid transparent;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    color: var(--text-secondary);
+    font-size: 9px;
+    font-family: var(--font-sans);
+    transition: all var(--transition-fast);
+}
+.aoi-basemap-option:hover { border-color: var(--border-accent); }
+.aoi-basemap-option.active { border-color: var(--accent-cyan); color: var(--accent-cyan); }
+.aoi-basemap-option .aoi-bm-preview {
+    width: 100%;
+    aspect-ratio: 16/9;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-subtle);
+}
+
+/* === RESPONSIVE === */
+@media (max-width: 960px) {
+    .admin-layout { grid-template-columns: 1fr; }
+    .admin-sidebar { display: none; }
+    .aoi-layout { grid-template-columns: 1fr; height: auto; }
+    .aoi-sidebar { max-height: 300px; border-left: none; border-top: 1px solid var(--border-subtle); }
+    .settings-grid { grid-template-columns: 1fr; }
+    .detail-grid { grid-template-columns: 1fr; }
+    .group-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 600px) {
+    .header-center { display: none; }
+    .admin-content { padding: 16px; }
+}
+
+/* === SERVICES TAB === */
+.services-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 32px;
+}
+.service-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    transition: all 0.2s;
+    cursor: pointer;
+    text-decoration: none;
+    display: block;
+    color: inherit;
+}
+.service-card:hover {
+    border-color: var(--border-accent);
+    background: var(--bg-card-hover);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+}
+.service-card-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+.service-card-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+.service-card-icon svg {
+    width: 22px;
+    height: 22px;
+}
+.service-card-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+.service-card-desc {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+.service-card-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-subtle);
+}
+.service-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+}
+.service-status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    transition: background 0.3s;
+}
+.service-status-dot.online { background: var(--accent-green); box-shadow: 0 0 6px rgba(34,197,94,0.5); }
+.service-status-dot.offline { background: var(--accent-red); box-shadow: 0 0 6px rgba(239,68,68,0.5); }
+.service-status-dot.checking { background: var(--accent-orange); animation: statusPulse 1s ease-in-out infinite; }
+@keyframes statusPulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+.service-port {
+    font-size: 11px;
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+    background: var(--bg-input);
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+}
+.url-config-section {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+}
+.url-config-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 12px;
+}
+.url-mode-toggle {
+    display: flex;
+    gap: 0;
+    margin-bottom: 12px;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    width: fit-content;
+}
+.url-mode-btn {
+    padding: 6px 16px;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-family: var(--font-sans);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+.url-mode-btn.active {
+    background: rgba(0,245,255,0.1);
+    color: var(--accent-cyan);
+}
+.url-host-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.url-host-input {
+    flex: 1;
+    padding: 8px 12px;
+    background: var(--bg-input);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    outline: none;
+    transition: border-color var(--transition-fast);
+}
+.url-host-input:focus { border-color: var(--accent-cyan); }
+@media (max-width: 960px) {
+    .services-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 600px) {
+    .services-grid { grid-template-columns: 1fr; }
+}
+
+/* === RTL OVERRIDES === */
+[dir="rtl"] body { font-family: 'Noto Sans Arabic', var(--font-sans, system-ui), sans-serif; text-align: right; }
+[dir="rtl"] .header { direction: rtl; }
+[dir="rtl"] .logo-globe { margin-right: 0; margin-left: 8px; }
+[dir="rtl"] .sidebar { border-right: none; border-left: 1px solid var(--border-subtle, rgba(255,255,255,0.08)); }
+[dir="rtl"] .notif-badge { right: auto; left: -8px; }
+[dir="rtl"] .notif-dropdown { right: auto; left: 0; }
+[dir="rtl"] .toast-container { right: auto; left: 16px; }
+[dir="rtl"] .toast { border-left: none; border-right: 4px solid var(--accent-cyan, #00f5ff); text-align: right; }
+[dir="rtl"] .toolbar-right { margin-left: 0; margin-right: auto; }
+[dir="rtl"] .sort-arrow { margin-left: 0; margin-right: 4px; }
+[dir="rtl"] table th, [dir="rtl"] table td { text-align: right; }
+[dir="rtl"] input, [dir="rtl"] select, [dir="rtl"] textarea { text-align: right; font-family: 'Noto Sans Arabic', var(--font-sans, system-ui), sans-serif; }
+
+</style>
+<link rel="stylesheet" href="/libs/abyss-theme.css">
+</head>
+<body>
+<div class="glyph-bg-orbs" aria-hidden="true"><div class="glyph-orb glyph-orb-cyan"></div><div class="glyph-orb glyph-orb-purple"></div></div>
+<div class="app">
+    <!-- === HEADER === -->
+    <header class="header">
+        <div class="header-left">
+            <a href="master-home.html" class="header-logo" id="abyss-brand"></a>
+            <script src="/libs/abyss-logo.js"></script>
+            <script>document.getElementById('abyss-brand').innerHTML = AbyssLogo.lockup({ size: 26 });</script>
+        </div>
+        <div class="header-center">
+            <a href="master-home.html" class="nav-link active" data-i18n="nav.home">Home</a>
+            <a href="collections-browse.html" class="nav-link" data-i18n="nav.collections">Collections</a>
+            <a href="bathymetry-studio.html" class="nav-link" data-i18n="nav.regions">Studio</a>
+            <a href="reports-browse.html" class="nav-link" data-i18n="nav.reports">Reports</a>
+</div>
+        <div class="header-right">
+            <span id="userDisplay"></span>
+            <a href="admin.html" class="settings-btn active" title="Settings">&#9881;</a>
+            <button id="langToggle" class="glyph-lang-toggle" title="عربي / English" onclick="(function(){var l=localStorage.getItem('glyph_lang')||'en';localStorage.setItem('glyph_lang',l==='ar'?'en':'ar');location.reload();})()" style="width:32px;height:32px;border-radius:8px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.04);color:var(--text-dim,#e0e0e0);cursor:pointer;font-size:12px;font-weight:700;font-family:'Noto Sans Arabic',sans-serif;display:flex;align-items:center;justify-content:center;transition:all 0.2s;margin-right:8px;"></button>
+            <script>document.getElementById('langToggle').textContent=localStorage.getItem('glyph_lang')==='ar'?'EN':'ع';</script>
+            <button id="logoutBtn" data-i18n="nav.signout">Logout</button>
+        </div>
+    </header>
+
+    <!-- === ADMIN LAYOUT === -->
+    <div class="admin-layout">
+        <!-- Sidebar -->
+        <aside class="admin-sidebar">
+            <div class="sidebar-title" data-i18n="admin.sidebar_title">Administration</div>
+            <nav class="sidebar-nav">
+                <button class="sidebar-link active" data-tab="users" onclick="switchTab('users')">
+                    <span class="sidebar-icon">&#128101;</span> <span data-i18n="admin.users">Users</span>
+                </button>
+                <button class="sidebar-link" data-tab="groups" onclick="switchTab('groups')">
+                    <span class="sidebar-icon">&#127970;</span> <span data-i18n="admin.groups">Groups</span>
+                </button>
+                <button class="sidebar-link" data-tab="aoi" onclick="switchTab('aoi')">
+                    <span class="sidebar-icon">&#128506;</span> <span data-i18n="admin.aoi_access">AOI Access</span>
+                </button>
+                <button class="sidebar-link" data-tab="settings" onclick="switchTab('settings')">
+                    <span class="sidebar-icon">&#9881;</span> <span data-i18n="admin.system_settings">System Settings</span>
+                </button>
+                <button class="sidebar-link" data-tab="audit" onclick="switchTab('audit')">
+                    <span class="sidebar-icon">&#128202;</span> <span data-i18n="admin.audit_log">Audit Log</span>
+                </button>
+                <button class="sidebar-link" data-tab="services" onclick="switchTab('services')">
+                    <span class="sidebar-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><circle cx="6" cy="6" r="1" fill="currentColor"/><circle cx="6" cy="18" r="1" fill="currentColor"/></svg></span> <span data-i18n="admin.services">Services</span>
+                </button>
+            </nav>
+            <div class="sidebar-stats">
+                <div class="sidebar-stat"><span data-i18n="admin.stat.total_users">Total Users</span><span class="sidebar-stat-val" id="statUsers">15</span></div>
+                <div class="sidebar-stat"><span data-i18n="admin.stat.active_groups">Active Groups</span><span class="sidebar-stat-val" id="statGroups">5</span></div>
+                <div class="sidebar-stat"><span data-i18n="admin.stat.defined_aois">Defined AOIs</span><span class="sidebar-stat-val" id="statAois">6</span></div>
+                <div class="sidebar-stat"><span data-i18n="admin.stat.system_status">System Status</span><span class="sidebar-stat-val" style="color:var(--accent-green)" data-i18n="admin.stat.online">Online</span></div>
+            </div>
+        </aside>
+
+        <!-- Content -->
+        <main class="admin-content">
+
+            <!-- ======== USERS TAB ======== -->
+            <div class="tab-panel active" id="panel-users">
+                <div class="page-title" data-i18n="admin.user_management">User Management</div>
+                <div class="page-subtitle">Manage user accounts and permissions</div>
+                <div style="font-size:11px;color:var(--accent-cyan);background:rgba(0,245,255,0.06);border:1px solid rgba(0,245,255,0.15);border-radius:var(--radius-sm);padding:6px 12px;margin-bottom:8px;display:inline-block">&#x1F512; Access controlled by group membership</div>
+                <div class="toolbar">
+                    <div class="toolbar-left">
+                        <input type="text" class="search-input" id="userSearch" placeholder="Search users..." data-i18n-placeholder="admin.placeholder.search_users" oninput="filterUsers()">
+                        <!-- Role filter hidden: access now controlled by groups -->
+                        <select class="filter-select" id="userFilterRole" onchange="filterUsers()" style="display:none">
+                            <option value="" data-i18n="admin.filter.all_roles">All Roles</option>
+                            <option value="Admin" data-i18n="admin.role.admin">Admin</option>
+                            <option value="Analyst" data-i18n="admin.role.analyst">Analyst</option>
+                            <option value="Viewer" data-i18n="admin.role.viewer">Viewer</option>
+                        </select>
+                        <select class="filter-select" id="userFilterStatus" onchange="filterUsers()">
+                            <option value="" data-i18n="admin.filter.all_status">All Status</option>
+                            <option value="Active" data-i18n="admin.filter.active">Active</option>
+                            <option value="Disabled" data-i18n="admin.filter.disabled">Disabled</option>
+                        </select>
+                        <select class="filter-select" id="userFilterGroup" onchange="filterUsers()">
+                            <option value="">All Groups</option>
+                        </select>
+                    </div>
+                    <div class="toolbar-right">
+                        <button class="btn btn-primary" onclick="openAddUserModal()" data-i18n="admin.add_user">+ Add User</button>
+                    </div>
+                </div>
+                <div class="card">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th data-i18n="admin.th.username">Username</th>
+                                <th data-i18n="admin.th.email">Email</th>
+                                <!-- Role column hidden: access controlled by groups -->
+                                <th data-i18n="admin.th.groups">Groups</th>
+                                <th data-i18n="admin.th.status">Status</th>
+                                <th data-i18n="admin.th.last_login">Last Login</th>
+                                <th data-i18n="admin.th.actions">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="usersBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- ======== GROUPS TAB ======== -->
+            <div class="tab-panel" id="panel-groups">
+                <div class="page-title" data-i18n="admin.group_management">Group Management</div>
+                <div class="page-subtitle" data-i18n="admin.group_subtitle">Organize users into groups and manage AOI assignments</div>
+                <div class="toolbar">
+                    <div class="toolbar-left">
+                        <input type="text" class="search-input" id="groupSearch" placeholder="Search groups..." data-i18n-placeholder="admin.placeholder.search_groups" oninput="filterGroups()">
+                    </div>
+                    <div class="toolbar-right">
+                        <button class="btn btn-primary" onclick="openCreateGroupModal()" data-i18n="admin.create_group">+ Create Group</button>
+                    </div>
+                </div>
+                <div class="group-grid" id="groupsGrid"></div>
+                <div id="groupDetail" style="display:none"></div>
+            </div>
+
+            <!-- ======== AOI ACCESS TAB ======== -->
+            <div class="tab-panel" id="panel-aoi">
+                <div class="page-title" data-i18n="admin.aoi_control">AOI Access Control</div>
+                <div class="page-subtitle">Define Areas of Interest and assign group-level access</div>
+                <div class="toolbar" style="margin-bottom:12px">
+                    <div class="toolbar-left">
+                        <button class="btn btn-primary" id="defineAoiBtn" onclick="startDefineAoi()" data-i18n="admin.define_aoi">+ Define AOI</button>
+                    </div>
+                </div>
+                <div class="aoi-layout">
+                    <div class="aoi-map">
+                        <div id="aoiMap"></div>
+                        <div class="aoi-basemap-trigger" id="aoiBasemapTrigger">
+                            <button class="map-control-btn" id="aoiBasemapBtn" title="Change basemap">&#x1F5FA;</button>
+                            <div class="aoi-basemap-popup" id="aoiBasemapPopup">
+                                <div class="aoi-basemap-section-label" data-i18n="admin.basemap">Basemap</div>
+                                <div class="aoi-basemap-grid">
+                                    <button class="aoi-basemap-option active" data-style="dark"><div class="aoi-bm-preview" style="background:url('thumbnails/dark.png') center/cover"></div><span>Dark</span></button>
+                                    <button class="aoi-basemap-option" data-style="light"><div class="aoi-bm-preview" style="background:url('thumbnails/light.png') center/cover"></div><span>Light</span></button>
+                                    <button class="aoi-basemap-option" data-style="contrast"><div class="aoi-bm-preview" style="background:url('thumbnails/contrast.png') center/cover"></div><span>Contrast</span></button>
+                                    <button class="aoi-basemap-option" data-style="terrain"><div class="aoi-bm-preview" style="background:url('thumbnails/terrain.png') center/cover"></div><span>Terrain</span></button>
+                                    <button class="aoi-basemap-option" data-style="osm"><div class="aoi-bm-preview" style="background:url('thumbnails/standard.png') center/cover"></div><span>OSM</span></button>
+                                    <button class="aoi-basemap-option" data-style="midnight"><div class="aoi-bm-preview" style="background:url('thumbnails/midnight.png') center/cover"></div><span>Midnight</span></button>
+                                    <button class="aoi-basemap-option" data-style="ocean"><div class="aoi-bm-preview" style="background:url('thumbnails/ocean.png') center/cover"></div><span>Ocean</span></button>
+                                    <button class="aoi-basemap-option" data-style="sand"><div class="aoi-bm-preview" style="background:url('thumbnails/desert.png') center/cover"></div><span>Sand</span></button>
+                                    <button class="aoi-basemap-option" data-style="tactical"><div class="aoi-bm-preview" style="background:url('thumbnails/tactical.png') center/cover"></div><span>Tactical</span></button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="aoi-sidebar">
+                        <div class="aoi-sidebar-header">
+                            <span>AOI Regions</span>
+                            <span style="font-size:11px;color:var(--text-muted)" id="aoiCount">6</span>
+                        </div>
+                        <div class="aoi-sidebar-body" id="aoiSidebarBody"></div>
+                        <div class="aoi-legend">
+                            <div class="aoi-legend-item"><span class="aoi-legend-dot" style="background:#ef4444"></span> TS</div>
+                            <div class="aoi-legend-item"><span class="aoi-legend-dot" style="background:#f59e0b"></span> S</div>
+                            <div class="aoi-legend-item"><span class="aoi-legend-dot" style="background:#f5dd32"></span> C</div>
+                            <div class="aoi-legend-item"><span class="aoi-legend-dot" style="background:#22c55e"></span> U</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ======== SYSTEM SETTINGS TAB ======== -->
+            <div class="tab-panel" id="panel-settings">
+                <div class="page-title" data-i18n="admin.system_settings_title">System Settings</div>
+                <div class="page-subtitle">Platform configuration (demo mode — changes are not persisted)</div>
+                <div class="card" style="padding:24px; max-width:860px">
+                    <div class="settings-grid">
+                        <div class="form-group">
+                            <label class="form-label">Default Classification Level</label>
+                            <select class="form-select" id="settingClassification" style="width:100%">
+                                <option value="U">UNCLASSIFIED</option>
+                                <option value="C">CONFIDENTIAL</option>
+                                <option value="S" selected>SECRET</option>
+                                <option value="TS">TOP SECRET</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Session Timeout (minutes)</label>
+                            <input type="number" class="form-input" id="settingTimeout" value="30" min="5" max="480" style="width:100%">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Max Upload Size (MB)</label>
+                            <input type="number" class="form-input" id="settingUpload" value="500" min="1" max="10000" style="width:100%">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">API Rate Limit (req/min)</label>
+                            <input type="number" class="form-input" id="settingRateLimit" value="120" min="10" max="10000" style="width:100%">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Maintenance Mode</label>
+                            <div class="toggle-container">
+                                <div class="toggle" id="settingMaintenance" onclick="toggleMaintenance()">
+                                    <div class="toggle-knob"></div>
+                                </div>
+                                <span style="font-size:12px;color:var(--text-secondary)" id="maintenanceLabel">Disabled</span>
+                            </div>
+                        </div>
+                        <div></div>
+                        <div class="form-group" style="grid-column:1/-1">
+                            <label class="form-label">Message of the Day (MOTD)</label>
+                            <textarea class="form-textarea" id="settingMotd" rows="3" placeholder="Enter a message displayed to all users on login...">System maintenance scheduled for Sunday 0200-0600 UTC. Plan accordingly.</textarea>
+                        </div>
+                    </div>
+                    <div style="display:flex;gap:10px;margin-top:8px">
+                        <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
+                        <button class="btn btn-ghost" onclick="resetSettings()">Reset to Defaults</button>
+                    </div>
+                </div>
+
+                <!-- Home Page Settings -->
+                <div style="margin-top:24px;max-width:860px">
+                    <h2 style="font-size:16px;font-weight:600;color:var(--text-primary);margin-bottom:4px">Home Page</h2>
+                    <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px">Configure the home page appearance and broadcast messages</p>
+
+                    <div class="card" style="padding:20px;margin-bottom:16px">
+                        <h3 style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:4px">Platform Logo</h3>
+                        <p style="font-size:11px;color:var(--text-muted);margin-bottom:12px">Upload an 80px logo displayed on the home page</p>
+                        <div style="display:flex;gap:12px;align-items:center;">
+                            <img id="logoPreview" src="" style="width:80px;height:80px;border-radius:8px;background:rgba(255,255,255,0.05);object-fit:contain;display:none;">
+                            <div id="logoPlaceholder" style="width:80px;height:80px;border-radius:8px;background:rgba(255,255,255,0.05);border:1px dashed var(--border-subtle);display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:10px">No logo</div>
+                            <input type="file" id="logoUpload" accept="image/*" style="display:none;">
+                            <button onclick="document.getElementById('logoUpload').click()" class="btn">Upload Logo</button>
+                            <button onclick="removeLogo()" class="btn btn-danger">Remove</button>
+                        </div>
+                    </div>
+
+                    <div class="card" style="padding:20px">
+                        <h3 style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:4px">Broadcast Messages</h3>
+                        <p style="font-size:11px;color:var(--text-muted);margin-bottom:12px">Messages shown to all users on the home page</p>
+                        <div id="broadcastList" style="margin-bottom:12px"></div>
+                        <div style="display:flex;gap:8px;align-items:center;">
+                            <input id="broadcastInput" class="form-input" placeholder="New broadcast message..." style="flex:1;">
+                            <select id="broadcastType" class="form-select" style="width:auto">
+                                <option value="info">Info</option>
+                                <option value="warning">Warning</option>
+                                <option value="success">Success</option>
+                                <option value="urgent">Urgent</option>
+                            </select>
+                            <button onclick="addBroadcast()" class="btn btn-primary">Send</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- AI Configuration -->
+                <div style="margin-top:24px;max-width:860px">
+                    <h2 style="font-size:16px;font-weight:600;color:var(--text-primary);margin-bottom:4px">&#129302; AI Configuration</h2>
+                    <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px">Configure the AI inference backend used by all AI-powered features</p>
+
+                    <div class="card" style="padding:20px;margin-bottom:16px">
+                        <div class="settings-grid">
+                            <div class="form-group">
+                                <label class="form-label">AI Model Name</label>
+                                <input type="text" class="form-input" id="settingAiModel" placeholder="e.g. gemma-4-31b-it" style="width:100%">
+                                <p style="font-size:11px;color:var(--text-muted);margin-top:4px">Model name passed to the inference backend. Change this to switch all AI features to a different model.</p>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">AI Backend URL</label>
+                                <input type="text" class="form-input" id="settingAiBackendUrl" placeholder="e.g. http://128.100.100.10:8000" style="width:100%">
+                                <p style="font-size:11px;color:var(--text-muted);margin-top:4px">URL of the vLLM or OpenAI-compatible inference server.</p>
+                            </div>
+                        </div>
+                        <div style="display:flex;gap:10px;align-items:center;margin-top:8px;flex-wrap:wrap">
+                            <button class="btn btn-primary" onclick="saveAiSettings()">Save AI Settings</button>
+                            <button class="btn" onclick="testAiConnection()">Test Connection</button>
+                            <span id="aiTestResult" style="font-size:12px;font-family:var(--font-mono)"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Data Loading Settings -->
+                <div style="margin-top:24px;max-width:860px">
+                    <h2 style="font-size:16px;font-weight:600;color:var(--text-primary);margin-bottom:4px">Data Loading Settings</h2>
+                    <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px">Configure pagination and page sizes for each browse endpoint</p>
+
+                    <div class="card" style="padding:20px;margin-bottom:16px">
+                        <div class="settings-grid" id="paginationSettingsGrid">
+                            <div class="form-group">
+                                <label class="form-label">Reports per page</label>
+                                <div style="display:flex;gap:8px;align-items:center">
+                                    <input type="number" class="form-input" id="pgReports" value="500" min="0" style="width:100px">
+                                    <select class="form-select" onchange="applyPaginationPreset(this,'pgReports')" style="width:auto;flex:1">
+                                        <option value="">Custom</option>
+                                        <option value="500" selected>Default (500)</option>
+                                        <option value="1000">1000</option>
+                                        <option value="2000">2000</option>
+                                        <option value="5000">5000</option>
+                                        <option value="0">All</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Projects per page</label>
+                                <div style="display:flex;gap:8px;align-items:center">
+                                    <input type="number" class="form-input" id="pgProjects" value="50" min="0" style="width:100px">
+                                    <select class="form-select" onchange="applyPaginationPreset(this,'pgProjects')" style="width:auto;flex:1">
+                                        <option value="">Custom</option>
+                                        <option value="50" selected>Default (50)</option>
+                                        <option value="100">100</option>
+                                        <option value="200">200</option>
+                                        <option value="500">500</option>
+                                        <option value="0">All</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Stories per page</label>
+                                <div style="display:flex;gap:8px;align-items:center">
+                                    <input type="number" class="form-input" id="pgStories" value="50" min="0" style="width:100px">
+                                    <select class="form-select" onchange="applyPaginationPreset(this,'pgStories')" style="width:auto;flex:1">
+                                        <option value="">Custom</option>
+                                        <option value="50" selected>Default (50)</option>
+                                        <option value="100">100</option>
+                                        <option value="200">200</option>
+                                        <option value="500">500</option>
+                                        <option value="0">All</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Collections per page</label>
+                                <div style="display:flex;gap:8px;align-items:center">
+                                    <input type="number" class="form-input" id="pgCollections" value="100" min="0" style="width:100px">
+                                    <select class="form-select" onchange="applyPaginationPreset(this,'pgCollections')" style="width:auto;flex:1">
+                                        <option value="">Custom</option>
+                                        <option value="100" selected>Default (100)</option>
+                                        <option value="200">200</option>
+                                        <option value="500">500</option>
+                                        <option value="1000">1000</option>
+                                        <option value="0">All</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">OOB Units per page</label>
+                                <div style="display:flex;gap:8px;align-items:center">
+                                    <input type="number" class="form-input" id="pgOob" value="100" min="0" style="width:100px">
+                                    <select class="form-select" onchange="applyPaginationPreset(this,'pgOob')" style="width:auto;flex:1">
+                                        <option value="">Custom</option>
+                                        <option value="100" selected>Default (100)</option>
+                                        <option value="200">200</option>
+                                        <option value="500">500</option>
+                                        <option value="1000">1000</option>
+                                        <option value="0">All</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Globe Initial Days</label>
+                                <div style="display:flex;gap:8px;align-items:center">
+                                    <input type="number" class="form-input" id="pgGlobeDays" value="7" min="1" max="365" style="width:100px">
+                                    <select class="form-select" onchange="applyPaginationPreset(this,'pgGlobeDays')" style="width:auto;flex:1">
+                                        <option value="">Custom</option>
+                                        <option value="7" selected>Default (7)</option>
+                                        <option value="14">14 days</option>
+                                        <option value="30">30 days</option>
+                                        <option value="90">90 days</option>
+                                        <option value="365">1 year</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-group" style="grid-column:1/-1">
+                                <label class="form-label">Globe Initial Limit</label>
+                                <div style="display:flex;gap:8px;align-items:center;max-width:380px">
+                                    <input type="number" class="form-input" id="pgGlobeLimit" value="500" min="0" style="width:100px">
+                                    <select class="form-select" onchange="applyPaginationPreset(this,'pgGlobeLimit')" style="width:auto;flex:1">
+                                        <option value="">Custom</option>
+                                        <option value="500" selected>Default (500)</option>
+                                        <option value="1000">1000</option>
+                                        <option value="2000">2000</option>
+                                        <option value="5000">5000</option>
+                                        <option value="0">All</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <p style="font-size:11px;color:var(--text-muted);margin-top:12px">Setting a value to <strong>0</strong> (or selecting "All") disables the limit and loads all records. Use with caution on large datasets.</p>
+                        <div style="display:flex;gap:10px;margin-top:12px">
+                            <button class="btn btn-primary" onclick="savePaginationSettings()">Save Settings</button>
+                            <button class="btn btn-ghost" onclick="resetPaginationSettings()">Reset to Defaults</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ======== AUDIT LOG TAB ======== -->
+            <div class="tab-panel" id="panel-audit">
+                <div class="page-title" data-i18n="admin.audit_log_title">Audit Log</div>
+                <div class="page-subtitle" data-i18n="admin.audit_subtitle">System activity log with full event tracing</div>
+                <div class="toolbar">
+                    <div class="toolbar-left">
+                        <select class="filter-select" id="auditFilterAction" onchange="filterAudit()">
+                            <option value="">All Actions</option>
+                            <option value="Login">Login</option>
+                            <option value="Logout" data-i18n="nav.signout">Logout</option>
+                            <option value="Report View">Report View</option>
+                            <option value="Project Create">Project Create</option>
+                            <option value="Export">Export</option>
+                            <option value="User Create">User Create</option>
+                            <option value="User Update">User Update</option>
+                            <option value="User Delete">User Delete</option>
+                            <option value="Settings Change">Settings Change</option>
+                            <option value="AOI Access">AOI Access</option>
+                        </select>
+                        <select class="filter-select" id="auditFilterUser" onchange="filterAudit()">
+                            <option value="">All Users</option>
+                        </select>
+                        <input type="date" class="filter-select" id="auditFilterDateFrom" onchange="filterAudit()" style="color:var(--text-secondary)">
+                        <input type="date" class="filter-select" id="auditFilterDateTo" onchange="filterAudit()" style="color:var(--text-secondary)">
+                    </div>
+                </div>
+                <div class="card">
+                    <div style="max-height:calc(100vh - 260px);overflow-y:auto">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Timestamp</th>
+                                    <th>User</th>
+                                    <th>Action</th>
+                                    <th>Resource</th>
+                                    <th>IP Address</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="auditBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ======== SERVICES TAB ======== -->
+            <div class="tab-panel" id="panel-services">
+                <div class="page-title" data-i18n="admin.services_title">Services</div>
+                <div class="page-subtitle">Monitor and access platform services</div>
+
+                <div class="services-grid" id="servicesGrid"></div>
+
+                <div class="url-config-section">
+                    <div class="url-config-title">Configure Service URLs</div>
+                    <div class="url-mode-toggle">
+                        <button class="url-mode-btn" data-mode="ip" onclick="setUrlMode('ip')">IP Mode</button>
+                        <button class="url-mode-btn" data-mode="dns" onclick="setUrlMode('dns')">DNS Mode</button>
+                    </div>
+                    <div class="url-host-row">
+                        <label style="font-size:12px;color:var(--text-secondary);white-space:nowrap">Host / DNS:</label>
+                        <input type="text" class="url-host-input" id="urlHostInput" placeholder="e.g. 192.168.1.100 or myserver.local" oninput="saveUrlConfig()">
+                        <button class="btn btn-primary" onclick="checkAllServices()" style="white-space:nowrap">Refresh Status</button>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+    </div>
+</div>
+
+<!-- ======== MODALS ======== -->
+
+<!-- Add/Edit User Modal -->
+<div class="modal-overlay" id="userModal">
+    <div class="modal">
+        <div class="modal-title" id="userModalTitle" data-i18n="admin.add_user_title">Add User</div>
+        <div class="form-group">
+            <label class="form-label" data-i18n="admin.th.username">Username</label>
+            <input type="text" class="form-input" id="userFieldUsername" style="width:100%" autocomplete="off">
+        </div>
+        <div class="form-group">
+            <label class="form-label" data-i18n="admin.th.email">Email</label>
+            <input type="email" class="form-input" id="userFieldEmail" style="width:100%" autocomplete="off">
+        </div>
+        <!-- Role selector hidden: access now controlled by group membership -->
+        <input type="hidden" id="userFieldRole" value="Analyst">
+        <div class="form-group">
+            <label class="form-label" data-i18n="admin.assign_groups">Assign Groups</label>
+            <div class="checkbox-list" id="userGroupsList"></div>
+        </div>
+        <div class="modal-actions">
+            <button class="btn btn-ghost" onclick="closeModal('userModal')" data-i18n="admin.cancel">Cancel</button>
+            <button class="btn btn-primary" id="userSaveBtn" onclick="saveUser()" data-i18n="admin.create_user">Create User</button>
+        </div>
+    </div>
+</div>
+
+<!-- Create Group Modal -->
+<div class="modal-overlay" id="groupModal">
+    <div class="modal">
+        <div class="modal-title">Create Group</div>
+        <div class="form-group">
+            <label class="form-label">Group Name</label>
+            <input type="text" class="form-input" id="groupFieldName" style="width:100%" autocomplete="off">
+        </div>
+        <div class="form-group">
+            <label class="form-label">Description</label>
+            <textarea class="form-textarea" id="groupFieldDesc" rows="2"></textarea>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Max Classification Level</label>
+            <select class="form-select" id="groupFieldClassification" style="width:100%">
+                <option value="U">UNCLASSIFIED</option>
+                <option value="C">CONFIDENTIAL</option>
+                <option value="S" selected>SECRET</option>
+                <option value="TS">TOP SECRET</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Allowed Applications</label>
+            <div class="checkbox-list" id="groupAppsList" style="max-height:180px;overflow-y:auto">
+                <div style="color:var(--text-muted);font-size:12px;padding:8px">Loading apps...</div>
+            </div>
+        </div>
+        <div class="modal-actions">
+            <button class="btn btn-ghost" onclick="closeModal('groupModal')">Cancel</button>
+            <button class="btn btn-primary" onclick="createGroup()">Create Group</button>
+        </div>
+    </div>
+</div>
+
+<!-- Define AOI Modal -->
+<div class="modal-overlay" id="aoiModal">
+    <div class="modal">
+        <div class="modal-title">Define AOI</div>
+        <div class="form-group">
+            <label class="form-label">AOI Name</label>
+            <input type="text" class="form-input" id="aoiFieldName" style="width:100%" autocomplete="off">
+        </div>
+        <div class="form-group">
+            <label class="form-label">Classification Level</label>
+            <select class="form-select" id="aoiFieldClassification" style="width:100%">
+                <option value="TS">TOP SECRET</option>
+                <option value="S" selected>SECRET</option>
+                <option value="C">CONFIDENTIAL</option>
+                <option value="U">UNCLASSIFIED</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Assign Groups</label>
+            <div class="checkbox-list" id="aoiGroupsList"></div>
+        </div>
+        <div class="modal-actions">
+            <button class="btn btn-ghost" onclick="closeModal('aoiModal')">Cancel</button>
+            <button class="btn btn-primary" onclick="saveAoi()">Save AOI</button>
+        </div>
+    </div>
+</div>
+
+<!-- Toast Container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script src="/libs/maplibre-gl.js"></script>
+<script src="/libs/map-styles.js?v=abyss2"></script>
+<script>
+// ============================================================
+// AUTH
+// ============================================================
+
+function checkAuth() {
+    var token = localStorage.getItem('intel_globe_token');
+    if (!token) {
+        window.location.href = 'login.html';
+        return false;
+    }
+    // Verify user is admin (check localStorage then JWT payload)
+    try {
+        var user = JSON.parse(localStorage.getItem('intel_globe_user'));
+        var role = (user && user.role) || '';
+        // Fallback: check JWT payload directly
+        if (role !== 'admin') {
+            try {
+                var jwtPayload = JSON.parse(atob(token.split('.')[1]));
+                role = jwtPayload.role || role;
+            } catch(je) {}
+        }
+        if (role !== 'admin') {
+            window.location.href = 'master-home.html';
+            return false;
+        }
+    } catch(e) {
+        window.location.href = 'login.html';
+        return false;
+    }
+    return true;
+}
+
+function loadUser() {
+    try {
+        var u = JSON.parse(localStorage.getItem('intel_globe_user'));
+        if (u) {
+            var name = u.username || u.name || 'admin';
+            var el = document.getElementById('userDisplay');
+            if (el) el.textContent = name + ' (admin)';
+        }
+    } catch(e) {
+        document.getElementById('userDisplay').textContent = 'admin';
+    }
+}
+
+function logout() {
+    if (window.AbyssAuth && typeof AbyssAuth.logout === 'function') { AbyssAuth.logout(); return; }
+    localStorage.removeItem('intel_globe_token');
+    localStorage.removeItem('intel_globe_user');
+    window.location.href = 'login.html';
+}
+
+// ============================================================
+// TOAST
+// ============================================================
+
+function toast(msg, type) {
+    type = type || 'info';
+    var c = document.getElementById('toastContainer');
+    if (!c) return;
+    var t = document.createElement('div');
+    t.className = 'toast toast-' + type;
+    t.textContent = msg;
+    c.appendChild(t);
+    setTimeout(function() {
+        t.style.opacity = '0';
+        t.style.transition = 'opacity 0.3s';
+        setTimeout(function() { t.remove(); }, 300);
+    }, 4000);
+}
+
+// ============================================================
+// MODAL HELPERS
+// ============================================================
+
+function openModal(id) { document.getElementById(id).classList.add('active'); }
+function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+
+document.querySelectorAll('.modal-overlay').forEach(function(overlay) {
+    overlay.addEventListener('click', function(e) {
+        if (e.target === overlay) overlay.classList.remove('active');
+    });
+});
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        document.querySelectorAll('.modal-overlay.active').forEach(function(m) { m.classList.remove('active'); });
+    }
+});
+
+// ============================================================
+// TAB SWITCHING
+// ============================================================
+
+var aoiMapInited = false;
+
+function switchTab(tab) {
+    document.querySelectorAll('.sidebar-link').forEach(function(b) {
+        b.classList.toggle('active', b.dataset.tab === tab);
+    });
+    document.querySelectorAll('.tab-panel').forEach(function(p) {
+        p.classList.toggle('active', p.id === 'panel-' + tab);
+    });
+    if (tab === 'aoi' && !aoiMapInited) {
+        aoiMapInited = true;
+        setTimeout(initAoiMap, 100);
+    }
+    if (tab === 'aoi' && aoiMapInited && aoiMap) {
+        setTimeout(function() { aoiMap.resize(); }, 50);
+    }
+    if (tab === 'services') {
+        initServicesTab();
+    }
+}
+
+// ============================================================
+// UTILITY
+// ============================================================
+
+function esc(s) {
+    if (!s) return '';
+    var d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+}
+
+// ============================================================
+// DEMO DATA
+// ============================================================
+
+var DEMO_GROUPS = [
+    { id: 1, name: 'Admin Staff', description: 'System administrators', memberCount: 1, aoiCount: 0, classification: 'U', members: ['admin'], allowed_apps: [] }
+];
+
+// Cache for registered apps list
+var REGISTERED_APPS = [];
+
+function fetchRegisteredApps() {
+    var token = localStorage.getItem('intel_globe_token');
+    return fetch('/api/registered-apps', {
+        headers: token ? { 'Authorization': 'Bearer ' + token } : {}
+    })
+    .then(function(res) { return res.ok ? res.json() : []; })
+    .then(function(data) {
+        REGISTERED_APPS = Array.isArray(data) ? data : (data.items || []);
+        return REGISTERED_APPS;
+    })
+    .catch(function(err) {
+        console.warn('Could not fetch registered apps:', err);
+        return [];
+    });
+}
+
+function renderGroupAppsCheckbox(selectedApps) {
+    var list = document.getElementById('groupAppsList');
+    if (!REGISTERED_APPS.length) {
+        list.innerHTML = '<div style="color:var(--text-muted);font-size:12px;padding:8px">No applications registered</div>';
+        return;
+    }
+    var sel = selectedApps || [];
+    list.innerHTML = REGISTERED_APPS.map(function(app) {
+        var appName = app.app_name || app.name || '';
+        var displayName = app.display_name || appName;
+        var checked = sel.indexOf(appName) !== -1 ? ' checked' : '';
+        return '<label class="checkbox-item"><input type="checkbox" value="' + esc(appName) + '"' + checked + '><span>' + esc(displayName) + '</span></label>';
+    }).join('');
+}
+
+function getCheckedApps() {
+    var apps = [];
+    document.querySelectorAll('#groupAppsList input[type="checkbox"]:checked').forEach(function(cb) {
+        apps.push(cb.value);
+    });
+    return apps;
+}
+
+function fetchApiGroups() {
+    var token = localStorage.getItem('intel_globe_token');
+    fetch('/api/groups', {
+        headers: token ? { 'Authorization': 'Bearer ' + token } : {}
+    })
+    .then(function(res) { return res.ok ? res.json() : { items: [] }; })
+    .then(function(data) {
+        var apiGroups = data.items || (Array.isArray(data) ? data : []);
+        if (!apiGroups.length) return;
+        DEMO_GROUPS = apiGroups.map(function(g) {
+            return {
+                id: g.id,
+                name: g.name || 'Unnamed',
+                description: g.description || '',
+                memberCount: g.member_count || (g.members ? g.members.length : 0),
+                aoiCount: g.aoi_count || 0,
+                classification: g.classification || 'U',
+                members: g.members || [],
+                allowed_apps: g.allowed_apps || []
+            };
+        });
+        filterGroups();
+        populateGroupFilter();
+        updateStats();
+    })
+    .catch(function(err) {
+        console.warn('Could not fetch groups from API:', err);
+    });
+}
+
+var DEMO_USERS = [
+    { username: 'admin', email: 'admin@map2.local', role: 'Admin', groups: ['Admin Staff'], status: 'Active', lastLogin: new Date().toISOString().slice(0,16).replace('T',' ') }
+];
+
+// Fetch real users from API and merge into DEMO_USERS
+function fetchApiUsers() {
+    var token = localStorage.getItem('intel_globe_token');
+    fetch('/api/users', {
+        headers: token ? { 'Authorization': 'Bearer ' + token } : {}
+    })
+    .then(function(res) { return res.ok ? res.json() : { items: [] }; })
+    .then(function(data) {
+        var apiUsers = data.items || (Array.isArray(data) ? data : []);
+        if (!apiUsers.length) return;
+        // Replace DEMO_USERS with real API data, preserving demo group assignments
+        var merged = apiUsers.map(function(u) {
+            var existing = DEMO_USERS.find(function(d) { return d.username === u.username; });
+            return {
+                id: u.id,
+                username: u.username || u.display_name || 'unknown',
+                email: u.email || (existing ? existing.email : ''),
+                role: (u.role || 'Viewer').charAt(0).toUpperCase() + (u.role || 'viewer').slice(1),
+                groups: existing ? existing.groups : [],
+                status: u.is_active !== false ? 'Active' : 'Disabled',
+                lastLogin: u.last_login ? u.last_login.replace('T', ' ').substring(0, 16) : 'Never'
+            };
+        });
+        DEMO_USERS = merged;
+        filterUsers();
+        populateAuditUserFilter();
+        updateStats();
+    })
+    .catch(function(err) {
+        console.warn('Could not fetch users from API:', err);
+    });
+}
+
+var CLASSIFICATION_COLORS = {
+    'TS': { fill: '#ef4444', border: '#ef4444', opacity: 0.15 },
+    'S':  { fill: '#f59e0b', border: '#f59e0b', opacity: 0.15 },
+    'C':  { fill: '#f5dd32', border: '#f5dd32', opacity: 0.15 },
+    'U':  { fill: '#22c55e', border: '#22c55e', opacity: 0.15 }
+};
+
+var DEMO_AOIS = [];
+
+// Generate 50 audit log entries
+var AUDIT_ACTIONS = ['Login', 'Logout', 'Report View', 'Project Create', 'Export', 'User Create', 'User Update', 'Settings Change', 'AOI Access', 'Login'];
+var AUDIT_RESOURCE_MAP = {
+    'Login': function(user) { return 'Session'; },
+    'Logout': function(user) { return 'Session'; },
+    'Report View': function() { var codes = ['RPT-2026-04821','RPT-2026-04819','RPT-2026-04815','RPT-2026-04810','RPT-2026-04807']; return codes[Math.floor(Math.random()*codes.length)]; },
+    'Project Create': function() { var names = ['Project CEDAR','Project FALCON','Project GRANITE','Project SUMMIT','Project ARCHER']; return names[Math.floor(Math.random()*names.length)]; },
+    'Export': function() { var items = ['Report RPT-2026-04821 as PDF','Report RPT-2026-04819 as KML','Report RPT-2026-04815 as CSV','Project CEDAR as PDF','Timeline TL-7 as PDF']; return items[Math.floor(Math.random()*items.length)]; },
+    'User Create': function() { var users = ['b.johnson','v.moore','t.nguyen','r.smith','j.clark']; return users[Math.floor(Math.random()*users.length)]; },
+    'User Update': function() { var users = ['b.johnson','v.moore','t.nguyen','r.smith','j.clark']; return users[Math.floor(Math.random()*users.length)]; },
+    'User Delete': function() { var users = ['x.former','y.departed','z.removed']; return users[Math.floor(Math.random()*users.length)]; },
+    'Settings Change': function() { var settings = ['Password Policy','Session Timeout','MFA Requirement','Export Watermark','Classification Banner']; return settings[Math.floor(Math.random()*settings.length)]; },
+    'AOI Access': function() { var aois = ['AOI: Iraq','AOI: Syria','AOI: Iran','AOI: Yemen','AOI: Libya']; return aois[Math.floor(Math.random()*aois.length)]; }
+};
+var AUDIT_IPS = ['10.0.1.15', '10.0.1.22', '10.0.1.30', '10.0.2.5', '10.0.2.18', '192.168.1.100', '10.0.3.7', '172.16.0.50'];
+
+var DEMO_AUDIT = [];
+(function generateAudit() {
+    var usernames = DEMO_USERS.map(function(u) { return u.username; });
+    var base = new Date('2026-03-15T10:00:00');
+    for (var i = 0; i < 50; i++) {
+        var ts = new Date(base.getTime() - i * 1800000 - Math.random() * 600000);
+        var action = AUDIT_ACTIONS[Math.floor(Math.random() * AUDIT_ACTIONS.length)];
+        var user = usernames[Math.floor(Math.random() * usernames.length)];
+        var resourceFn = AUDIT_RESOURCE_MAP[action];
+        var resource = resourceFn ? resourceFn(user) : action;
+        var ip = AUDIT_IPS[Math.floor(Math.random() * AUDIT_IPS.length)];
+        var failed = (action === 'Login' && Math.random() < 0.15) || (action === 'Export' && Math.random() < 0.1) || (action === 'AOI Access' && Math.random() < 0.2);
+        DEMO_AUDIT.push({
+            timestamp: ts.toISOString().replace('T', ' ').substring(0, 19),
+            user: user,
+            action: action,
+            resource: resource,
+            ip: ip,
+            status: failed ? 'Failed' : 'Success'
+        });
+    }
+})();
+
+// ============================================================
+// USERS TAB
+// ============================================================
+
+function renderUsers(users) {
+    var body = document.getElementById('usersBody');
+    if (!users || !users.length) {
+        body.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-muted)">No users found</td></tr>';
+        return;
+    }
+    body.innerHTML = users.map(function(u) {
+        var statusBadge = u.status === 'Active' ? 'badge-active' : 'badge-disabled';
+        var groupsHtml = u.groups.map(function(g) { return '<span style="display:inline-block;font-size:11px;color:var(--text-secondary);background:rgba(255,255,255,0.06);padding:2px 8px;border-radius:4px;margin:0 4px 2px 0;border:1px solid rgba(255,255,255,0.08)">' + esc(g) + '</span>'; }).join('');
+        return '<tr>' +
+            '<td><strong>' + esc(u.username) + '</strong></td>' +
+            '<td style="color:var(--text-secondary)">' + esc(u.email) + '</td>' +
+            '<td>' + groupsHtml + '</td>' +
+            '<td><span class="badge ' + statusBadge + '">' + esc(u.status) + '</span></td>' +
+            '<td style="font-size:11px;color:var(--text-muted);font-family:var(--font-mono)">' + esc(u.lastLogin) + '</td>' +
+            '<td class="actions">' +
+                '<button class="btn btn-ghost btn-xs" onclick="editUser(\'' + esc(u.username) + '\')">Edit</button>' +
+                '<button class="btn btn-ghost btn-xs" onclick="toggleUserStatus(\'' + esc(u.username) + '\')">' + (u.status === 'Active' ? 'Disable' : 'Enable') + '</button>' +
+                '<button class="btn btn-ghost btn-xs" onclick="resetPassword(\'' + esc(u.username) + '\')">Reset PW</button>' +
+                '<button class="btn btn-danger btn-xs" onclick="deleteUser(\'' + esc(u.username) + '\')">Delete</button>' +
+            '</td></tr>';
+    }).join('');
+}
+
+function filterUsers() {
+    var q = document.getElementById('userSearch').value.toLowerCase();
+    var role = document.getElementById('userFilterRole').value;
+    var status = document.getElementById('userFilterStatus').value;
+    var group = document.getElementById('userFilterGroup').value;
+    var filtered = DEMO_USERS.filter(function(u) {
+        if (q && u.username.toLowerCase().indexOf(q) === -1 && u.email.toLowerCase().indexOf(q) === -1) return false;
+        if (role && u.role !== role) return false;
+        if (status && u.status !== status) return false;
+        if (group && u.groups.indexOf(group) === -1) return false;
+        return true;
+    });
+    renderUsers(filtered);
+}
+
+function populateGroupFilter() {
+    var sel = document.getElementById('userFilterGroup');
+    sel.innerHTML = '<option value="">All Groups</option>';
+    DEMO_GROUPS.forEach(function(g) {
+        sel.innerHTML += '<option value="' + esc(g.name) + '">' + esc(g.name) + '</option>';
+    });
+}
+
+function openAddUserModal() {
+    document.getElementById('userModalTitle').textContent = 'Add User';
+    document.getElementById('userFieldUsername').value = '';
+    document.getElementById('userFieldUsername').disabled = false;
+    document.getElementById('userFieldEmail').value = '';
+    document.getElementById('userFieldRole').value = 'Analyst';
+    document.getElementById('userSaveBtn').textContent = 'Create User';
+    document.getElementById('userSaveBtn').setAttribute('data-mode', 'create');
+    renderUserGroupsCheckbox([]);
+    openModal('userModal');
+}
+
+function renderUserGroupsCheckbox(selectedGroups) {
+    var list = document.getElementById('userGroupsList');
+    list.innerHTML = DEMO_GROUPS.map(function(g) {
+        var checked = selectedGroups.indexOf(g.name) !== -1 ? ' checked' : '';
+        return '<label class="checkbox-item"><input type="checkbox" value="' + esc(g.name) + '"' + checked + '><span>' + esc(g.name) + '</span></label>';
+    }).join('');
+}
+
+function editUser(username) {
+    var u = DEMO_USERS.find(function(x) { return x.username === username; });
+    if (!u) return;
+    document.getElementById('userModalTitle').textContent = 'Edit User';
+    document.getElementById('userFieldUsername').value = u.username;
+    document.getElementById('userFieldUsername').disabled = true;
+    document.getElementById('userFieldEmail').value = u.email;
+    document.getElementById('userFieldRole').value = u.role;
+    document.getElementById('userSaveBtn').textContent = 'Save Changes';
+    document.getElementById('userSaveBtn').setAttribute('data-mode', 'edit');
+    renderUserGroupsCheckbox(u.groups);
+    openModal('userModal');
+}
+
+function saveUser() {
+    var mode = document.getElementById('userSaveBtn').getAttribute('data-mode');
+    var username = document.getElementById('userFieldUsername').value.trim();
+    var email = document.getElementById('userFieldEmail').value.trim();
+    var role = document.getElementById('userFieldRole').value;
+    if (!username || !email) { toast('Username and email are required', 'error'); return; }
+    var checkedGroups = [];
+    document.querySelectorAll('#userGroupsList input[type="checkbox"]:checked').forEach(function(cb) {
+        checkedGroups.push(cb.value);
+    });
+    var token = localStorage.getItem('intel_globe_token');
+    if (mode === 'create') {
+        var password = document.getElementById('userFieldPassword') ? document.getElementById('userFieldPassword').value.trim() : '';
+        if (!password) password = 'changeme123';
+        fetch('/api/users', {
+            method: 'POST',
+            headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: username, email: email, role: role.toLowerCase(), password: password, display_name: username })
+        })
+        .then(function(res) {
+            if (!res.ok) return res.json().then(function(d) { throw new Error(d.detail || 'API error'); });
+            return res.json();
+        })
+        .then(function(newUser) {
+            toast('User "' + username + '" created', 'success');
+            closeModal('userModal');
+            fetchApiUsers();
+        })
+        .catch(function(err) {
+            toast('Failed to create user: ' + err.message, 'error');
+        });
+    } else {
+        var u = DEMO_USERS.find(function(x) { return x.username === username; });
+        if (u && u.id) {
+            fetch('/api/users/' + u.id, {
+                method: 'PATCH',
+                headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: email, role: role.toLowerCase() })
+            })
+            .then(function(res) {
+                if (!res.ok) return res.json().then(function(d) { throw new Error(d.detail || 'API error'); });
+                return res.json();
+            })
+            .then(function() {
+                toast('User "' + username + '" updated', 'success');
+                closeModal('userModal');
+                fetchApiUsers();
+            })
+            .catch(function(err) {
+                toast('Failed to update user: ' + err.message, 'error');
+            });
+        } else {
+            if (u) { u.email = email; u.role = role; u.groups = checkedGroups; }
+            toast('User "' + username + '" updated (local only)', 'success');
+            closeModal('userModal');
+            filterUsers();
+            updateStats();
+        }
+    }
+}
+
+function toggleUserStatus(username) {
+    var u = DEMO_USERS.find(function(x) { return x.username === username; });
+    if (!u) return;
+    var newActive = u.status !== 'Active';
+    var token = localStorage.getItem('intel_globe_token');
+    if (u.id) {
+        fetch('/api/users/' + u.id, {
+            method: 'PATCH',
+            headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ is_active: newActive })
+        })
+        .then(function(res) {
+            if (!res.ok) return res.json().then(function(d) { throw new Error(d.detail || 'API error'); });
+            u.status = newActive ? 'Active' : 'Disabled';
+            toast('User "' + username + '" ' + u.status.toLowerCase(), 'success');
+            filterUsers();
+        })
+        .catch(function(err) {
+            toast('Failed to toggle user: ' + err.message, 'error');
+        });
+    } else {
+        u.status = newActive ? 'Active' : 'Disabled';
+        toast('User "' + username + '" ' + u.status.toLowerCase(), 'success');
+        filterUsers();
+    }
+}
+
+function resetPassword(username) {
+    var u = DEMO_USERS.find(function(x) { return x.username === username; });
+    var token = localStorage.getItem('intel_globe_token');
+    if (u && u.id) {
+        var newPw = prompt('Enter new password for "' + username + '":', '');
+        if (!newPw) return;
+        fetch('/api/users/' + u.id, {
+            method: 'PATCH',
+            headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password: newPw })
+        })
+        .then(function(res) {
+            if (!res.ok) return res.json().then(function(d) { throw new Error(d.detail || 'API error'); });
+            toast('Password reset for "' + username + '"', 'success');
+        })
+        .catch(function(err) {
+            toast('Failed to reset password: ' + err.message, 'error');
+        });
+    } else {
+        toast('Password reset link sent for "' + username + '"', 'success');
+    }
+}
+
+function deleteUser(username) {
+    if (username === 'admin') { toast('Cannot delete the admin account', 'error'); return; }
+    if (!confirm('Deactivate user "' + username + '"?')) return;
+    var u = DEMO_USERS.find(function(x) { return x.username === username; });
+    var token = localStorage.getItem('intel_globe_token');
+    if (u && u.id) {
+        fetch('/api/users/' + u.id, {
+            method: 'DELETE',
+            headers: { 'Authorization': 'Bearer ' + token }
+        })
+        .then(function(res) {
+            if (!res.ok) return res.json().then(function(d) { throw new Error(d.detail || 'API error'); });
+            toast('User "' + username + '" deactivated', 'success');
+            fetchApiUsers();
+        })
+        .catch(function(err) {
+            toast('Failed to deactivate user: ' + err.message, 'error');
+        });
+    } else {
+        DEMO_USERS = DEMO_USERS.filter(function(x) { return x.username !== username; });
+        toast('User "' + username + '" removed', 'success');
+        filterUsers();
+        updateStats();
+    }
+}
+
+// ============================================================
+// GROUPS TAB
+// ============================================================
+
+var selectedGroupId = null;
+
+function renderGroups(groups) {
+    var grid = document.getElementById('groupsGrid');
+    if (!groups || !groups.length) {
+        grid.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted);grid-column:1/-1">No groups found</div>';
+        return;
+    }
+    grid.innerHTML = groups.map(function(g) {
+        var classBadge = 'badge-' + g.classification.toLowerCase();
+        var memberChips = g.members.slice(0, 4).map(function(m) {
+            return '<span class="chip chip-user">' + esc(m) + '</span>';
+        }).join('');
+        if (g.members.length > 4) memberChips += '<span class="chip chip-none">+' + (g.members.length - 4) + ' more</span>';
+        var aoiNames = DEMO_AOIS.filter(function(a) { return a.groups.indexOf(g.name) !== -1; }).map(function(a) { return a.name; });
+        var aoiChips = aoiNames.length > 0
+            ? aoiNames.map(function(n) { return '<span class="chip chip-aoi">' + esc(n) + '</span>'; }).join('')
+            : '<span class="chip chip-none">No AOIs assigned</span>';
+        return '<div class="group-card' + (selectedGroupId === g.id ? ' selected' : '') + '" onclick="selectGroup(' + g.id + ')">' +
+            '<div class="group-card-header">' +
+                '<div class="group-card-title">' + esc(g.name) + '</div>' +
+                '<span class="badge ' + classBadge + '">' + esc(g.classification) + '</span>' +
+            '</div>' +
+            '<div class="group-card-desc">' + esc(g.description) + '</div>' +
+            '<div class="group-card-meta">' +
+                '<div class="group-meta-item"><span>' + g.memberCount + '</span> members</div>' +
+                '<div class="group-meta-item"><span>' + aoiNames.length + '</span> AOIs</div>' +
+                '<div class="group-meta-item"><span>' + (g.allowed_apps ? g.allowed_apps.length : 0) + '</span> apps</div>' +
+            '</div>' +
+            '<div class="section-label-sm">Members</div>' +
+            '<div class="chip-list">' + memberChips + '</div>' +
+            '<div class="section-label-sm">AOIs</div>' +
+            '<div class="chip-list">' + aoiChips + '</div>' +
+        '</div>';
+    }).join('');
+}
+
+function filterGroups() {
+    var q = document.getElementById('groupSearch').value.toLowerCase();
+    var filtered = DEMO_GROUPS.filter(function(g) {
+        if (q && g.name.toLowerCase().indexOf(q) === -1 && g.description.toLowerCase().indexOf(q) === -1) return false;
+        return true;
+    });
+    renderGroups(filtered);
+}
+
+function selectGroup(id) {
+    selectedGroupId = id;
+    renderGroups(DEMO_GROUPS);
+    showGroupDetail(id);
+}
+
+function showGroupDetail(id) {
+    var g = DEMO_GROUPS.find(function(x) { return x.id === id; });
+    if (!g) { document.getElementById('groupDetail').style.display = 'none'; return; }
+    var aoiNames = DEMO_AOIS.filter(function(a) { return a.groups.indexOf(g.name) !== -1; });
+    var membersHtml = g.members.map(function(m) {
+        var u = DEMO_USERS.find(function(x) { return x.username === m; });
+        var role = u ? u.role : 'Unknown';
+        var roleBadge = role === 'Admin' ? 'badge-admin' : role === 'Analyst' ? 'badge-analyst' : 'badge-viewer';
+        return '<div class="member-item"><span class="badge ' + roleBadge + '" style="font-size:9px">' + esc(role) + '</span> ' + esc(m) + '</div>';
+    }).join('');
+    var aoisHtml = aoiNames.map(function(a) {
+        var classBadge = 'badge-' + a.classification.toLowerCase();
+        return '<div class="member-item"><span class="badge ' + classBadge + '" style="font-size:9px">' + esc(a.classification) + '</span> ' + esc(a.name) + '</div>';
+    }).join('') || '<div style="color:var(--text-muted);font-size:12px;padding:8px">No AOIs assigned</div>';
+
+    var detail = document.getElementById('groupDetail');
+    detail.style.display = 'block';
+    detail.innerHTML = '<div class="group-detail">' +
+        '<div class="group-detail-title">' + esc(g.name) + '</div>' +
+        '<div class="detail-grid">' +
+            '<div><div class="detail-section-title">Members (' + g.members.length + ')</div><div class="member-list">' + membersHtml + '</div></div>' +
+            '<div><div class="detail-section-title">Assigned AOIs (' + aoiNames.length + ')</div><div class="member-list">' + aoisHtml + '</div></div>' +
+            '<div><div class="detail-section-title">Allowed Apps (' + (g.allowed_apps ? g.allowed_apps.length : 0) + ')</div><div class="member-list">' + (g.allowed_apps && g.allowed_apps.length ? g.allowed_apps.map(function(a) { return '<div class="member-item">' + esc(a) + '</div>'; }).join('') : '<div style="color:var(--text-muted);font-size:12px;padding:8px">All apps (no restrictions)</div>') + '</div></div>' +
+        '</div>' +
+        '<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border-subtle);display:flex;gap:8px">' +
+            '<button class="btn btn-ghost btn-sm" onclick="toast(\'User assignment modal would open\',\'info\')">Manage Members</button>' +
+            '<button class="btn btn-ghost btn-sm" onclick="toast(\'AOI assignment modal would open\',\'info\')">Manage AOIs</button>' +
+            '<button class="btn btn-ghost btn-sm" onclick="openEditGroupApps(' + g.id + ')">Manage Apps</button>' +
+            '<button class="btn btn-danger btn-sm" onclick="deleteGroup(' + g.id + ')">Delete Group</button>' +
+        '</div>' +
+    '</div>';
+}
+
+function openCreateGroupModal() {
+    document.getElementById('groupFieldName').value = '';
+    document.getElementById('groupFieldDesc').value = '';
+    document.getElementById('groupFieldClassification').value = 'S';
+    renderGroupAppsCheckbox([]);
+    _editingGroupId = null;
+    openModal('groupModal');
+}
+
+var _editingGroupId = null;
+
+function openEditGroupApps(groupId) {
+    var g = DEMO_GROUPS.find(function(gr) { return gr.id === groupId; });
+    if (!g) return;
+    document.getElementById('groupFieldName').value = g.name;
+    document.getElementById('groupFieldDesc').value = g.description || '';
+    document.getElementById('groupFieldClassification').value = g.classification || 'S';
+    renderGroupAppsCheckbox(g.allowed_apps || []);
+    _editingGroupId = groupId;
+    openModal('groupModal');
+}
+
+function createGroup() {
+    var name = document.getElementById('groupFieldName').value.trim();
+    var desc = document.getElementById('groupFieldDesc').value.trim();
+    var cls = document.getElementById('groupFieldClassification').value;
+    if (!name) { toast('Group name is required', 'error'); return; }
+    var allowedApps = getCheckedApps();
+    var token = localStorage.getItem('intel_globe_token');
+
+    // If editing an existing group, update instead of create
+    if (_editingGroupId) {
+        var method = 'PUT';
+        var url = '/api/groups/' + _editingGroupId;
+        fetch(url, {
+            method: method,
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (token || '') },
+            body: JSON.stringify({ name: name, description: desc || '', classification: cls, allowed_apps: allowedApps })
+        })
+        .then(function(res) { if (!res.ok) throw new Error('API returned ' + res.status); return res.json(); })
+        .then(function() {
+            closeModal('groupModal');
+            toast('Group "' + name + '" updated', 'success');
+            _editingGroupId = null;
+            fetchApiGroups();
+        })
+        .catch(function(err) {
+            console.warn('API update group failed, using local fallback:', err);
+            var g = DEMO_GROUPS.find(function(gr) { return gr.id === _editingGroupId; });
+            if (g) { g.name = name; g.description = desc; g.classification = cls; g.allowed_apps = allowedApps; }
+            closeModal('groupModal');
+            toast('Group "' + name + '" updated (offline)', 'success');
+            _editingGroupId = null;
+            filterGroups();
+        });
+        return;
+    }
+
+    fetch('/api/groups', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + (token || '')
+        },
+        body: JSON.stringify({ name: name, description: desc || 'New group', classification: cls, allowed_apps: allowedApps })
+    })
+    .then(function(res) {
+        if (!res.ok) throw new Error('API returned ' + res.status);
+        return res.json();
+    })
+    .then(function(created) {
+        closeModal('groupModal');
+        toast('Group "' + name + '" created', 'success');
+        fetchApiGroups();
+    })
+    .catch(function(err) {
+        console.warn('API create group failed, using local fallback:', err);
+        var newId = DEMO_GROUPS.length > 0 ? Math.max.apply(null, DEMO_GROUPS.map(function(g) { return g.id; })) + 1 : 1;
+        DEMO_GROUPS.push({ id: newId, name: name, description: desc || 'New group', memberCount: 0, aoiCount: 0, classification: cls, members: [], allowed_apps: allowedApps });
+        closeModal('groupModal');
+        toast('Group "' + name + '" created (offline)', 'success');
+        filterGroups();
+        populateGroupFilter();
+        updateStats();
+    });
+}
+
+function deleteGroup(id) {
+    var token = localStorage.getItem('intel_globe_token');
+
+    fetch('/api/groups/' + id, {
+        method: 'DELETE',
+        headers: { 'Authorization': 'Bearer ' + (token || '') }
+    })
+    .then(function(res) {
+        if (!res.ok) throw new Error('API returned ' + res.status);
+        selectedGroupId = null;
+        document.getElementById('groupDetail').style.display = 'none';
+        toast('Group deleted', 'success');
+        fetchApiGroups();
+    })
+    .catch(function(err) {
+        console.warn('API delete group failed, using local fallback:', err);
+        DEMO_GROUPS = DEMO_GROUPS.filter(function(g) { return g.id !== id; });
+        selectedGroupId = null;
+        document.getElementById('groupDetail').style.display = 'none';
+        toast('Group deleted (offline)', 'success');
+        filterGroups();
+        populateGroupFilter();
+        updateStats();
+    });
+}
+
+// ============================================================
+// AOI ACCESS TAB
+// ============================================================
+
+var aoiMap = null;
+var selectedAoiId = null;
+var aoiCurrentStyle = 'dark';
+
+function initAoiMap() {
+    var initStyle = (typeof MapStyles !== 'undefined') ? MapStyles.getStyle('en') : {
+        version: 8,
+        sources: { 'carto': { type: 'raster', tiles: ['/raster-tiles/{z}/{x}/{y}.png'], tileSize: 256 } },
+        layers: [{ id: 'carto-tiles', type: 'raster', source: 'carto', minzoom: 0, maxzoom: 19 }]
+    };
+    aoiMap = new maplibregl.Map({
+        container: 'aoiMap',
+        style: initStyle,
+        center: [45, 28],
+        zoom: 3,
+        maxPitch: 0
+    });
+
+    // Initialize MapStyles engine for the AOI map
+    if (typeof MapStyles !== 'undefined') {
+        MapStyles.init(aoiMap, 'en');
+    }
+
+    aoiMap.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
+
+    aoiMap.on('load', function() {
+        addAoiLayers();
+        renderAoiSidebar();
+    });
+
+    // Basemap switcher UI
+    initAoiBasemapUI();
+}
+
+function initAoiBasemapUI() {
+    var btn = document.getElementById('aoiBasemapBtn');
+    var popup = document.getElementById('aoiBasemapPopup');
+    if (btn && popup) {
+        btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            popup.classList.toggle('open');
+        });
+    }
+    document.querySelectorAll('.aoi-basemap-option').forEach(function(opt) {
+        opt.addEventListener('click', function() {
+            var style = this.dataset.style;
+            aoiCurrentStyle = style;
+            if (typeof MapStyles !== 'undefined') {
+                MapStyles.switchMapStyle(style);
+                // Re-add AOI layers after style change
+                aoiMap.once('style.load', function() {
+                    addAoiLayers();
+                });
+            }
+            document.querySelectorAll('.aoi-basemap-option').forEach(function(b) {
+                b.classList.toggle('active', b.dataset.style === style);
+            });
+            if (popup) popup.classList.remove('open');
+        });
+    });
+    // Close popup on outside click
+    document.addEventListener('click', function(e) {
+        if (popup && !popup.contains(e.target) && e.target !== btn) {
+            popup.classList.remove('open');
+        }
+    });
+}
+
+function addAoiLayers() {
+    if (!aoiMap) return;
+
+    var features = DEMO_AOIS.map(function(aoi) {
+        var colors = CLASSIFICATION_COLORS[aoi.classification] || CLASSIFICATION_COLORS['U'];
+        return {
+            type: 'Feature',
+            properties: {
+                id: aoi.id,
+                name: aoi.name,
+                classification: aoi.classification,
+                groups: aoi.groups.join(', '),
+                fillColor: colors.fill,
+                fillOpacity: colors.opacity,
+                borderColor: colors.border
+            },
+            geometry: {
+                type: 'Polygon',
+                coordinates: [aoi.polygon]
+            }
+        };
+    });
+
+    if (aoiMap.getSource('aoi-regions')) {
+        aoiMap.getSource('aoi-regions').setData({ type: 'FeatureCollection', features: features });
+        return;
+    }
+
+    aoiMap.addSource('aoi-regions', {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: features }
+    });
+
+    aoiMap.addLayer({
+        id: 'aoi-fill',
+        type: 'fill',
+        source: 'aoi-regions',
+        paint: {
+            'fill-color': ['get', 'fillColor'],
+            'fill-opacity': ['get', 'fillOpacity']
+        }
+    });
+
+    aoiMap.addLayer({
+        id: 'aoi-border',
+        type: 'line',
+        source: 'aoi-regions',
+        paint: {
+            'line-color': ['get', 'borderColor'],
+            'line-width': 2,
+            'line-opacity': 0.8
+        }
+    });
+
+    aoiMap.addLayer({
+        id: 'aoi-labels',
+        type: 'symbol',
+        source: 'aoi-regions',
+        layout: {
+            'text-field': ['get', 'name'],
+            'text-size': 12,
+            'text-allow-overlap': true
+        },
+        paint: {
+            'text-color': '#ffffff',
+            'text-halo-color': 'rgba(0,0,0,0.7)',
+            'text-halo-width': 1.5
+        }
+    });
+
+    aoiMap.on('click', 'aoi-fill', function(e) {
+        if (!e.features || !e.features.length) return;
+        var f = e.features[0];
+        var props = f.properties;
+        var classBadgeClass = 'badge-' + (props.classification || 'u').toLowerCase();
+        var html = '<div style="min-width:180px">' +
+            '<div style="font-weight:600;font-size:14px;margin-bottom:6px">' + esc(props.name) + '</div>' +
+            '<div style="margin-bottom:6px"><span class="badge ' + classBadgeClass + '">' + esc(props.classification) + '</span></div>' +
+            '<div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">Groups:</div>' +
+            '<div style="font-size:12px;color:var(--text-secondary)">' + esc(props.groups) + '</div>' +
+        '</div>';
+        new maplibregl.Popup({ closeOnClick: true, maxWidth: '280px' })
+            .setLngLat(e.lngLat)
+            .setHTML(html)
+            .addTo(aoiMap);
+
+        selectAoi(props.id);
+    });
+
+    aoiMap.on('mouseenter', 'aoi-fill', function() { aoiMap.getCanvas().style.cursor = 'pointer'; });
+    aoiMap.on('mouseleave', 'aoi-fill', function() { aoiMap.getCanvas().style.cursor = ''; });
+}
+
+function renderAoiSidebar() {
+    var body = document.getElementById('aoiSidebarBody');
+    document.getElementById('aoiCount').textContent = DEMO_AOIS.length;
+    body.innerHTML = DEMO_AOIS.map(function(aoi) {
+        var colors = CLASSIFICATION_COLORS[aoi.classification] || CLASSIFICATION_COLORS['U'];
+        return '<div class="aoi-item' + (selectedAoiId === aoi.id ? ' selected' : '') + '" onclick="selectAoi(' + aoi.id + ')">' +
+            '<span class="aoi-item-dot" style="background:' + colors.fill + '"></span>' +
+            '<div class="aoi-item-info">' +
+                '<div class="aoi-item-name">' + esc(aoi.name) + '</div>' +
+                '<div class="aoi-item-sub">' + esc(aoi.classification) + ' &middot; ' + aoi.groups.length + ' group' + (aoi.groups.length !== 1 ? 's' : '') + '</div>' +
+            '</div>' +
+            '<span class="badge badge-' + aoi.classification.toLowerCase() + '" style="font-size:9px">' + esc(aoi.classification) + '</span>' +
+        '</div>';
+    }).join('');
+}
+
+function selectAoi(id) {
+    selectedAoiId = id;
+    renderAoiSidebar();
+    var aoi = DEMO_AOIS.find(function(a) { return a.id === id; });
+    if (aoi && aoiMap) {
+        aoiMap.flyTo({ center: aoi.center, zoom: 5, duration: 800 });
+        // Highlight by temporarily boosting opacity
+        aoiMap.setPaintProperty('aoi-fill', 'fill-opacity', [
+            'case',
+            ['==', ['get', 'id'], id], 0.35,
+            ['get', 'fillOpacity']
+        ]);
+        setTimeout(function() {
+            aoiMap.setPaintProperty('aoi-fill', 'fill-opacity', ['get', 'fillOpacity']);
+        }, 1500);
+    }
+}
+
+function startDefineAoi() {
+    renderAoiGroupsCheckbox();
+    document.getElementById('aoiFieldName').value = '';
+    document.getElementById('aoiFieldClassification').value = 'S';
+    openModal('aoiModal');
+    toast('In production, you would draw a polygon on the map. For demo, a default region will be created.', 'info');
+}
+
+function renderAoiGroupsCheckbox() {
+    var list = document.getElementById('aoiGroupsList');
+    list.innerHTML = DEMO_GROUPS.map(function(g) {
+        return '<label class="checkbox-item"><input type="checkbox" value="' + esc(g.name) + '"><span>' + esc(g.name) + '</span></label>';
+    }).join('');
+}
+
+function saveAoi() {
+    var name = document.getElementById('aoiFieldName').value.trim();
+    var cls = document.getElementById('aoiFieldClassification').value;
+    if (!name) { toast('AOI name is required', 'error'); return; }
+    var checkedGroups = [];
+    document.querySelectorAll('#aoiGroupsList input[type="checkbox"]:checked').forEach(function(cb) {
+        checkedGroups.push(cb.value);
+    });
+    var newId = DEMO_AOIS.length > 0 ? Math.max.apply(null, DEMO_AOIS.map(function(a) { return a.id; })) + 1 : 1;
+    // Demo polygon near existing AOIs
+    var cx = 40 + Math.random() * 20;
+    var cy = 25 + Math.random() * 10;
+    DEMO_AOIS.push({
+        id: newId,
+        name: name,
+        classification: cls,
+        groups: checkedGroups,
+        polygon: [[cx-2,cy+2],[cx+2,cy+2],[cx+2,cy-2],[cx-2,cy-2],[cx-2,cy+2]],
+        center: [cx, cy]
+    });
+    closeModal('aoiModal');
+    toast('AOI "' + name + '" defined', 'success');
+    if (aoiMap && aoiMap.getSource('aoi-regions')) {
+        addAoiLayers();
+    }
+    renderAoiSidebar();
+    updateStats();
+}
+
+// ============================================================
+// SYSTEM SETTINGS
+// ============================================================
+
+function toggleMaintenance() {
+    var el = document.getElementById('settingMaintenance');
+    var label = document.getElementById('maintenanceLabel');
+    el.classList.toggle('on');
+    label.textContent = el.classList.contains('on') ? 'Enabled' : 'Disabled';
+}
+
+function saveSettings() {
+    toast('Settings saved successfully', 'success');
+}
+
+function resetSettings() {
+    document.getElementById('settingClassification').value = 'S';
+    document.getElementById('settingTimeout').value = '30';
+    document.getElementById('settingUpload').value = '500';
+    document.getElementById('settingRateLimit').value = '120';
+    document.getElementById('settingMaintenance').classList.remove('on');
+    document.getElementById('maintenanceLabel').textContent = 'Disabled';
+    document.getElementById('settingMotd').value = '';
+    toast('Settings reset to defaults', 'info');
+}
+
+// ============================================================
+// AI CONFIGURATION
+// ============================================================
+
+function loadAiSettings() {
+    var token = localStorage.getItem('intel_globe_token');
+    fetch('/api/settings/public', {
+        headers: token ? { 'Authorization': 'Bearer ' + token } : {}
+    })
+    .then(function(r) { return r.ok ? r.json() : Promise.reject(r); })
+    .then(function(data) {
+        if (data.ai_model) document.getElementById('settingAiModel').value = data.ai_model;
+        if (data.ai_backend_url) document.getElementById('settingAiBackendUrl').value = data.ai_backend_url;
+    })
+    .catch(function() { /* settings not available yet, leave defaults */ });
+}
+
+function saveAiSettings() {
+    var token = localStorage.getItem('intel_globe_token');
+    var model = document.getElementById('settingAiModel').value.trim();
+    var backendUrl = document.getElementById('settingAiBackendUrl').value.trim();
+    if (!model && !backendUrl) { toast('Enter at least one value to save', 'warning'); return; }
+
+    var headers = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = 'Bearer ' + token;
+
+    var saves = [];
+    if (model) {
+        saves.push(fetch('/api/settings/ai_model', {
+            method: 'PUT',
+            headers: headers,
+            body: JSON.stringify({ value: model })
+        }));
+    }
+    if (backendUrl) {
+        saves.push(fetch('/api/settings/ai_backend_url', {
+            method: 'PUT',
+            headers: headers,
+            body: JSON.stringify({ value: backendUrl })
+        }));
+    }
+
+    Promise.all(saves)
+        .then(function(responses) {
+            var allOk = responses.every(function(r) { return r.ok; });
+            if (allOk) {
+                toast('AI settings saved successfully', 'success');
+            } else {
+                toast('Some AI settings failed to save', 'error');
+            }
+        })
+        .catch(function() {
+            toast('Failed to save AI settings', 'error');
+        });
+}
+
+function testAiConnection() {
+    var backendUrl = document.getElementById('settingAiBackendUrl').value.trim();
+    var resultEl = document.getElementById('aiTestResult');
+    if (!backendUrl) {
+        resultEl.textContent = 'Enter a backend URL first';
+        resultEl.style.color = 'var(--accent-orange)';
+        return;
+    }
+
+    resultEl.textContent = 'Testing...';
+    resultEl.style.color = 'var(--text-secondary)';
+
+    var token = localStorage.getItem('intel_globe_token');
+    var headers = {};
+    if (token) headers['Authorization'] = 'Bearer ' + token;
+
+    // Proxy through our backend to avoid CORS issues
+    fetch('/api/ai/test-connection', {
+        method: 'POST',
+        headers: Object.assign({ 'Content-Type': 'application/json' }, headers),
+        body: JSON.stringify({ backend_url: backendUrl })
+    })
+    .then(function(r) { return r.ok ? r.json() : Promise.reject(r); })
+    .then(function(data) {
+        if (data.connected) {
+            var modelName = data.model || 'unknown';
+            resultEl.textContent = 'Connected — model: ' + modelName;
+            resultEl.style.color = 'var(--accent-green)';
+        } else {
+            resultEl.textContent = 'Failed: ' + (data.error || 'unknown error');
+            resultEl.style.color = 'var(--accent-red)';
+        }
+    })
+    .catch(function() {
+        // Fallback: try direct fetch to backend /v1/models
+        var url = backendUrl.replace(/\/+$/, '') + '/v1/models';
+        fetch(url, { headers: headers })
+            .then(function(r) { return r.ok ? r.json() : Promise.reject(r); })
+            .then(function(data) {
+                var models = (data.data || []).map(function(m) { return m.id; });
+                resultEl.textContent = 'Connected — model' + (models.length !== 1 ? 's' : '') + ': ' + (models.join(', ') || 'none');
+                resultEl.style.color = 'var(--accent-green)';
+            })
+            .catch(function() {
+                resultEl.textContent = 'Failed to connect';
+                resultEl.style.color = 'var(--accent-red)';
+            });
+    });
+}
+
+// ============================================================
+// PAGINATION / DATA LOADING SETTINGS
+// ============================================================
+
+var PAGINATION_DEFAULTS = {
+    reports_page_size: 500,
+    projects_page_size: 50,
+    stories_page_size: 50,
+    collections_page_size: 100,
+    oob_page_size: 100,
+    globe_initial_days: 7,
+    globe_initial_limit: 500
+};
+
+var PAGINATION_FIELD_MAP = {
+    reports_page_size: 'pgReports',
+    projects_page_size: 'pgProjects',
+    stories_page_size: 'pgStories',
+    collections_page_size: 'pgCollections',
+    oob_page_size: 'pgOob',
+    globe_initial_days: 'pgGlobeDays',
+    globe_initial_limit: 'pgGlobeLimit'
+};
+
+function applyPaginationPreset(sel, inputId) {
+    var val = sel.value;
+    if (val !== '') {
+        document.getElementById(inputId).value = val;
+    }
+}
+
+function loadPaginationSettings() {
+    var token = localStorage.getItem('intel_globe_token');
+    fetch('/api/settings/pagination', {
+        headers: token ? { 'Authorization': 'Bearer ' + token } : {}
+    })
+    .then(function(r) { return r.ok ? r.json() : Promise.reject(r); })
+    .then(function(data) {
+        Object.keys(PAGINATION_FIELD_MAP).forEach(function(key) {
+            var el = document.getElementById(PAGINATION_FIELD_MAP[key]);
+            if (el && data[key] !== undefined && data[key] !== null) {
+                el.value = data[key];
+                // Sync the dropdown to match
+                var sel = el.parentElement.querySelector('select');
+                if (sel) {
+                    var matched = false;
+                    for (var i = 0; i < sel.options.length; i++) {
+                        if (sel.options[i].value === String(data[key])) {
+                            sel.selectedIndex = i;
+                            matched = true;
+                            break;
+                        }
+                    }
+                    if (!matched) sel.selectedIndex = 0; // "Custom"
+                }
+            }
+        });
+    })
+    .catch(function() { /* API not available, keep defaults */ });
+}
+
+function savePaginationSettings() {
+    var token = localStorage.getItem('intel_globe_token');
+    var payload = {};
+    Object.keys(PAGINATION_FIELD_MAP).forEach(function(key) {
+        var el = document.getElementById(PAGINATION_FIELD_MAP[key]);
+        if (el) payload[key] = parseInt(el.value, 10) || 0;
+    });
+
+    var headers = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = 'Bearer ' + token;
+
+    fetch('/api/settings/pagination', {
+        method: 'PUT',
+        headers: headers,
+        body: JSON.stringify(payload)
+    })
+    .then(function(r) {
+        if (r.ok) {
+            toast('Pagination settings saved', 'success');
+        } else {
+            toast('Failed to save pagination settings', 'error');
+        }
+    })
+    .catch(function() {
+        toast('Failed to save pagination settings', 'error');
+    });
+}
+
+function resetPaginationSettings() {
+    Object.keys(PAGINATION_FIELD_MAP).forEach(function(key) {
+        var el = document.getElementById(PAGINATION_FIELD_MAP[key]);
+        if (el) {
+            el.value = PAGINATION_DEFAULTS[key];
+            var sel = el.parentElement.querySelector('select');
+            if (sel) {
+                for (var i = 0; i < sel.options.length; i++) {
+                    if (sel.options[i].value === String(PAGINATION_DEFAULTS[key])) {
+                        sel.selectedIndex = i;
+                        break;
+                    }
+                }
+            }
+        }
+    });
+    toast('Pagination settings reset to defaults', 'info');
+}
+
+// ============================================================
+// AUDIT LOG
+// ============================================================
+
+function renderAudit(entries) {
+    var body = document.getElementById('auditBody');
+    if (!entries || !entries.length) {
+        body.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-muted)">No audit entries found</td></tr>';
+        return;
+    }
+    body.innerHTML = entries.map(function(e) {
+        var statusClass = e.status === 'Success' ? 'log-status-success' : 'log-status-failed';
+        var rowStyle = e.status === 'Failed' ? 'background:rgba(239,68,68,0.03)' : '';
+        return '<tr style="' + rowStyle + '">' +
+            '<td style="font-size:11px;font-family:var(--font-mono);color:var(--text-muted);white-space:nowrap">' + esc(e.timestamp) + '</td>' +
+            '<td><strong>' + esc(e.user) + '</strong></td>' +
+            '<td>' + esc(e.action) + '</td>' +
+            '<td style="color:var(--text-secondary)">' + esc(e.resource) + '</td>' +
+            '<td style="font-size:11px;font-family:var(--font-mono);color:var(--text-muted)">' + esc(e.ip) + '</td>' +
+            '<td><span class="' + statusClass + '" style="font-weight:600;font-size:12px">' + esc(e.status) + '</span></td>' +
+        '</tr>';
+    }).join('');
+}
+
+function filterAudit() {
+    var action = document.getElementById('auditFilterAction').value;
+    var user = document.getElementById('auditFilterUser').value;
+    var dateFrom = document.getElementById('auditFilterDateFrom').value;
+    var dateTo = document.getElementById('auditFilterDateTo').value;
+    var filtered = DEMO_AUDIT.filter(function(e) {
+        if (action && e.action !== action) return false;
+        if (user && e.user !== user) return false;
+        if (dateFrom && e.timestamp.substring(0, 10) < dateFrom) return false;
+        if (dateTo && e.timestamp.substring(0, 10) > dateTo) return false;
+        return true;
+    });
+    renderAudit(filtered);
+}
+
+function populateAuditUserFilter() {
+    var sel = document.getElementById('auditFilterUser');
+    sel.innerHTML = '<option value="">All Users</option>';
+    var usernames = [];
+    DEMO_USERS.forEach(function(u) {
+        if (usernames.indexOf(u.username) === -1) usernames.push(u.username);
+    });
+    usernames.sort();
+    usernames.forEach(function(un) {
+        sel.innerHTML += '<option value="' + esc(un) + '">' + esc(un) + '</option>';
+    });
+}
+
+// ============================================================
+// STATS
+// ============================================================
+
+function updateStats() {
+    document.getElementById('statUsers').textContent = DEMO_USERS.length;
+    document.getElementById('statGroups').textContent = DEMO_GROUPS.length;
+    document.getElementById('statAois').textContent = DEMO_AOIS.length;
+}
+
+// ============================================================
+// INIT
+// ============================================================
+
+(function init() {
+    checkAuth();
+    loadUser();
+
+    var logoutBtn = document.getElementById('logoutBtn');
+    if (logoutBtn) logoutBtn.addEventListener('click', logout);
+
+    // Render initial data
+    renderUsers(DEMO_USERS);
+    renderGroups(DEMO_GROUPS);
+    renderAudit(DEMO_AUDIT);
+    populateGroupFilter();
+    populateAuditUserFilter();
+    updateStats();
+
+    // Fetch real data from API
+    fetchApiUsers();
+    fetchApiGroups();
+    fetchRegisteredApps();
+    loadAiSettings();
+    loadPaginationSettings();
+
+    setTimeout(function() {
+        toast('Admin panel loaded', 'success');
+    }, 300);
+})();
+
+// ============================================================
+// SERVICES TAB
+// ============================================================
+
+var SERVICE_DEFS = [
+    { name: 'PostgreSQL', port: 5432, desc: 'PostGIS Database', color: '#336791',
+      icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v6c0 1.66 3.58 3 8 3s8-1.34 8-3V6"/><path d="M4 12v6c0 1.66 3.58 3 8 3s8-1.34 8-3v-6"/></svg>' },
+    { name: 'Redis', port: 6379, desc: 'Cache & Sessions', color: '#dc382d',
+      icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>' },
+    { name: 'MinIO', port: 9002, desc: 'Object Storage', color: '#c72c48',
+      icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z"/><path d="M4 4l8 8 8-8"/><path d="M4 20l8-8 8 8"/></svg>' },
+    { name: 'Elasticsearch', port: 9200, desc: 'Search Engine', color: '#fed10a',
+      icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/></svg>' },
+    { name: 'TileServer', port: 8090, desc: 'Map Tiles', color: '#22c55e',
+      icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>' },
+    { name: 'FastAPI', port: 8000, desc: 'API Backend', color: '#009688',
+      icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>' },
+    { name: 'Airflow', port: 8082, desc: 'ETL Pipeline', color: '#017cee',
+      icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>' },
+    { name: 'Open WebUI', port: 3001, desc: 'AI Chat', color: '#a855f7',
+      icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 0 1 7-7z"/><line x1="9" y1="21" x2="15" y2="21"/><line x1="10" y1="23" x2="14" y2="23"/></svg>' },
+    { name: 'Adminer', port: 8081, desc: 'Database UI', color: '#00f5ff',
+      icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>' },
+    { name: 'YOLO Service', port: 8001, desc: 'Object Detection', color: '#ff6b35',
+      icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><rect x="7" y="7" width="10" height="10" rx="1"/><circle cx="12" cy="12" r="2"/></svg>' }
+];
+
+var servicesInited = false;
+
+function getUrlConfig() {
+    try { return JSON.parse(localStorage.getItem('ig_url_config') || '{}'); } catch(e) { return {}; }
+}
+
+function saveUrlConfig() {
+    var cfg = getUrlConfig();
+    cfg.host = document.getElementById('urlHostInput').value.trim();
+    localStorage.setItem('ig_url_config', JSON.stringify(cfg));
+}
+
+function setUrlMode(mode) {
+    var cfg = getUrlConfig();
+    cfg.mode = mode;
+    localStorage.setItem('ig_url_config', JSON.stringify(cfg));
+    document.querySelectorAll('.url-mode-btn').forEach(function(b) {
+        b.classList.toggle('active', b.dataset.mode === mode);
+    });
+}
+
+function getServiceHost() {
+    var cfg = getUrlConfig();
+    return cfg.host || window.location.hostname;
+}
+
+function getServiceUrl(port) {
+    return 'http://' + getServiceHost() + ':' + port;
+}
+
+function initServicesTab() {
+    var grid = document.getElementById('servicesGrid');
+    if (!grid) return;
+
+    // Render cards
+    grid.innerHTML = '';
+    SERVICE_DEFS.forEach(function(svc) {
+        var url = getServiceUrl(svc.port);
+        var card = document.createElement('a');
+        card.href = url;
+        card.target = '_blank';
+        card.rel = 'noopener';
+        card.className = 'service-card';
+        card.innerHTML =
+            '<div class="service-card-header">' +
+                '<div class="service-card-icon" style="background:' + svc.color + '22;color:' + svc.color + '">' + svc.icon + '</div>' +
+                '<div>' +
+                    '<div class="service-card-name">' + svc.name + '</div>' +
+                    '<div class="service-card-desc">' + svc.desc + '</div>' +
+                '</div>' +
+            '</div>' +
+            '<div class="service-card-footer">' +
+                '<div class="service-status">' +
+                    '<span class="service-status-dot checking" id="status-' + svc.port + '"></span>' +
+                    '<span id="status-text-' + svc.port + '">Checking...</span>' +
+                '</div>' +
+                '<span class="service-port">:' + svc.port + '</span>' +
+            '</div>';
+        grid.appendChild(card);
+    });
+
+    // Load URL config into inputs
+    var cfg = getUrlConfig();
+    var hostInput = document.getElementById('urlHostInput');
+    if (hostInput && cfg.host) hostInput.value = cfg.host;
+    var mode = cfg.mode || 'ip';
+    document.querySelectorAll('.url-mode-btn').forEach(function(b) {
+        b.classList.toggle('active', b.dataset.mode === mode);
+    });
+
+    checkAllServices();
+}
+
+function checkAllServices() {
+    SERVICE_DEFS.forEach(function(svc) {
+        var dot = document.getElementById('status-' + svc.port);
+        var txt = document.getElementById('status-text-' + svc.port);
+        if (!dot || !txt) return;
+        dot.className = 'service-status-dot checking';
+        txt.textContent = 'Checking...';
+
+        var url = getServiceUrl(svc.port);
+        var controller = new AbortController();
+        var timeout = setTimeout(function() { controller.abort(); }, 5000);
+
+        fetch(url, { mode: 'no-cors', signal: controller.signal })
+            .then(function() {
+                clearTimeout(timeout);
+                dot.className = 'service-status-dot online';
+                txt.textContent = 'Online';
+            })
+            .catch(function() {
+                clearTimeout(timeout);
+                dot.className = 'service-status-dot offline';
+                txt.textContent = 'Offline';
+            });
+    });
+}
+
+// ============================================================
+// HOME PAGE SETTINGS: Logo + Broadcast
+// ============================================================
+
+function loadHomePageSettings() {
+    var token = localStorage.getItem('intel_globe_token');
+    fetch('/api/settings/public', {
+        headers: token ? { 'Authorization': 'Bearer ' + token } : {}
+    })
+    .then(function(res) { return res.ok ? res.json() : {}; })
+    .then(function(data) {
+        // Logo
+        if (data.logo_url) {
+            var preview = document.getElementById('logoPreview');
+            var placeholder = document.getElementById('logoPlaceholder');
+            preview.src = data.logo_url;
+            preview.style.display = 'block';
+            if (placeholder) placeholder.style.display = 'none';
+        }
+        // Broadcasts
+        if (data.broadcasts && data.broadcasts.length) {
+            renderBroadcasts(data.broadcasts);
+        } else {
+            renderBroadcasts([]);
+        }
+    })
+    .catch(function(err) {
+        console.warn('Could not load home page settings:', err);
+    });
+}
+
+// Logo upload handler
+(function() {
+    var el = document.getElementById('logoUpload');
+    if (el) {
+        el.addEventListener('change', function() {
+            var file = this.files[0];
+            if (!file) return;
+            var formData = new FormData();
+            formData.append('logo', file);
+            var token = localStorage.getItem('intel_globe_token');
+            fetch('/api/settings/logo', {
+                method: 'POST',
+                headers: token ? { 'Authorization': 'Bearer ' + token } : {},
+                body: formData
+            })
+            .then(function(res) {
+                if (!res.ok) throw new Error('Upload failed');
+                return res.json();
+            })
+            .then(function(data) {
+                var preview = document.getElementById('logoPreview');
+                var placeholder = document.getElementById('logoPlaceholder');
+                preview.src = data.logo_url || URL.createObjectURL(file);
+                preview.style.display = 'block';
+                if (placeholder) placeholder.style.display = 'none';
+                toast('Logo uploaded successfully', 'success');
+            })
+            .catch(function(err) {
+                toast('Failed to upload logo: ' + err.message, 'error');
+            });
+        });
+    }
+})();
+
+function removeLogo() {
+    var token = localStorage.getItem('intel_globe_token');
+    fetch('/api/settings/logo', {
+        method: 'DELETE',
+        headers: token ? { 'Authorization': 'Bearer ' + token } : {}
+    })
+    .then(function(res) {
+        if (!res.ok) throw new Error('Delete failed');
+        var preview = document.getElementById('logoPreview');
+        var placeholder = document.getElementById('logoPlaceholder');
+        preview.src = '';
+        preview.style.display = 'none';
+        if (placeholder) placeholder.style.display = 'flex';
+        toast('Logo removed', 'success');
+    })
+    .catch(function(err) {
+        toast('Failed to remove logo: ' + err.message, 'error');
+    });
+}
+
+// Broadcast messages
+var BROADCAST_TYPE_COLORS = {
+    info: { bg: 'rgba(0,245,255,0.08)', border: 'rgba(0,245,255,0.2)', color: 'var(--accent-cyan)' },
+    warning: { bg: 'rgba(245,158,11,0.08)', border: 'rgba(245,158,11,0.2)', color: 'var(--accent-orange)' },
+    success: { bg: 'rgba(34,197,94,0.08)', border: 'rgba(34,197,94,0.2)', color: 'var(--accent-green)' },
+    urgent: { bg: 'rgba(239,68,68,0.08)', border: 'rgba(239,68,68,0.2)', color: 'var(--accent-red)' }
+};
+
+function renderBroadcasts(broadcasts) {
+    var list = document.getElementById('broadcastList');
+    if (!broadcasts || !broadcasts.length) {
+        list.innerHTML = '<div style="font-size:12px;color:var(--text-muted);padding:8px 0">No active broadcasts</div>';
+        return;
+    }
+    list.innerHTML = broadcasts.map(function(b) {
+        var tc = BROADCAST_TYPE_COLORS[b.type] || BROADCAST_TYPE_COLORS.info;
+        return '<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;margin-bottom:6px;border-radius:var(--radius-md);background:' + tc.bg + ';border:1px solid ' + tc.border + '">' +
+            '<span class="badge" style="background:' + tc.bg + ';color:' + tc.color + ';border:1px solid ' + tc.border + ';font-size:9px;text-transform:uppercase">' + esc(b.type) + '</span>' +
+            '<span style="flex:1;font-size:12px;color:var(--text-primary)">' + esc(b.text) + '</span>' +
+            '<button class="btn btn-danger btn-xs" onclick="deleteBroadcast(\'' + b.id + '\')">Delete</button>' +
+        '</div>';
+    }).join('');
+}
+
+function addBroadcast() {
+    var input = document.getElementById('broadcastInput');
+    var typeSelect = document.getElementById('broadcastType');
+    var text = input.value.trim();
+    var type = typeSelect.value;
+    if (!text) { toast('Enter a broadcast message', 'error'); return; }
+    var token = localStorage.getItem('intel_globe_token');
+    fetch('/api/settings/broadcast', {
+        method: 'POST',
+        headers: {
+            'Authorization': 'Bearer ' + (token || ''),
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ text: text, type: type })
+    })
+    .then(function(res) {
+        if (!res.ok) throw new Error('Failed to send broadcast');
+        return res.json();
+    })
+    .then(function(data) {
+        input.value = '';
+        toast('Broadcast sent', 'success');
+        loadHomePageSettings();
+    })
+    .catch(function(err) {
+        toast('Failed to send broadcast: ' + err.message, 'error');
+    });
+}
+
+function deleteBroadcast(id) {
+    var token = localStorage.getItem('intel_globe_token');
+    fetch('/api/settings/broadcast/' + id, {
+        method: 'DELETE',
+        headers: token ? { 'Authorization': 'Bearer ' + token } : {}
+    })
+    .then(function(res) {
+        if (!res.ok) throw new Error('Failed to delete broadcast');
+        toast('Broadcast deleted', 'success');
+        loadHomePageSettings();
+    })
+    .catch(function(err) {
+        toast('Failed to delete broadcast: ' + err.message, 'error');
+    });
+}
+
+// Load home page settings on init
+loadHomePageSettings();
+</script>
+<script src="/libs/glyph-upload-queue.js"></script>
+<script src="/libs/abyss-theme.js" data-opacity="10" data-no-wrap data-no-topbar></script>
+<script>
+(function(){
+  var lang = localStorage.getItem('glyph_lang') || 'en';
+  if (lang === 'en') return;
+  fetch('/libs/i18n/' + lang + '.json')
+    .then(function(r) { return r.ok ? r.json() : null; })
+    .then(function(tr) {
+      if (!tr) return;
+      document.querySelectorAll('[data-i18n]').forEach(function(el) {
+        var key = el.getAttribute('data-i18n');
+        if (!tr[key]) return;
+        if (el.childElementCount === 0) el.textContent = tr[key];
+        else { var nodes = el.childNodes; for (var i = nodes.length - 1; i >= 0; i--) { if (nodes[i].nodeType === 3 && nodes[i].textContent.trim()) { nodes[i].textContent = ' ' + tr[key]; break; } } }
+      });
+      document.querySelectorAll('[data-i18n-placeholder]').forEach(function(el) {
+        var key = el.getAttribute('data-i18n-placeholder');
+        if (tr[key]) el.placeholder = tr[key];
+      });
+    }).catch(function(){});
+})();
+</script>
+</body>
+</html>

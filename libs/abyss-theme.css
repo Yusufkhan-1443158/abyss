@@ -1,0 +1,1009 @@
+/* ============================================================================
+   ABYSS THEME — Shared Design System for Abyss by Orbion
+   Stella-derived: near-black canvas, neon-cyan accent, glass morphism, orbital
+   depth glow. Host Grotesk / Geist Mono. Day + night via [data-theme].
+   Include via: <link rel="stylesheet" href="/libs/abyss-theme.css">
+   ============================================================================ */
+
+/* Vendored Stella fonts (local woff2 — airgap-safe; falls back to Outfit). */
+@import url('/fonts/host-grotesk/host-grotesk.css');
+@import url('/fonts/geist-mono/geist-mono.css');
+
+/* ===== CSS Variables — DARK (default) ===== */
+:root {
+  --bg: #0a0a0f;
+  --bg2: #111118;
+  --bg3: #1a1a24;
+  --bg-deep: #07070b;
+  --accent: #00f5ff;
+  --accent2: #00c8d4;
+  --accent-dim: rgba(0, 245, 255, 0.15);
+  --accent-glow: rgba(0, 245, 255, 0.4);
+  --text: #e0e0e0;
+  --text-dim: rgba(255,255,255,0.45);
+  --border: rgba(255,255,255,0.06);
+  --danger: #ff4060;
+  --success: #00e676;
+  --warn: #ffab00;
+  --purple: #a78bfa;
+  --purple-dim: rgba(167,139,250,0.15);
+  --glass-bg: rgba(15, 15, 25, 0.7);
+  --glass-bg-light: rgba(15, 15, 25, 0.5);
+  --glass-border: rgba(255,255,255,0.08);
+  --glass-blur: blur(20px);
+  --sidebar-w: 260px;
+
+  /* Typography (Stella) */
+  --font-ui: 'Host Grotesk', 'Outfit', 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-mono: 'Geist Mono', 'JetBrains Mono', 'Fira Code', monospace;
+
+  /* Bathymetric depth ramp (shallow → abyssal) — used by depth layers/legends */
+  --depth-0: #7df9ff;   /* shallows */
+  --depth-1: #21d4d4;
+  --depth-2: #1f8fd1;
+  --depth-3: #1d5fb0;
+  --depth-4: #173a86;
+  --depth-5: #0b1f56;   /* abyssal */
+
+  /* Orbital glow tint (re-tinted to water/depth) */
+  --orb-glow: rgba(0, 200, 255, 0.05);
+  --orb-ring: rgba(0, 245, 255, 0.035);
+  --shadow-glow: 0 0 0 1px rgba(0,245,255,0.22), 0 12px 48px rgba(0,200,255,0.10);
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Abyss is dark-only. The former [data-theme="light"] token block lived here but
+   nothing toggled it (dark is force-set at boot), so it was unreachable dead
+   code and has been removed. Re-add a light token set here if a working
+   day/night toggle is ever reintroduced. */
+
+
+/* ===== Minimal Reset (safe to layer on existing pages) ===== */
+.glyph-topbar *,
+.glyph-dock *,
+.glyph-globe-bg *,
+.glyph-page-content * {
+  box-sizing: border-box;
+}
+
+body.glyph-themed {
+  font-family: var(--font-ui);
+  background: var(--bg) !important;
+  color: var(--text);
+  overflow-x: hidden;
+  transition: background 280ms var(--ease), color 280ms var(--ease);
+}
+
+/* Fix layout when theme hides the original header.
+   Many pages use .app { grid-template-rows: 48px 1fr; height: 100vh } where 48px is header.
+   When theme hides header, collapse that row and account for glyph topbar + dock. */
+/* Only override .app layout when the glyph topbar is present (not data-no-topbar pages) */
+body.glyph-themed:has(#glyph-topbar) .app {
+  grid-template-rows: 1fr !important;
+  height: 100vh !important;
+  box-sizing: border-box !important;
+  padding-top: 60px !important;
+  padding-bottom: 0 !important;
+  overflow: hidden !important;
+  position: relative !important;
+  z-index: 1 !important;
+}
+body.glyph-themed:has(#glyph-topbar) .header,
+body.glyph-themed:has(#glyph-topbar) header:not(.glyph-topbar),
+body.glyph-themed:has(#glyph-topbar) nav:not(.glyph-dock):not(.sidebar-nav) {
+  display: none !important;
+  height: 0 !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: none !important;
+}
+/* Ensure content areas expand properly */
+body.glyph-themed .content-area,
+body.glyph-themed .main-area {
+  min-height: 0 !important;
+  height: 100% !important;
+  overflow: auto !important;
+}
+body.glyph-themed .sidebar {
+  min-height: 0 !important;
+  height: 100% !important;
+  overflow: auto !important;
+}
+
+
+/* ===== Scrollbar ===== */
+body.glyph-themed::-webkit-scrollbar,
+.glyph-page-content::-webkit-scrollbar { width: 5px; }
+body.glyph-themed::-webkit-scrollbar-track,
+.glyph-page-content::-webkit-scrollbar-track { background: transparent; }
+body.glyph-themed::-webkit-scrollbar-thumb,
+.glyph-page-content::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 3px; }
+body.glyph-themed::-webkit-scrollbar-thumb:hover,
+.glyph-page-content::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.15); }
+
+
+/* =====================================================================
+   ORBITAL GLOBE BACKGROUND
+   ===================================================================== */
+.glyph-globe-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 0;
+  animation: glyph-bg-fadein 0.5s ease 0.1s forwards;
+}
+@keyframes glyph-bg-fadein {
+  to { opacity: var(--globe-target-opacity, 0.15); }
+}
+
+/* Opacity variants via data attribute — set the target for fade-in */
+.glyph-globe-bg[data-opacity="5"]  { --globe-target-opacity: 0.05; }
+.glyph-globe-bg[data-opacity="10"] { --globe-target-opacity: 0.10; }
+.glyph-globe-bg[data-opacity="15"] { --globe-target-opacity: 0.15; }
+.glyph-globe-bg[data-opacity="20"] { --globe-target-opacity: 0.20; }
+.glyph-globe-bg[data-opacity="25"] { --globe-target-opacity: 0.25; }
+.glyph-globe-bg[data-opacity="30"] { --globe-target-opacity: 0.30; }
+.glyph-globe-bg[data-opacity="40"] { --globe-target-opacity: 0.40; }
+.glyph-globe-bg[data-opacity="50"] { --globe-target-opacity: 0.50; }
+.glyph-globe-bg[data-opacity="60"] { --globe-target-opacity: 0.60; }
+.glyph-globe-bg[data-opacity="75"] { --globe-target-opacity: 0.75; }
+.glyph-globe-bg[data-opacity="100"] { --globe-target-opacity: 1; }
+
+.glyph-globe-grid {
+  position: absolute;
+  inset: 0;
+  background:
+    repeating-linear-gradient(90deg, rgba(0,245,255,0.012) 0px, transparent 1px, transparent 120px),
+    repeating-linear-gradient(0deg, rgba(0,245,255,0.012) 0px, transparent 1px, transparent 100px);
+}
+
+.glyph-globe-sphere {
+  position: absolute;
+  width: 1521px;
+  height: 1521px;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 35% 35%, rgba(0,245,255,0.05) 0%, transparent 50%),
+    radial-gradient(circle at 65% 65%, rgba(0,100,140,0.04) 0%, transparent 40%),
+    radial-gradient(circle, rgba(0,50,70,0.25) 0%, rgba(0,20,40,0.06) 55%, transparent 70%);
+  box-shadow:
+    inset 0 0 160px rgba(0,245,255,0.04),
+    0 0 120px rgba(0,245,255,0.03);
+}
+
+/* Orbital rings */
+.glyph-orbital-ring {
+  position: absolute;
+  border-radius: 50%;
+  top: 50%;
+  left: 50%;
+}
+.glyph-orbital-ring-1 {
+  width: 1014px; height: 1014px;
+  margin-left: -507px; margin-top: -608px;
+  border: 1.5px dashed rgba(0,245,255,0.12);
+  animation: glyph-orbit-rotate 55s linear infinite;
+  box-shadow: 0 0 20px rgba(0,245,255,0.06), inset 0 0 20px rgba(0,245,255,0.03);
+}
+.glyph-orbital-ring-2 {
+  width: 1318px; height: 811px;
+  margin-left: -659px; margin-top: -507px;
+  border: 1px solid rgba(0,245,255,0.10);
+  animation: glyph-orbit-rotate 80s linear infinite reverse;
+  box-shadow: 0 0 30px rgba(0,245,255,0.05), inset 0 0 30px rgba(0,245,255,0.02);
+}
+.glyph-orbital-ring-3 {
+  width: 1555px; height: 608px;
+  margin-left: -777px; margin-top: -406px;
+  border: 1px dotted rgba(0,245,255,0.08);
+  animation: glyph-orbit-rotate 70s linear infinite;
+  box-shadow: 0 0 25px rgba(0,245,255,0.04);
+}
+.glyph-orbital-ring-4 {
+  width: 845px; height: 845px;
+  margin-left: -422px; margin-top: -524px;
+  border: 1px solid rgba(0,245,255,0.06);
+  animation: glyph-orbit-rotate 100s linear infinite;
+  box-shadow: 0 0 40px rgba(0,245,255,0.03);
+}
+@keyframes glyph-orbit-rotate {
+  0%   { transform: rotateX(60deg) rotateZ(0deg); }
+  100% { transform: rotateX(60deg) rotateZ(360deg); }
+}
+
+/* Pulsing dots */
+.glyph-globe-dot {
+  position: absolute;
+  width: 4px; height: 4px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 10px var(--accent), 0 0 25px var(--accent-glow);
+  animation: glyph-dot-pulse 3s ease-in-out infinite;
+}
+.glyph-globe-dot:nth-child(7)  { top: 28%; left: 22%; animation-delay: 0s; }
+.glyph-globe-dot:nth-child(8)  { top: 35%; left: 48%; animation-delay: 0.8s; }
+.glyph-globe-dot:nth-child(9)  { top: 42%; left: 72%; animation-delay: 1.6s; }
+.glyph-globe-dot:nth-child(10) { top: 55%; left: 30%; animation-delay: 0.4s; }
+.glyph-globe-dot:nth-child(11) { top: 60%; left: 62%; animation-delay: 2.0s; }
+.glyph-globe-dot:nth-child(12) { top: 25%; left: 65%; animation-delay: 1.2s; }
+.glyph-globe-dot:nth-child(13) { top: 68%; left: 45%; animation-delay: 0.6s; }
+.glyph-globe-dot:nth-child(14) { top: 38%; left: 38%; animation-delay: 2.4s; }
+.glyph-globe-dot:nth-child(15) { top: 50%; left: 80%; animation-delay: 1.8s; }
+.glyph-globe-dot:nth-child(16) { top: 72%; left: 25%; animation-delay: 1.0s; }
+.glyph-globe-dot:nth-child(17) { top: 30%; left: 55%; animation-delay: 2.2s; }
+.glyph-globe-dot:nth-child(18) { top: 45%; left: 15%; animation-delay: 0.2s; }
+@keyframes glyph-dot-pulse {
+  0%, 100% { opacity: 0.2; transform: scale(1); }
+  50%      { opacity: 1; transform: scale(2); }
+}
+
+/* Continent silhouettes */
+.glyph-continent {
+  position: absolute;
+  background: rgba(0,245,255,0.025);
+  border-radius: 40%;
+  filter: blur(10px);
+}
+.glyph-continent-1 { width: 200px; height: 160px; top: 25%; left: 18%; transform: rotate(-15deg); }
+.glyph-continent-2 { width: 120px; height: 200px; top: 30%; left: 45%; transform: rotate(5deg); }
+.glyph-continent-3 { width: 260px; height: 180px; top: 35%; left: 60%; transform: rotate(-8deg); }
+.glyph-continent-4 { width: 140px; height: 100px; top: 60%; left: 25%; transform: rotate(12deg); }
+.glyph-continent-5 { width: 180px; height: 120px; top: 65%; left: 55%; transform: rotate(-5deg); }
+
+/* Ambient glow */
+.glyph-globe-ambient {
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 1014px; height: 1014px;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(circle, rgba(0,245,255,0.04) 0%, transparent 70%);
+  animation: glyph-ambient-breathe 8s ease-in-out infinite;
+}
+@keyframes glyph-ambient-breathe {
+  0%, 100% { opacity: 0.6; transform: translate(-50%, -50%) scale(1); }
+  50%      { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
+}
+
+
+/* =====================================================================
+   GLASS TOP BAR
+   ===================================================================== */
+.glyph-topbar {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  height: 60px;
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border-bottom: 1px solid var(--glass-border);
+  box-shadow: 0 4px 30px rgba(0,0,0,0.3);
+}
+
+/* Dock embedded in the center of the topbar — exact master-home style */
+.glyph-app-dock {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 10px;
+  box-shadow: none;
+}
+
+.glyph-topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  text-decoration: none;
+}
+.glyph-topbar-left:hover { text-decoration: none; }
+
+.glyph-logo-mark {
+  width: 28px; height: 28px;
+  border-radius: 7px;
+  background: linear-gradient(135deg, rgba(0,245,255,0.15), rgba(0,245,255,0.04));
+  border: 1px solid rgba(0,245,255,0.25);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; font-weight: 800;
+  color: var(--accent);
+  letter-spacing: -1px;
+  text-shadow: 0 0 12px rgba(0,245,255,0.5);
+  flex-shrink: 0;
+}
+
+.glyph-logo-text {
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+/* Topbar app icons row */
+.glyph-topbar-apps {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 18px;
+}
+/* Dock items — exact master-home style */
+.glyph-topbar-app-icon {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  padding: 4px;
+  text-decoration: none;
+}
+.glyph-topbar-app-icon:hover {
+  transform: scale(1.4) translateY(-10px);
+  text-decoration: none;
+}
+.glyph-topbar-app-icon:hover .glyph-topbar-app-svg {
+  box-shadow: 0 0 18px rgba(0,245,255,0.4), 0 0 40px rgba(0,245,255,0.1);
+  border-color: rgba(0,245,255,0.3);
+  background: var(--bg3);
+}
+.glyph-topbar-app-icon.active .glyph-topbar-app-svg {
+  border-color: rgba(0,245,255,0.3);
+  box-shadow: 0 0 12px rgba(0,245,255,0.2);
+}
+.glyph-topbar-app-icon.active .glyph-topbar-app-label {
+  opacity: 1;
+  color: var(--accent);
+}
+.glyph-topbar-app-svg {
+  width: 37px; height: 37px;
+  border-radius: 10px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  color: var(--accent);
+}
+.glyph-topbar-app-svg svg {
+  width: 20px; height: 20px;
+}
+.glyph-topbar-app-label {
+  font-size: 10px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.2s;
+  pointer-events: none;
+}
+.glyph-topbar-app-icon:hover .glyph-topbar-app-label {
+  opacity: 1;
+  color: var(--accent);
+}
+.glyph-topbar-apps-sep {
+  width: 1px;
+  height: 22px;
+  background: rgba(255,255,255,0.06);
+  margin: 0 4px;
+  align-self: center;
+}
+
+/* Classification badge in topbar center */
+.glyph-topbar-center {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+}
+
+.glyph-classification-badge {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  padding: 4px 14px;
+  border-radius: 4px;
+  white-space: nowrap;
+  /* Default: UNCLASSIFIED green */
+  background: rgba(0,230,118,0.15);
+  color: var(--success);
+  border: 1px solid rgba(0,230,118,0.3);
+}
+.glyph-classification-badge.cls-u {
+  background: rgba(0,230,118,0.15);
+  color: var(--success);
+  border-color: rgba(0,230,118,0.3);
+}
+.glyph-classification-badge.cls-c {
+  background: rgba(59,130,246,0.15);
+  color: #60a5fa;
+  border-color: rgba(59,130,246,0.3);
+}
+.glyph-classification-badge.cls-s {
+  background: rgba(255,64,96,0.15);
+  color: var(--danger);
+  border-color: rgba(255,64,96,0.3);
+}
+.glyph-classification-badge.cls-ts {
+  background: rgba(255,171,0,0.15);
+  color: var(--warn);
+  border-color: rgba(255,171,0,0.3);
+}
+
+/* Broadcast bar — thin bar below topbar for LIVE messages */
+.glyph-broadcast-bar {
+  position: fixed;
+  top: 60px;
+  left: 0; right: 0;
+  z-index: 999;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--accent2);
+  background: rgba(0,245,255,0.04);
+  border-bottom: 1px solid rgba(0,245,255,0.08);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+.glyph-broadcast-live {
+  font-size: 8px;
+  font-weight: 700;
+  background: var(--accent);
+  color: #000;
+  padding: 2px 6px;
+  border-radius: 3px;
+  letter-spacing: 1px;
+  flex-shrink: 0;
+  animation: glyph-live-blink 2s ease-in-out infinite;
+}
+@keyframes glyph-live-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.glyph-topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.glyph-user-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: rgba(255,255,255,0.7);
+}
+
+.glyph-user-avatar {
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent-dim), rgba(0,245,255,0.05));
+  border: 1px solid rgba(0,245,255,0.2);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; color: var(--accent);
+  flex-shrink: 0;
+}
+
+.glyph-btn-logout {
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.03);
+  color: var(--text-dim);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+.glyph-btn-logout:hover {
+  border-color: rgba(255,64,96,0.3);
+  color: var(--danger);
+  background: rgba(255,64,96,0.06);
+}
+
+
+/* Bottom dock removed — app icons now live in topbar */
+
+
+/* =====================================================================
+   GLASS CARDS
+   ===================================================================== */
+.glass-card {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+  transition: all 0.3s;
+}
+.glass-card:hover {
+  border-color: rgba(0,245,255,0.15);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4), 0 0 20px rgba(0,245,255,0.04);
+  transform: translateY(-2px);
+}
+
+
+/* =====================================================================
+   GLASS SIDEBAR
+   ===================================================================== */
+.glass-sidebar {
+  background: rgba(12, 12, 20, 0.8);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border-right: 1px solid var(--glass-border);
+  box-shadow: 4px 0 30px rgba(0,0,0,0.3);
+}
+
+.glyph-sidebar-nav-item {
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 13px;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid transparent;
+}
+.glyph-sidebar-nav-item:hover {
+  background: rgba(255,255,255,0.03);
+  color: rgba(255,255,255,0.7);
+}
+.glyph-sidebar-nav-item.active {
+  background: rgba(0,245,255,0.06);
+  border-color: rgba(0,245,255,0.12);
+  color: var(--accent);
+  box-shadow: 0 0 12px rgba(0,245,255,0.04);
+}
+.glyph-sidebar-nav-item svg { width: 16px; height: 16px; flex-shrink: 0; }
+
+
+/* =====================================================================
+   GLASS BUTTONS
+   ===================================================================== */
+.glass-btn {
+  padding: 8px 18px;
+  border-radius: 10px;
+  border: 1px solid rgba(0,245,255,0.2);
+  background: rgba(0,245,255,0.08);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.25s;
+  font-family: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.glass-btn:hover {
+  background: rgba(0,245,255,0.15);
+  box-shadow: 0 0 20px rgba(0,245,255,0.15);
+  transform: translateY(-1px);
+}
+
+.glass-btn-primary {
+  padding: 10px 22px;
+  border-radius: 10px;
+  border: 1px solid rgba(0,245,255,0.35);
+  background: rgba(0,245,255,0.15);
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.25s;
+  font-family: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 0 20px rgba(0,245,255,0.1);
+}
+.glass-btn-primary:hover {
+  background: rgba(0,245,255,0.22);
+  box-shadow: 0 0 30px rgba(0,245,255,0.2);
+  transform: translateY(-1px);
+}
+
+.glass-btn.purple {
+  border-color: rgba(167,139,250,0.3);
+  background: rgba(167,139,250,0.1);
+  color: var(--purple);
+}
+.glass-btn.purple:hover {
+  background: rgba(167,139,250,0.18);
+  box-shadow: 0 0 20px rgba(167,139,250,0.15);
+}
+
+.glass-btn.danger {
+  border-color: rgba(255,64,96,0.3);
+  background: rgba(255,64,96,0.08);
+  color: var(--danger);
+}
+.glass-btn.danger:hover {
+  background: rgba(255,64,96,0.15);
+  box-shadow: 0 0 20px rgba(255,64,96,0.15);
+}
+
+
+/* =====================================================================
+   GLASS PILL (tag/filter style)
+   ===================================================================== */
+.glass-pill {
+  padding: 6px 16px;
+  border-radius: 20px;
+  border: 1px solid var(--glass-border);
+  background: rgba(255,255,255,0.03);
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+.glass-pill:hover {
+  border-color: rgba(0,245,255,0.25);
+  color: var(--accent);
+  background: rgba(0,245,255,0.06);
+}
+.glass-pill.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(0,245,255,0.1);
+  box-shadow: 0 0 12px rgba(0,245,255,0.1);
+}
+
+
+/* =====================================================================
+   GLASS INPUT
+   ===================================================================== */
+.glass-input {
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.03);
+  color: #fff;
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  transition: all 0.25s;
+  width: 100%;
+}
+.glass-input:focus {
+  border-color: rgba(0,245,255,0.3);
+  box-shadow: 0 0 20px rgba(0,245,255,0.06);
+}
+.glass-input::placeholder { color: rgba(255,255,255,0.2); }
+
+textarea.glass-input {
+  resize: vertical;
+  min-height: 80px;
+}
+
+select.glass-input {
+  appearance: none;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='rgba(255,255,255,0.4)' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 32px;
+}
+
+
+/* =====================================================================
+   GLASS TABLE
+   ===================================================================== */
+.glass-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 4px;
+}
+.glass-table th {
+  padding: 10px 16px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-dim);
+  font-weight: 600;
+  text-align: left;
+  border-bottom: 1px solid var(--glass-border);
+}
+.glass-table td {
+  padding: 14px 16px;
+  font-size: 13px;
+  color: var(--text);
+  background: rgba(255,255,255,0.015);
+  transition: all 0.2s;
+}
+.glass-table tr:hover td {
+  background: rgba(0,245,255,0.03);
+  box-shadow: inset 0 0 0 1px rgba(0,245,255,0.06);
+}
+.glass-table tr td:first-child { border-radius: 10px 0 0 10px; }
+.glass-table tr td:last-child { border-radius: 0 10px 10px 0; }
+
+
+/* =====================================================================
+   CLASSIFICATION BADGES
+   ===================================================================== */
+.glyph-classification {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  display: inline-block;
+}
+.glyph-classification.ts { background: rgba(255,64,96,0.2); color: var(--danger); }
+.glyph-classification.s  { background: rgba(255,171,0,0.2); color: var(--warn); }
+.glyph-classification.u  { background: rgba(0,230,118,0.2); color: var(--success); }
+
+
+/* =====================================================================
+   STATUS DOTS
+   ===================================================================== */
+.glyph-status-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.glyph-status-dot.green  { background: var(--success); box-shadow: 0 0 8px var(--success); }
+.glyph-status-dot.yellow { background: var(--warn);    box-shadow: 0 0 8px var(--warn); }
+.glyph-status-dot.red    { background: var(--danger);  box-shadow: 0 0 8px var(--danger); }
+.glyph-status-dot.cyan   { background: var(--accent);  box-shadow: 0 0 8px var(--accent); }
+
+
+/* =====================================================================
+   FAB (Floating Action Button)
+   ===================================================================== */
+.glyph-fab {
+  position: fixed;
+  bottom: 28px;
+  right: 28px;
+  width: 52px; height: 52px;
+  border-radius: 16px;
+  background: rgba(0,245,255,0.12);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(0,245,255,0.25);
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s;
+  z-index: 50;
+  box-shadow: 0 4px 24px rgba(0,245,255,0.15);
+}
+.glyph-fab:hover {
+  background: rgba(0,245,255,0.2);
+  box-shadow: 0 4px 32px rgba(0,245,255,0.25);
+  transform: scale(1.08);
+}
+.glyph-fab svg { width: 24px; height: 24px; }
+
+
+/* =====================================================================
+   PAGE CONTENT AREA (accounts for topbar)
+   ===================================================================== */
+.glyph-page-content {
+  padding-top: 72px;    /* below topbar (60px) + breathing room */
+  padding-bottom: 0;
+  min-height: 100vh;
+  position: relative;
+  z-index: 1;
+}
+
+/* Variant for full-bleed pages (map viewer etc) where content fills viewport */
+.glyph-page-content.full-bleed {
+  padding-top: 105px;
+  padding-bottom: 0;
+}
+
+/* Layout helpers */
+.glyph-page-grid {
+  display: grid;
+  gap: 16px;
+  padding: 20px 28px;
+}
+.glyph-page-grid.cols-2 { grid-template-columns: repeat(2, 1fr); }
+.glyph-page-grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
+.glyph-page-grid.cols-4 { grid-template-columns: repeat(4, 1fr); }
+
+.glyph-with-sidebar {
+  display: flex;
+  height: 100%;
+}
+.glyph-sidebar {
+  width: var(--sidebar-w);
+  flex-shrink: 0;
+  padding: 20px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.glyph-main-content {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.glyph-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+.glyph-section-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+}
+.glyph-section-subtitle {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-top: 4px;
+}
+
+.glyph-filter-bar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+
+/* Progress bar */
+.glyph-progress-bar {
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255,255,255,0.06);
+  overflow: hidden;
+}
+.glyph-progress-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--accent), var(--accent2));
+  box-shadow: 0 0 8px var(--accent-glow);
+}
+
+
+/* =====================================================================
+   PAGE FOOTER BAR
+   ===================================================================== */
+body.glyph-themed .toolbar-bottom,
+body.glyph-themed .pagination-bar,
+body.glyph-themed .page-footer {
+  background: var(--glass-bg) !important;
+  backdrop-filter: var(--glass-blur) !important;
+  -webkit-backdrop-filter: var(--glass-blur) !important;
+  border-top: 1px solid var(--glass-border) !important;
+  height: 40px !important;
+  position: sticky !important;
+  bottom: 0 !important;
+  z-index: 10 !important;
+}
+
+
+/* =====================================================================
+   PAGE TRANSITIONS
+   ===================================================================== */
+.glyph-page-enter {
+  animation: glyph-fade-in 0.4s ease;
+}
+@keyframes glyph-fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.glyph-page-exit {
+  animation: glyph-fade-out 0.3s ease forwards;
+}
+@keyframes glyph-fade-out {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(-8px); }
+}
+
+
+/* =====================================================================
+   RESPONSIVE
+   ===================================================================== */
+@media (max-width: 768px) {
+  .glyph-topbar-center { display: none; }
+  .glyph-topbar-apps { display: none; }
+
+  .glyph-page-grid.cols-3,
+  .glyph-page-grid.cols-4 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .glyph-with-sidebar {
+    flex-direction: column;
+  }
+  .glyph-sidebar {
+    width: 100%;
+    flex-direction: row;
+    overflow-x: auto;
+    padding: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .glyph-page-grid.cols-2,
+  .glyph-page-grid.cols-3,
+  .glyph-page-grid.cols-4 {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+/* =====================================================================
+   ABYSS — Orbital depth glow + glass cards (Stella signature, re-tinted)
+   ===================================================================== */
+
+/* Orbital depth glow background. Opt-in via class so full-viewport map apps
+   (which set overflow:hidden and own the whole screen) are unaffected; the
+   home / login / browse shells add `.abyss-depth-bg` to <body>. */
+.abyss-depth-bg {
+  position: relative;
+  background:
+    radial-gradient(1200px 800px at 50% -10%, var(--orb-glow), transparent 60%),
+    radial-gradient(900px 700px at 85% 110%, rgba(167,139,250,0.05), transparent 60%),
+    var(--bg) !important;
+}
+.abyss-depth-bg::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    repeating-radial-gradient(circle at 50% 40%,
+      var(--orb-ring) 0, var(--orb-ring) 1px,
+      transparent 1px, transparent 46px);
+  -webkit-mask-image: radial-gradient(circle at 50% 40%, #000 0%, transparent 72%);
+          mask-image: radial-gradient(circle at 50% 40%, #000 0%, transparent 72%);
+  opacity: 0.9;
+}
+.abyss-depth-bg > * { position: relative; z-index: 1; }
+
+/* Glass card with soft cyan under-glow (Stella "Trainer-Trav" card). */
+.glow-card {
+  position: relative;
+  background: linear-gradient(180deg, var(--glass-bg), var(--glass-bg-light));
+  border: 1px solid var(--glass-border);
+  border-radius: 14px;
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.35);
+  transition: transform 250ms var(--ease), box-shadow 250ms var(--ease), border-color 250ms var(--ease);
+}
+.glow-card:hover {
+  transform: translateY(-4px);
+  border-color: var(--accent-dim);
+  box-shadow: var(--shadow-glow);
+}
+
+/* Bathymetric depth legend swatch helper. */
+.depth-ramp {
+  background: linear-gradient(90deg,
+    var(--depth-0), var(--depth-1), var(--depth-2),
+    var(--depth-3), var(--depth-4), var(--depth-5));
+  border-radius: 4px;
+}

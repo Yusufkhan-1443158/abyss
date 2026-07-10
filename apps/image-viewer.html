@@ -1,0 +1,3511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<script>(function(){document.documentElement.setAttribute("data-theme","dark");try{localStorage.removeItem("glyph_theme");}catch(e){}var l=localStorage.getItem("glyph_lang")||"en";if(l==="ar"){document.documentElement.setAttribute("dir","rtl");document.documentElement.setAttribute("lang","ar");}})()</script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Image Viewer — Abyss</title>
+<link rel="stylesheet" href="/fonts/outfit.css">
+<link rel="stylesheet" href="/fonts/jbmono.css">
+<link rel="stylesheet" href="/css/theme.css">
+<link rel="stylesheet" href="/css/components.css">
+<link rel="stylesheet" href="/libs/abyss-theme.css">
+<script src="/libs/glyph-upload-queue.js"></script>
+<script src="/libs/abyss-theme.js" data-opacity="5" defer></script>
+<script src="check-app-permission.js"></script>
+<style>
+/* === DESIGN TOKENS === */
+:root {
+    --bg-dark: #0a0a0f;
+    --bg-card: rgba(15, 15, 25, 0.95);
+    --bg-card-hover: rgba(20, 20, 35, 0.95);
+    --bg-input: rgba(255,255,255,0.04);
+    --bg-overlay: rgba(0,0,0,0.6);
+    --accent-cyan: #00f5ff;
+    --accent-purple: #a855f7;
+    --accent-orange: #f59e0b;
+    --accent-green: #22c55e;
+    --accent-pink: #ec4899;
+    --accent-red: #ef4444;
+    --text-primary: rgba(255,255,255,0.9);
+    --text-secondary: rgba(255,255,255,0.6);
+    --text-muted: rgba(255,255,255,0.3);
+    --border-subtle: rgba(255,255,255,0.08);
+    --border-accent: rgba(0,245,255,0.3);
+    --font-sans: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+    --radius-sm: 6px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --shadow-lg: 0 8px 32px rgba(0,0,0,0.5);
+    --transition-fast: 0.15s ease;
+}
+
+/* === RESET === */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; }
+body { background: var(--bg-dark); color: var(--text-primary); font-family: var(--font-sans); }
+.logo-globe { margin-right: 8px; vertical-align: middle; filter: drop-shadow(0 0 4px rgba(0,245,255,0.5)); animation: logoSpin 30s linear infinite; }
+@keyframes logoSpin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+/* === SCROLLBAR === */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.25); }
+
+/* === APP LAYOUT === */
+.app {
+    display: grid;
+    grid-template-rows: 48px auto 1fr 32px;
+    height: 100vh;
+    overflow: hidden;
+}
+/* Override glyph-theme grid collapse — keep toolbar + status bar rows */
+body.glyph-themed:has(#glyph-topbar) .app {
+    grid-template-rows: auto 1fr 32px !important;
+    padding-top: 60px !important;
+}
+
+/* === HEADER === */
+.header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 48px;
+    padding: 0 12px;
+    background: var(--bg-card);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--border-subtle);
+    z-index: 100;
+}
+.header-left { display: flex; align-items: center; gap: 16px; }
+.header-logo {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--accent-cyan);
+    text-decoration: none;
+    font-family: var(--font-mono);
+    letter-spacing: 1px;
+}
+.header-center { display: flex; align-items: center; gap: 2px; }
+.nav-link {
+    display: flex; align-items: center; gap: 4px;
+    padding: 6px 10px; background: transparent; border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-secondary); font-family: var(--font-sans);
+    font-size: 12px; cursor: pointer; transition: all var(--transition-fast);
+    white-space: nowrap; text-decoration: none;
+}
+.nav-link:hover { color: var(--text-primary); background: rgba(255,255,255,0.04); }
+.nav-link.active { color: var(--accent-cyan); border-bottom: 2px solid var(--accent-cyan); }
+.header-right { display: flex; align-items: center; gap: 10px; }
+#userDisplay { font-size: 12px; color: var(--text-secondary); font-family: var(--font-mono); }
+.settings-btn {
+    width: 32px; height: 32px; border-radius: var(--radius-sm);
+    display: flex; align-items: center; justify-content: center;
+    background: transparent; border: 1px solid var(--border-subtle);
+    color: var(--text-secondary); font-size: 16px; cursor: pointer;
+    text-decoration: none; transition: all var(--transition-fast);
+}
+.settings-btn:hover { border-color: var(--accent-cyan); color: var(--accent-cyan); }
+#logoutBtn {
+    padding: 5px 12px; border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm); background: transparent;
+    color: var(--text-secondary); font-size: 11px; font-family: var(--font-sans);
+    cursor: pointer; transition: all var(--transition-fast);
+}
+#logoutBtn:hover { border-color: var(--accent-red); color: var(--accent-red); }
+
+/* === TOOLBAR === */
+.toolbar {
+    display: flex; align-items: center; gap: 6px;
+    padding: 6px 12px; background: var(--bg-card);
+    border-bottom: 1px solid var(--border-subtle);
+    z-index: 90;
+}
+.tool-btn {
+    display: flex; align-items: center; gap: 5px;
+    padding: 5px 10px; border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm); background: transparent;
+    color: var(--text-secondary); font-size: 11px;
+    font-family: var(--font-sans); cursor: pointer;
+    transition: all var(--transition-fast); white-space: nowrap;
+}
+.tool-btn:hover { border-color: var(--accent-cyan); color: var(--accent-cyan); }
+.tool-btn.active { background: rgba(0,245,255,0.1); border-color: var(--accent-cyan); color: var(--accent-cyan); }
+.tool-btn svg { width: 14px; height: 14px; }
+.tool-sep { width: 1px; height: 22px; background: var(--border-subtle); margin: 0 4px; }
+.zoom-display {
+    font-family: var(--font-mono); font-size: 11px;
+    color: var(--accent-cyan); padding: 0 8px;
+    min-width: 60px; text-align: center;
+}
+.tool-spacer { flex: 1; }
+.image-name-display {
+    font-family: var(--font-mono); font-size: 12px;
+    color: var(--text-primary); letter-spacing: 0.5px;
+}
+
+/* === MAIN AREA === */
+.main-area {
+    display: flex; overflow: hidden; position: relative;
+}
+
+/* === CANVAS VIEWPORT === */
+.canvas-viewport {
+    flex: 1; position: relative; overflow: hidden;
+    background: #060610; cursor: grab;
+}
+.canvas-viewport.dragging { cursor: grabbing; }
+.canvas-viewport.placing { cursor: crosshair; }
+#imageCanvas { position: absolute; top: 0; left: 0; image-rendering: auto; }
+#annotCanvas { position: absolute; top: 0; left: 0; pointer-events: none; z-index: 5; }
+
+/* === MINIMAP === */
+.minimap {
+    position: absolute; bottom: 12px; left: 12px;
+    width: 180px; height: 180px;
+    background: rgba(10,10,15,0.9); border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md); overflow: hidden; z-index: 50;
+    box-shadow: var(--shadow-lg);
+}
+.minimap canvas { width: 100%; height: 100%; }
+.minimap-viewport {
+    position: absolute; border: 1.5px solid var(--accent-cyan);
+    background: rgba(0,245,255,0.08); pointer-events: none;
+    box-shadow: 0 0 6px rgba(0,245,255,0.3);
+}
+
+/* === GRID OVERLAY === */
+.grid-overlay {
+    position: absolute; top: 0; left: 0;
+    pointer-events: none; z-index: 10;
+}
+
+/* === POINT MARKERS === */
+.point-marker {
+    position: absolute; width: 12px; height: 12px;
+    margin-left: -6px; margin-top: -6px;
+    background: var(--accent-cyan); border: 2px solid #fff;
+    border-radius: 50%; z-index: 20;
+    box-shadow: 0 0 8px rgba(0,245,255,0.6);
+    pointer-events: none;
+    transition: transform 0.1s ease;
+}
+.point-marker-label {
+    position: absolute; z-index: 21;
+    font-family: var(--font-mono); font-size: 10px;
+    color: var(--accent-cyan); white-space: nowrap;
+    padding: 1px 4px; background: rgba(0,0,0,0.7);
+    border-radius: 3px; pointer-events: none;
+    margin-left: 10px; margin-top: -6px;
+}
+
+/* === RIGHT PANEL === */
+.right-panel {
+    width: 300px; background: var(--bg-card);
+    border-left: 1px solid var(--border-subtle);
+    display: flex; flex-direction: column;
+    overflow: hidden; z-index: 50;
+    transition: width 0.2s ease;
+}
+.right-panel.collapsed { width: 0; border-left: none; }
+.panel-section {
+    border-bottom: 1px solid var(--border-subtle);
+    overflow: hidden;
+}
+.panel-section-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 12px; cursor: pointer;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.5px;
+    color: var(--text-secondary); text-transform: uppercase;
+    transition: color var(--transition-fast);
+}
+.panel-section-header:hover { color: var(--accent-cyan); }
+.panel-section-header .chevron {
+    font-size: 10px; transition: transform 0.2s;
+}
+.panel-section-header .chevron.open { transform: rotate(90deg); }
+.panel-section-body {
+    padding: 0 12px 10px; display: none;
+}
+.panel-section-body.open { display: block; }
+
+/* === TABS === */
+.panel-tabs {
+    display: flex; border-bottom: 1px solid var(--border-subtle);
+    background: rgba(10,10,20,0.5); flex-shrink: 0;
+}
+.panel-tab {
+    flex: 1; padding: 8px 4px; border: none; background: transparent;
+    color: var(--text-muted); font-family: var(--font-sans);
+    font-size: 10px; font-weight: 600; cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all var(--transition-fast);
+    text-transform: uppercase; letter-spacing: 0.3px;
+    white-space: nowrap;
+}
+.panel-tab:hover { color: var(--text-secondary); background: rgba(255,255,255,0.02); }
+.panel-tab.active { color: var(--accent-cyan); border-bottom-color: var(--accent-cyan); background: rgba(0,245,255,0.04); }
+
+.tab-content { display: none; flex: 1; overflow-y: auto; padding: 10px 12px; }
+.tab-content.active { display: block; }
+
+/* === ADJUSTMENT SLIDERS === */
+.adj-row {
+    display: flex; align-items: center; gap: 8px;
+    margin-bottom: 6px;
+}
+.adj-label {
+    font-family: var(--font-mono); font-size: 10px;
+    color: var(--text-muted); width: 28px; flex-shrink: 0;
+    text-transform: uppercase;
+}
+.adj-slider {
+    flex: 1; -webkit-appearance: none; appearance: none;
+    height: 4px; background: rgba(255,255,255,0.1);
+    border-radius: 2px; outline: none;
+}
+.adj-slider::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 12px; height: 12px;
+    background: var(--accent-cyan); border-radius: 50%;
+    cursor: pointer; border: none;
+    box-shadow: 0 0 4px rgba(0,245,255,0.4);
+}
+.adj-slider::-moz-range-thumb {
+    width: 12px; height: 12px;
+    background: var(--accent-cyan); border-radius: 50%;
+    cursor: pointer; border: none;
+}
+.adj-value {
+    font-family: var(--font-mono); font-size: 10px;
+    color: var(--text-secondary); width: 28px;
+    text-align: right; flex-shrink: 0;
+}
+.adj-buttons {
+    display: flex; gap: 6px; margin-top: 8px;
+}
+.adj-btn {
+    flex: 1; padding: 5px 8px; border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm); background: transparent;
+    color: var(--text-secondary); font-size: 10px;
+    font-family: var(--font-sans); cursor: pointer;
+    transition: all var(--transition-fast);
+}
+.adj-btn:hover { border-color: var(--accent-cyan); color: var(--accent-cyan); }
+
+/* === POINTS LIST === */
+.points-list {
+    max-height: 200px; overflow-y: auto;
+}
+.point-entry {
+    display: flex; align-items: flex-start; gap: 6px;
+    padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,0.04);
+    font-size: 10px;
+}
+.point-entry:last-child { border-bottom: none; }
+.point-idx {
+    font-family: var(--font-mono); color: var(--accent-cyan);
+    font-size: 10px; font-weight: 600; min-width: 18px;
+}
+.point-coords {
+    flex: 1; font-family: var(--font-mono); color: var(--text-secondary);
+    line-height: 1.5;
+}
+.point-remove {
+    background: none; border: none; color: var(--text-muted);
+    cursor: pointer; font-size: 12px; padding: 0 2px;
+    transition: color var(--transition-fast);
+}
+.point-remove:hover { color: var(--accent-red); }
+.export-btn, .action-btn {
+    width: 100%; padding: 6px; margin-top: 6px;
+    border: 1px solid var(--border-accent);
+    border-radius: var(--radius-sm); background: rgba(0,245,255,0.05);
+    color: var(--accent-cyan); font-size: 11px;
+    font-family: var(--font-sans); cursor: pointer;
+    transition: all var(--transition-fast);
+}
+.export-btn:hover, .action-btn:hover { background: rgba(0,245,255,0.15); }
+.action-btn.disabled {
+    opacity: 0.35; pointer-events: none; cursor: default;
+}
+
+/* === IMAGE INFO === */
+.info-row {
+    display: flex; justify-content: space-between;
+    font-size: 11px; padding: 3px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+}
+.info-row:last-child { border-bottom: none; }
+.info-key { color: var(--text-muted); font-size: 10px; }
+.info-val { color: var(--text-secondary); font-family: var(--font-mono); font-size: 10px; text-align: right; }
+
+/* === ANNOTATION TOOL BUTTONS === */
+.annot-tools {
+    display: flex; gap: 4px; margin-bottom: 8px; flex-wrap: wrap;
+}
+.annot-tool-btn {
+    padding: 5px 8px; border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm); background: transparent;
+    color: var(--text-secondary); font-size: 10px;
+    font-family: var(--font-sans); cursor: pointer;
+    transition: all var(--transition-fast);
+    display: flex; align-items: center; gap: 4px;
+}
+.annot-tool-btn:hover { border-color: var(--accent-cyan); color: var(--accent-cyan); }
+.annot-tool-btn.active { background: rgba(0,245,255,0.1); border-color: var(--accent-cyan); color: var(--accent-cyan); }
+.annot-tool-btn svg { width: 12px; height: 12px; }
+
+/* === COLOR PICKER ROW === */
+.color-row {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+}
+.color-row label {
+    font-size: 10px; color: var(--text-muted); text-transform: uppercase;
+    font-family: var(--font-mono);
+}
+.color-row input[type="color"] {
+    width: 28px; height: 22px; border: 1px solid var(--border-subtle);
+    border-radius: 4px; background: transparent; cursor: pointer;
+    padding: 0;
+}
+
+/* === LAYER PANEL (project-workspace pattern) === */
+.layers-panel { border-bottom: 1px solid var(--border-subtle); padding-bottom: 8px; margin-bottom: 8px; }
+.layers-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.layers-header .section-label { margin: 0; font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); font-weight: 600; }
+.add-layer-btn { width: 24px; height: 24px; border-radius: var(--radius-sm); background: rgba(0,245,255,0.1); border: 1px solid var(--accent-cyan); color: var(--accent-cyan); font-size: 15px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all var(--transition-fast); line-height: 1; }
+.add-layer-btn:hover { background: rgba(0,245,255,0.2); }
+
+/* When modal is open, hide canvases so modal renders above */
+body.modal-open .canvas-viewport canvas { visibility: hidden !important; }
+body.modal-open .minimap { visibility: hidden !important; }
+
+/* === NEW LAYER MODAL === */
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 9000; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
+.modal-overlay.hidden { display: none; }
+.modal-box { width: 320px; background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); padding: 20px; box-shadow: var(--shadow-lg); }
+.modal-box h3 { font-size: 14px; font-weight: 600; color: var(--text-primary); margin-bottom: 14px; }
+.modal-field { margin-bottom: 10px; }
+.modal-field label { display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+.modal-field input[type="text"], .modal-field textarea { width: 100%; padding: 6px 10px; background: var(--bg-input); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); color: var(--text-primary); font-family: var(--font-sans); font-size: 12px; outline: none; box-sizing: border-box; }
+.modal-field input[type="text"]:focus, .modal-field textarea:focus { border-color: var(--accent-cyan); }
+.modal-field input[type="color"] { width: 36px; height: 28px; border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); background: transparent; cursor: pointer; padding: 2px; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+.modal-actions button { padding: 6px 16px; border-radius: var(--radius-sm); font-family: var(--font-sans); font-size: 12px; font-weight: 500; cursor: pointer; transition: all var(--transition-fast); }
+.modal-cancel { background: transparent; border: 1px solid var(--border-subtle); color: var(--text-secondary); }
+.modal-cancel:hover { border-color: var(--text-muted); color: var(--text-primary); }
+.modal-confirm { background: rgba(0,245,255,0.15); border: 1px solid var(--accent-cyan); color: var(--accent-cyan); }
+.modal-confirm:hover { background: rgba(0,245,255,0.25); }
+.layer-list { max-height: 160px; overflow-y: auto; }
+.layer-card { display: flex; align-items: center; gap: 5px; padding: 5px 6px; background: var(--bg-input); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); margin-bottom: 3px; cursor: pointer; transition: all var(--transition-fast); position: relative; }
+.layer-card:hover { border-color: var(--border-accent); }
+.layer-card.selected { border-color: var(--accent-cyan); background: rgba(0,245,255,0.06); }
+.layer-card.editing .lc-name::after { content: ' \270F'; font-size: 9px; color: var(--accent-cyan); }
+.layer-color-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.lc-name { flex: 1; font-size: 11px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.layer-card.selected .lc-name { color: var(--text-primary); }
+.lc-count { font-size: 9px; font-family: var(--font-mono); color: var(--text-muted); background: rgba(255,255,255,0.04); padding: 1px 4px; border-radius: 8px; flex-shrink: 0; }
+.lc-vis, .lc-lock { background: transparent; border: none; color: var(--text-secondary); cursor: pointer; font-size: 12px; padding: 0 1px; transition: color var(--transition-fast); flex-shrink: 0; }
+.lc-vis:hover, .lc-lock:hover { color: var(--accent-cyan); }
+.lc-vis.off { color: var(--text-muted); opacity: 0.4; }
+.lc-lock.on { color: var(--accent-orange); opacity: 0.8; }
+.lc-menu-btn { background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 13px; padding: 0 1px; transition: color var(--transition-fast); flex-shrink: 0; }
+.lc-menu-btn:hover { color: var(--text-primary); }
+.layer-ctx-menu { position: absolute; top: 100%; right: 0; width: 150px; background: rgba(15,15,25,0.97); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 3px; z-index: 100; box-shadow: var(--shadow-lg); display: none; }
+.layer-ctx-menu.open { display: block; }
+.ctx-menu-item { display: block; width: 100%; padding: 5px 9px; background: transparent; border: none; color: var(--text-secondary); font-family: var(--font-sans); font-size: 10px; text-align: left; cursor: pointer; border-radius: var(--radius-sm); transition: all var(--transition-fast); }
+.ctx-menu-item:hover { background: rgba(255,255,255,0.06); color: var(--text-primary); }
+.ctx-menu-item.danger:hover { color: var(--accent-red); }
+
+/* === EDIT MODE TOGGLE === */
+.edit-mode-section { padding: 6px 0; border-bottom: 1px solid var(--border-subtle); margin-bottom: 8px; }
+.edit-toggle-btn { width: 100%; padding: 7px 10px; border-radius: var(--radius-md); font-family: var(--font-sans); font-size: 11px; font-weight: 600; cursor: pointer; transition: all var(--transition-fast); display: flex; align-items: center; justify-content: center; gap: 5px; text-transform: uppercase; letter-spacing: 0.5px; }
+.edit-toggle-btn.off { background: var(--bg-input); border: 1px solid var(--border-subtle); color: var(--text-secondary); }
+.edit-toggle-btn.off:hover { border-color: var(--border-accent); color: var(--text-primary); }
+.edit-toggle-btn.off:disabled { opacity: 0.35; cursor: not-allowed; }
+.edit-toggle-btn.off:disabled:hover { border-color: var(--border-subtle); color: var(--text-secondary); }
+.edit-toggle-btn.on { background: rgba(0,245,255,0.15); border: 1px solid var(--accent-cyan); color: var(--accent-cyan); }
+.edit-toggle-btn.on:hover { background: rgba(0,245,255,0.25); }
+
+/* === DRAWING TOOLS (layer mode) === */
+.drawing-tools-section { padding-bottom: 8px; border-bottom: 1px solid var(--border-subtle); margin-bottom: 8px; }
+.drawing-tools-section.disabled { opacity: 0.3; pointer-events: none; }
+.draw-tools-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; margin-bottom: 6px; }
+.draw-tool-btn { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 5px 2px; background: var(--bg-input); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); color: var(--text-secondary); font-size: 8px; font-family: var(--font-sans); cursor: pointer; transition: all var(--transition-fast); }
+.draw-tool-btn:hover { border-color: var(--border-accent); color: var(--text-primary); }
+.draw-tool-btn.active { border-color: var(--accent-cyan); color: var(--accent-cyan); background: rgba(0,245,255,0.08); }
+.draw-tool-btn.coming-soon { opacity: 0.35; cursor: not-allowed; }
+.draw-tool-btn svg { width: 14px; height: 14px; }
+
+/* === STYLE CONTROLS === */
+.style-controls { margin-bottom: 8px; }
+.style-row { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+.style-row label { font-size: 9px; color: var(--text-muted); text-transform: uppercase; font-family: var(--font-mono); width: 50px; flex-shrink: 0; }
+.style-row input[type="range"] { flex: 1; height: 3px; -webkit-appearance: none; appearance: none; background: var(--border-subtle); border-radius: 2px; outline: none; }
+.style-row input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; border-radius: 50%; background: var(--accent-cyan); cursor: pointer; }
+.style-row input[type="color"] { width: 24px; height: 20px; border: 1px solid var(--border-subtle); border-radius: 3px; background: transparent; cursor: pointer; padding: 0; }
+.style-val { font-size: 9px; font-family: var(--font-mono); color: var(--text-muted); width: 24px; text-align: right; flex-shrink: 0; }
+
+/* === FEATURE LIST === */
+.feature-list-section { margin-top: 4px; }
+.feature-list-section .section-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); font-weight: 600; margin-bottom: 4px; }
+.fl-empty { font-size: 10px; color: var(--text-muted); text-align: center; padding: 8px 0; }
+.feature-list { max-height: 180px; overflow-y: auto; }
+.fl-item { display: flex; align-items: center; gap: 5px; padding: 4px 6px; background: var(--bg-input); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); margin-bottom: 2px; cursor: pointer; transition: all var(--transition-fast); font-size: 10px; color: var(--text-secondary); }
+.fl-item:hover { border-color: var(--border-accent); }
+.fl-item.selected { border-color: var(--accent-cyan); background: rgba(0,245,255,0.06); }
+.fl-type-icon { font-size: 11px; flex-shrink: 0; width: 14px; text-align: center; }
+.fl-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fl-meas { font-size: 9px; font-family: var(--font-mono); color: var(--accent-cyan); flex-shrink: 0; }
+.fl-del-btn { background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 10px; padding: 0 2px; transition: color var(--transition-fast); flex-shrink: 0; }
+.fl-del-btn:hover { color: var(--accent-red); }
+
+/* === REPORT / OUTPUT TAB === */
+.report-meta-section { margin-bottom: 10px; }
+.report-field { margin-bottom: 6px; }
+.report-field label { display: block; font-size: 9px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px; font-family: var(--font-mono); }
+.report-field input, .report-field select, .report-field textarea {
+    width: 100%; padding: 5px 8px; background: var(--bg-input); border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm); color: var(--text-primary); font-family: var(--font-sans); font-size: 11px; outline: none;
+}
+.report-field input:focus, .report-field select:focus, .report-field textarea:focus { border-color: var(--accent-cyan); }
+.report-field select option { background: #0a0a0f; color: #e0e0e0; }
+.report-field textarea { resize: vertical; min-height: 40px; }
+.report-preview { padding: 8px; background: rgba(0,245,255,0.02); border: 1px solid rgba(0,245,255,0.08); border-radius: var(--radius-sm); margin-bottom: 10px; font-size: 10px; line-height: 1.5; color: var(--text-secondary); max-height: 200px; overflow-y: auto; }
+.report-preview .rp-heading { color: var(--accent-cyan); font-weight: 600; font-size: 11px; margin-bottom: 4px; }
+.report-preview .rp-row { display: flex; justify-content: space-between; padding: 1px 0; }
+.report-preview .rp-key { color: var(--text-muted); }
+.report-preview .rp-val { color: var(--text-secondary); font-family: var(--font-mono); }
+.report-preview .rp-layer { margin-top: 6px; padding-top: 4px; border-top: 1px solid rgba(255,255,255,0.04); }
+.report-preview .rp-layer-name { color: var(--text-primary); font-weight: 500; display: flex; align-items: center; gap: 4px; }
+.report-preview .rp-layer-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.report-preview .rp-feature { padding-left: 14px; color: var(--text-muted); font-size: 9px; }
+.classification-banner { padding: 3px 8px; text-align: center; font-size: 10px; font-weight: 700; letter-spacing: 1px; border-radius: var(--radius-sm); margin-bottom: 6px; }
+.classification-banner.UNCLASSIFIED { background: rgba(34,197,94,0.15); color: #22c55e; border: 1px solid rgba(34,197,94,0.3); }
+.classification-banner.CONFIDENTIAL { background: rgba(59,130,246,0.15); color: #3b82f6; border: 1px solid rgba(59,130,246,0.3); }
+.classification-banner.SECRET { background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid rgba(239,68,68,0.3); }
+.classification-banner.TOP_SECRET { background: rgba(168,85,247,0.15); color: #a855f7; border: 1px solid rgba(168,85,247,0.3); }
+
+/* === ANALYSIS SECTIONS === */
+.analysis-section {
+    margin-bottom: 12px;
+}
+.analysis-section-title {
+    font-size: 10px; font-weight: 600; color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: 0.5px;
+    margin-bottom: 6px; padding-bottom: 4px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.analysis-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 3px 0; font-size: 10px;
+}
+.analysis-key { color: var(--text-muted); font-family: var(--font-mono); }
+.analysis-val { color: var(--accent-cyan); font-family: var(--font-mono); }
+.meas-tools { display: flex; gap: 4px; margin-bottom: 8px; }
+.meas-tool-btn {
+    padding: 5px 8px; border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm); background: transparent;
+    color: var(--text-secondary); font-size: 10px;
+    font-family: var(--font-sans); cursor: pointer;
+    transition: all var(--transition-fast);
+}
+.meas-tool-btn:hover { border-color: var(--accent-cyan); color: var(--accent-cyan); }
+.meas-tool-btn.active { background: rgba(0,245,255,0.1); border-color: var(--accent-cyan); color: var(--accent-cyan); }
+
+/* === PIXEL INSPECTOR === */
+.pixel-inspector {
+    display: flex; align-items: center; gap: 8px; margin-top: 4px;
+}
+.pixel-swatch {
+    width: 28px; height: 28px; border: 1px solid var(--border-subtle);
+    border-radius: 4px;
+}
+.pixel-vals { font-family: var(--font-mono); font-size: 10px; color: var(--text-secondary); line-height: 1.5; }
+
+/* === AI TAB === */
+.ai-placeholder {
+    text-align: center; padding: 20px 0; color: var(--text-muted);
+    font-size: 11px; line-height: 1.6;
+}
+.ai-placeholder svg { opacity: 0.2; margin-bottom: 12px; }
+.ai-select {
+    width: 100%; padding: 6px 8px; margin-top: 8px;
+    border: 1px solid var(--border-subtle); border-radius: var(--radius-sm);
+    background: var(--bg-input); color: var(--text-muted);
+    font-family: var(--font-sans); font-size: 11px;
+}
+
+/* === STATUS BAR === */
+.status-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    height: 32px; padding: 0 12px;
+    background: var(--bg-card); border-top: 1px solid var(--border-subtle);
+    font-family: var(--font-mono); font-size: 11px;
+    color: var(--text-secondary); z-index: 100;
+}
+.status-left, .status-right { display: flex; align-items: center; gap: 16px; }
+.status-sep { width: 1px; height: 16px; background: var(--border-subtle); }
+.coord-label { color: var(--text-muted); font-size: 10px; margin-right: 4px; }
+.coord-value { color: var(--accent-cyan); }
+.coord-dms { color: var(--text-secondary); }
+
+/* === TOAST === */
+.toast-container { position: fixed; top: 56px; right: 16px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; }
+.toast {
+    padding: 10px 16px; border-radius: var(--radius-md);
+    background: var(--bg-card); border: 1px solid var(--border-subtle);
+    color: var(--text-primary); font-size: 12px;
+    box-shadow: var(--shadow-lg); backdrop-filter: blur(10px);
+    animation: toastIn 0.3s ease;
+    max-width: 320px;
+}
+.toast.success { border-color: var(--accent-green); }
+.toast.error { border-color: var(--accent-red); }
+.toast.info { border-color: var(--accent-cyan); }
+@keyframes toastIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+
+/* === LOADING OVERLAY === */
+.loading-overlay {
+    position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(6,6,16,0.9); z-index: 200;
+    flex-direction: column; gap: 16px;
+}
+.loading-spinner {
+    width: 40px; height: 40px; border: 3px solid rgba(255,255,255,0.1);
+    border-top-color: var(--accent-cyan); border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading-text { font-size: 13px; color: var(--text-secondary); }
+
+/* === EMPTY STATE === */
+.empty-state {
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; height: 100%; gap: 12px;
+    color: var(--text-muted); font-size: 14px;
+}
+.empty-state svg { opacity: 0.3; }
+
+/* === MEASUREMENT RESULT === */
+.meas-result {
+    margin-top: 8px; padding: 8px; border-radius: var(--radius-sm);
+    background: rgba(0,245,255,0.04); border: 1px solid rgba(0,245,255,0.1);
+    font-family: var(--font-mono); font-size: 10px;
+    color: var(--text-secondary); line-height: 1.6;
+}
+.meas-result .meas-val { color: var(--accent-cyan); font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="app">
+    <!-- === HEADER === -->
+    <header class="header">
+        <div class="header-left">
+            <a href="master-home.html" class="header-logo"><svg class="logo-globe" width="26" height="26" viewBox="0 0 56 56" fill="none"><circle cx="28" cy="12" r="2.4" fill="#00f5ff"/><g stroke="#00f5ff" stroke-width="2.4" stroke-linecap="round" fill="none"><path d="M20 18 Q28 23 36 18"/><path d="M14 24 Q28 31 42 24"/><path d="M9 30 Q28 39 47 30"/><path d="M6 36 Q28 45 50 36"/></g></svg>Abyss</a>
+        </div>
+        <div class="header-center">
+            <a href="master-home.html" class="nav-link" data-i18n="nav.home">Home</a>
+            <a href="collections-browse.html" class="nav-link" data-i18n="nav.collections">Collections</a>
+            <a href="bathymetry-studio.html" class="nav-link" data-i18n="nav.studio">CORE</a>
+            <a href="reports-browse.html" class="nav-link" data-i18n="nav.reports">Reports</a>
+</div>
+        <div class="header-right">
+            <span id="userDisplay"></span>
+            <a href="admin.html" class="settings-btn" title="Settings" aria-label="Settings">&#9881;</a>
+            <button id="langToggle" class="glyph-lang-toggle" title="عربي / English" onclick="(function(){var l=localStorage.getItem('glyph_lang')||'en';localStorage.setItem('glyph_lang',l==='ar'?'en':'ar');location.reload();})()" style="width:32px;height:32px;border-radius:8px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.04);color:var(--text-dim,#e0e0e0);cursor:pointer;font-size:12px;font-weight:700;font-family:'Noto Sans Arabic',sans-serif;display:flex;align-items:center;justify-content:center;transition:all 0.2s;margin-right:8px;"></button>
+            <script>document.getElementById('langToggle').textContent=localStorage.getItem('glyph_lang')==='ar'?'EN':'ع';</script>
+            <button id="logoutBtn" data-i18n="nav.signout">Logout</button>
+        </div>
+    </header>
+
+    <!-- === TOOLBAR === -->
+    <div class="toolbar">
+        <button class="tool-btn" id="zoomInBtn" title="Zoom In (+ / =)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+            Zoom In
+        </button>
+        <button class="tool-btn" id="zoomOutBtn" title="Zoom Out (-)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+            Zoom Out
+        </button>
+        <button class="tool-btn" id="fitBtn" title="Fit to Screen (0)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/></svg>
+            Fit
+        </button>
+        <span class="zoom-display" id="zoomDisplay">100%</span>
+        <div class="tool-sep"></div>
+        <button class="tool-btn" id="gridBtn" title="Toggle Grid (G)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
+            Grid
+        </button>
+        <button class="tool-btn" id="pointBtn" title="Place Point (P)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="10" r="3"/><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/></svg>
+            Point
+        </button>
+        <div class="tool-sep"></div>
+        <button class="tool-btn" id="openMapBtn" title="Open on Map">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
+            Open on Map
+        </button>
+        <button class="tool-btn" id="panelToggleBtn" title="Toggle Panel (I)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
+            Panel
+        </button>
+        <div class="tool-spacer"></div>
+        <span class="image-name-display" id="imageNameDisplay"></span>
+    </div>
+
+    <!-- === MAIN CONTENT === -->
+    <div class="main-area">
+        <!-- Canvas Viewport -->
+        <div class="canvas-viewport" id="viewport">
+            <canvas id="imageCanvas"></canvas>
+            <canvas id="annotCanvas"></canvas>
+            <canvas class="grid-overlay" id="gridCanvas"></canvas>
+            <div id="pointMarkersContainer"></div>
+
+            <!-- Loading overlay -->
+            <div class="loading-overlay" id="loadingOverlay">
+                <div class="loading-spinner"></div>
+                <div class="loading-text">Loading imagery...</div>
+            </div>
+
+            <!-- Minimap -->
+            <div class="minimap" id="minimap">
+                <canvas id="minimapCanvas"></canvas>
+                <div class="minimap-viewport" id="minimapViewport"></div>
+            </div>
+        </div>
+
+        <!-- Right Panel -->
+        <div class="right-panel" id="rightPanel">
+            <!-- Image Info (always visible, collapsible) -->
+            <div class="panel-section">
+                <div class="panel-section-header" data-section="info">
+                    <span>Image Info</span>
+                    <span class="chevron open">&#9654;</span>
+                </div>
+                <div class="panel-section-body open" id="infoBody">
+                    <div id="infoContent">
+                        <div style="font-size:11px;color:var(--text-muted)">No image loaded</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Adjustments (always visible, collapsible) -->
+            <div class="panel-section">
+                <div class="panel-section-header" data-section="adjust">
+                    <span>Adjustments</span>
+                    <span class="chevron open">&#9654;</span>
+                </div>
+                <div class="panel-section-body open" id="adjustBody">
+                    <div class="adj-row">
+                        <label class="adj-label" for="brightnessSlider">BRI</label>
+                        <input type="range" class="adj-slider" id="brightnessSlider" min="-100" max="100" value="0">
+                        <span class="adj-value" id="brightnessVal">0</span>
+                    </div>
+                    <div class="adj-row">
+                        <label class="adj-label" for="contrastSlider">CON</label>
+                        <input type="range" class="adj-slider" id="contrastSlider" min="-100" max="100" value="0">
+                        <span class="adj-value" id="contrastVal">0</span>
+                    </div>
+                    <div class="adj-row">
+                        <label class="adj-label" for="saturationSlider">SAT</label>
+                        <input type="range" class="adj-slider" id="saturationSlider" min="-100" max="100" value="0">
+                        <span class="adj-value" id="saturationVal">0</span>
+                    </div>
+                    <div class="adj-buttons">
+                        <button class="adj-btn" id="autoAdjBtn">Auto 95%</button>
+                        <button class="adj-btn" id="resetAdjBtn">Reset</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TABS -->
+            <div class="panel-tabs">
+                <button class="panel-tab active" data-tab="annotate">Annotate</button>
+                <button class="panel-tab" data-tab="analysis">Analysis</button>
+                <button class="panel-tab" data-tab="output">Output</button>
+                <button class="panel-tab" data-tab="ai">AI Inference</button>
+            </div>
+
+            <!-- ======== ANNOTATE TAB ======== -->
+            <div class="tab-content active" id="tab-annotate">
+                <!-- Layer Panel -->
+                <div class="layers-panel">
+                    <div class="layers-header">
+                        <span class="section-label">Layers</span>
+                        <button class="add-layer-btn" id="addLayerBtn" title="Add layer">+</button>
+                    </div>
+                    <div class="layer-list" id="layerList">
+                        <div class="fl-empty">No layers yet. Click + to add one.</div>
+                    </div>
+                </div>
+
+                <!-- Edit Mode Toggle -->
+                <div class="edit-mode-section">
+                    <button class="edit-toggle-btn off" id="editToggleBtn" disabled>
+                        <span>&#9998;</span> Enable Editing
+                    </button>
+                </div>
+
+                <!-- Drawing Tools -->
+                <div class="drawing-tools-section disabled" id="drawingToolsSection">
+                    <div class="draw-tools-grid">
+                        <button class="draw-tool-btn" data-tool="point" title="Point (P)">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="10" r="3"/><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/></svg>
+                            Point
+                        </button>
+                        <button class="draw-tool-btn" data-tool="line" title="Line (L)">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 20 10 8 16 16 20 4"/></svg>
+                            Line
+                        </button>
+                        <button class="draw-tool-btn" data-tool="polygon" title="Polygon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 22 8.5 18 20 6 20 2 8.5"/></svg>
+                            Polygon
+                        </button>
+                        <button class="draw-tool-btn" data-tool="rect" title="Rectangle">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="1"/></svg>
+                            Rect
+                        </button>
+                        <button class="draw-tool-btn" data-tool="circle" title="Circle">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="1"/></svg>
+                            Circle
+                        </button>
+                        <button class="draw-tool-btn" data-tool="text" title="Text Label">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 7 4 4 20 4 20 7"/><line x1="12" y1="4" x2="12" y2="20"/><line x1="8" y1="20" x2="16" y2="20"/></svg>
+                            Text
+                        </button>
+                        <button class="draw-tool-btn" data-tool="freehand" title="Freehand">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 17c3-4 6 2 9-2s6 2 9-2"/></svg>
+                            Free
+                        </button>
+                    </div>
+
+                    <!-- Style Controls -->
+                    <div class="style-controls">
+                        <div class="style-row">
+                            <label for="annotColor">Color</label>
+                            <input type="color" id="annotColor" value="#00f5ff">
+                        </div>
+                        <div class="style-row">
+                            <label for="annotLineWidth">Width</label>
+                            <input type="range" id="annotLineWidth" min="1" max="5" value="2" step="0.5">
+                            <span class="style-val" id="annotLineWidthVal">2</span>
+                        </div>
+                        <div class="style-row">
+                            <label for="annotOpacity">Opacity</label>
+                            <input type="range" id="annotOpacity" min="0" max="100" value="100">
+                            <span class="style-val" id="annotOpacityVal">100</span>
+                        </div>
+                        <div class="style-row">
+                            <label for="annotFillOpacity">Fill</label>
+                            <input type="range" id="annotFillOpacity" min="0" max="100" value="15">
+                            <span class="style-val" id="annotFillOpacityVal">15</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Feature List -->
+                <div class="feature-list-section">
+                    <div class="section-label" id="featureListLabel">Features</div>
+                    <div class="feature-list" id="featureListContainer">
+                        <div class="fl-empty">Select a layer to view features</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ======== ANALYSIS TAB ======== -->
+            <div class="tab-content" id="tab-analysis">
+                <!-- Measurement tools -->
+                <div class="analysis-section">
+                    <div class="analysis-section-title">Measurement Tools</div>
+                    <div class="meas-tools">
+                        <button class="meas-tool-btn" id="measDistBtn">Distance</button>
+                        <button class="meas-tool-btn" id="measAreaBtn">Area</button>
+                        <button class="meas-tool-btn" id="measBearingBtn">Bearing</button>
+                    </div>
+                    <div id="measResult" class="meas-result" style="display:none"></div>
+                    <button class="adj-btn" id="measClearBtn" style="margin-top:6px;width:100%">Clear Measurement</button>
+                </div>
+
+                <!-- Pixel Inspector -->
+                <div class="analysis-section">
+                    <div class="analysis-section-title">Pixel Inspector</div>
+                    <div class="pixel-inspector">
+                        <div class="pixel-swatch" id="pixelSwatch" style="background:#000"></div>
+                        <div class="pixel-vals" id="pixelVals">R: -- G: -- B: --<br>Hex: --</div>
+                    </div>
+                </div>
+
+                <!-- Band Statistics -->
+                <div class="analysis-section">
+                    <div class="analysis-section-title">Band Statistics (Visible Area)</div>
+                    <div id="bandStats">
+                        <div class="analysis-row"><span class="analysis-key">R min/max</span><span class="analysis-val" id="statR">--</span></div>
+                        <div class="analysis-row"><span class="analysis-key">G min/max</span><span class="analysis-val" id="statG">--</span></div>
+                        <div class="analysis-row"><span class="analysis-key">B min/max</span><span class="analysis-val" id="statB">--</span></div>
+                        <div class="analysis-row"><span class="analysis-key">R mean/std</span><span class="analysis-val" id="statRm">--</span></div>
+                        <div class="analysis-row"><span class="analysis-key">G mean/std</span><span class="analysis-val" id="statGm">--</span></div>
+                        <div class="analysis-row"><span class="analysis-key">B mean/std</span><span class="analysis-val" id="statBm">--</span></div>
+                    </div>
+                    <button class="adj-btn" id="computeStatsBtn" style="margin-top:6px;width:100%">Compute Stats</button>
+                </div>
+
+                <!-- Coordinate Readout -->
+                <div class="analysis-section">
+                    <div class="analysis-section-title">Coordinate Readout</div>
+                    <div class="analysis-row"><span class="analysis-key">Pixel</span><span class="analysis-val" id="readoutPixel">--, --</span></div>
+                    <div class="analysis-row"><span class="analysis-key">DD</span><span class="analysis-val" id="readoutDD">--, --</span></div>
+                    <div class="analysis-row"><span class="analysis-key">DMS</span><span class="analysis-val" id="readoutDMS">--, --</span></div>
+                    <div class="analysis-row"><span class="analysis-key">MGRS</span><span class="analysis-val" id="readoutMGRS">--</span></div>
+                </div>
+            </div>
+
+            <!-- ======== OUTPUT TAB ======== -->
+            <div class="tab-content" id="tab-output">
+                <!-- Report Metadata -->
+                <div class="report-meta-section">
+                    <div class="analysis-section-title">Report Metadata</div>
+                    <div class="report-field">
+                        <label for="reportTitle">Report Title</label>
+                        <input type="text" id="reportTitle" placeholder="Imagery Analysis Report">
+                    </div>
+                    <div class="report-field">
+                        <label for="reportClassification">Classification</label>
+                        <select id="reportClassification">
+                            <option value="UNCLASSIFIED">UNCLASSIFIED</option>
+                            <option value="CONFIDENTIAL">CONFIDENTIAL</option>
+                            <option value="SECRET">SECRET</option>
+                            <option value="TOP_SECRET">TOP SECRET</option>
+                        </select>
+                    </div>
+                    <div class="report-field">
+                        <label for="reportAuthor">Author</label>
+                        <input type="text" id="reportAuthor" placeholder="Analyst">
+                    </div>
+                    <div class="report-field">
+                        <label for="reportDate">Date</label>
+                        <input type="text" id="reportDate">
+                    </div>
+                    <div class="report-field">
+                        <label for="reportNotes">Notes</label>
+                        <textarea id="reportNotes" rows="2" placeholder="Additional notes..."></textarea>
+                    </div>
+                </div>
+
+                <!-- Report Preview -->
+                <div class="analysis-section">
+                    <div class="analysis-section-title">Report Preview</div>
+                    <div class="report-preview" id="reportPreview">
+                        <div style="color:var(--text-muted);text-align:center;padding:8px 0;">Load an image and add annotations to generate a report preview.</div>
+                    </div>
+                    <button class="action-btn" id="refreshPreviewBtn" style="margin-top:4px">Refresh Preview</button>
+                </div>
+
+                <!-- Save to Project -->
+                <div class="analysis-section">
+                    <div class="analysis-section-title">Save to Project</div>
+                    <button class="action-btn" id="saveAnnotationsBtn">Save Annotations to Server</button>
+                </div>
+
+                <!-- Export Options -->
+                <div class="analysis-section">
+                    <div class="analysis-section-title">Export Options</div>
+                    <button class="action-btn" id="exportReportHTML">Export Report as HTML</button>
+                    <button class="action-btn" id="exportReportPDF">Export Report as PDF (Print)</button>
+                    <button class="action-btn" id="exportAnnotGeoJSON2">Export Annotations as GeoJSON</button>
+                    <button class="action-btn" id="exportAnnotKML">Export Annotations as KML</button>
+                    <button class="action-btn" id="exportViewPNG">Export Current View as PNG</button>
+                    <button class="action-btn" id="exportMeasCSV">Export Measurements as CSV</button>
+                </div>
+            </div>
+
+            <!-- ======== AI INFERENCE TAB ======== -->
+            <div class="tab-content" id="tab-ai">
+                <div class="ai-placeholder">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M12 2a4 4 0 014 4v1h1a3 3 0 013 3v1a3 3 0 01-3 3h-1v1a4 4 0 01-8 0v-1H7a3 3 0 01-3-3v-1a3 3 0 013-3h1V6a4 4 0 014-4z"/>
+                        <circle cx="9" cy="10" r="1"/><circle cx="15" cy="10" r="1"/>
+                        <path d="M9 14h6"/>
+                    </svg>
+                    <div>Automated bathymetry analysis is not yet available.</div>
+                    <div style="margin-top:6px;font-size:10px;color:var(--text-muted);line-height:1.6;">Seafloor classification and depth-anomaly detection will appear here once processing models are enabled for this workspace.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- === STATUS BAR === -->
+    <div class="status-bar">
+        <div class="status-left">
+            <span><span class="coord-label">Pixel:</span> <span class="coord-value" id="pixelCoord">--, --</span></span>
+            <div class="status-sep"></div>
+            <span><span class="coord-label">Geo:</span> <span class="coord-value" id="geoCoordDD">--, --</span></span>
+            <div class="status-sep"></div>
+            <span><span class="coord-label">DMS:</span> <span class="coord-dms" id="geoCoordDMS">--, --</span></span>
+        </div>
+        <div class="status-right">
+            <span id="statusMsg">Ready</span>
+        </div>
+    </div>
+</div>
+
+<!-- Toast container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- New Layer Modal -->
+<div class="modal-overlay hidden" id="newLayerModal">
+    <div class="modal-box">
+        <h3>New Layer</h3>
+        <div class="modal-field">
+            <label>Name</label>
+            <input type="text" id="newLayerName" placeholder="Layer name" autocomplete="off">
+        </div>
+        <div class="modal-field">
+            <label>Color</label>
+            <input type="color" id="newLayerColor" value="#00f5ff">
+        </div>
+        <div class="modal-actions">
+            <button class="modal-cancel" id="newLayerCancel">Cancel</button>
+            <button class="modal-confirm" id="newLayerConfirm">Create</button>
+        </div>
+    </div>
+</div>
+
+<script>
+// ============================================================
+// AUTH
+// ============================================================
+function checkAuth() {
+    var token = localStorage.getItem('intel_globe_token');
+    if (!token) { window.location.href = 'login.html'; return false; }
+    try {
+        var payload = JSON.parse(atob(token.split('.')[1]));
+        if (payload.exp && payload.exp * 1000 < Date.now()) {
+            localStorage.removeItem('intel_globe_token');
+            window.location.href = 'login.html';
+            return false;
+        }
+    } catch(e) {}
+    return true;
+}
+
+function loadUser() {
+    var name = '';
+    try {
+        var u = localStorage.getItem('intel_globe_user');
+        if (u) {
+            var user = JSON.parse(u);
+            name = user.username || user.name || '';
+            if (!name && user.email) name = user.email.split('@')[0];
+        }
+    } catch(e) {}
+    var el = document.getElementById('userDisplay');
+    if (el) el.textContent = name || 'User';
+    // Auto-fill report author only with a real name
+    var authorEl = document.getElementById('reportAuthor');
+    if (authorEl && !authorEl.value && name) authorEl.value = name;
+}
+
+function logout() {
+    if (window.AbyssAuth && typeof AbyssAuth.logout === 'function') { AbyssAuth.logout(); return; }
+    localStorage.removeItem('intel_globe_token');
+    localStorage.removeItem('intel_globe_user');
+    window.location.href = 'login.html';
+}
+
+function escapeHtml(s) {
+    var d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+}
+
+// ============================================================
+// TOAST
+// ============================================================
+function toast(msg, type) {
+    var c = document.getElementById('toastContainer');
+    var t = document.createElement('div');
+    t.className = 'toast ' + (type || 'info');
+    t.textContent = msg;
+    c.appendChild(t);
+    setTimeout(function() { t.style.opacity = '0'; t.style.transition = 'opacity 0.3s'; }, 2500);
+    setTimeout(function() { t.remove(); }, 2800);
+}
+
+// ============================================================
+// COORDINATE FORMATTING
+// ============================================================
+function ddToDMS(dd) {
+    var d = Math.abs(dd);
+    var deg = Math.floor(d);
+    var minFloat = (d - deg) * 60;
+    var min = Math.floor(minFloat);
+    var sec = ((minFloat - min) * 60).toFixed(2);
+    return deg + '\u00B0' + String(min).padStart(2, '0') + '\u2032' + String(sec).padStart(5, '0') + '\u2033';
+}
+
+function formatDMS(lat, lon) {
+    var latDir = lat >= 0 ? 'N' : 'S';
+    var lonDir = lon >= 0 ? 'E' : 'W';
+    return ddToDMS(lat) + latDir + ' ' + ddToDMS(lon) + lonDir;
+}
+
+function formatDD(lat, lon) {
+    return lat.toFixed(6) + ', ' + lon.toFixed(6);
+}
+
+// MGRS conversion (simplified)
+function toMGRS(lat, lon) {
+    if (lat < -80 || lat > 84) return 'Outside MGRS';
+    var zoneNum = Math.floor((lon + 180) / 6) + 1;
+    var letters = 'CDEFGHJKLMNPQRSTUVWX';
+    var latBand = letters.charAt(Math.floor((lat + 80) / 8));
+    // Simplified easting/northing
+    var k0 = 0.9996;
+    var latRad = lat * Math.PI / 180;
+    var lonRad = lon * Math.PI / 180;
+    var lonOrigin = ((zoneNum - 1) * 6 - 180 + 3) * Math.PI / 180;
+    var a = 6378137;
+    var eccSq = 0.00669438;
+    var N = a / Math.sqrt(1 - eccSq * Math.sin(latRad) * Math.sin(latRad));
+    var T = Math.tan(latRad) * Math.tan(latRad);
+    var C = eccSq / (1 - eccSq) * Math.cos(latRad) * Math.cos(latRad);
+    var A = Math.cos(latRad) * (lonRad - lonOrigin);
+    var M = a * ((1 - eccSq / 4 - 3 * eccSq * eccSq / 64) * latRad -
+        (3 * eccSq / 8 + 3 * eccSq * eccSq / 32) * Math.sin(2 * latRad) +
+        (15 * eccSq * eccSq / 256) * Math.sin(4 * latRad));
+    var easting = k0 * N * (A + (1 - T + C) * A * A * A / 6) + 500000;
+    var northing = k0 * (M + N * Math.tan(latRad) * (A * A / 2 + (5 - T + 9 * C + 4 * C * C) * A * A * A * A / 24));
+    if (lat < 0) northing += 10000000;
+    // 100km grid letters
+    var set = ((zoneNum - 1) % 6);
+    var e100k = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+    var n100k = set % 2 === 0 ? 'ABCDEFGHJKLMNPQRSTUV' : 'FGHJKLMNPQRSTUVABCDE';
+    var eIdx = Math.floor(easting / 100000) - 1;
+    var nIdx = Math.floor(northing % 2000000 / 100000);
+    if (eIdx < 0) eIdx = 0;
+    if (eIdx >= e100k.length) eIdx = e100k.length - 1;
+    if (nIdx >= n100k.length) nIdx = nIdx % n100k.length;
+    var gridE = e100k.charAt(eIdx);
+    var gridN = n100k.charAt(nIdx);
+    var e5 = String(Math.round(easting % 100000)).padStart(5, '0');
+    var n5 = String(Math.round(northing % 100000)).padStart(5, '0');
+    return zoneNum + latBand + ' ' + gridE + gridN + ' ' + e5 + ' ' + n5;
+}
+
+// ============================================================
+// HAVERSINE & BEARING
+// ============================================================
+function haversine(lat1, lon1, lat2, lon2) {
+    var R = 6371000; // meters
+    var dLat = (lat2 - lat1) * Math.PI / 180;
+    var dLon = (lon2 - lon1) * Math.PI / 180;
+    var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function bearing(lat1, lon1, lat2, lon2) {
+    var dLon = (lon2 - lon1) * Math.PI / 180;
+    var y = Math.sin(dLon) * Math.cos(lat2 * Math.PI / 180);
+    var x = Math.cos(lat1 * Math.PI / 180) * Math.sin(lat2 * Math.PI / 180) -
+        Math.sin(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.cos(dLon);
+    var brng = Math.atan2(y, x) * 180 / Math.PI;
+    return (brng + 360) % 360;
+}
+
+function polylineLength(pts) {
+    var total = 0;
+    for (var i = 1; i < pts.length; i++) {
+        total += haversine(pts[i - 1].lat, pts[i - 1].lon, pts[i].lat, pts[i].lon);
+    }
+    return total;
+}
+
+function polygonArea(pts) {
+    // Shoelace on projected coordinates (approximate for small areas)
+    if (pts.length < 3) return 0;
+    var R = 6371000;
+    var refLat = pts[0].lat * Math.PI / 180;
+    var refLon = pts[0].lon * Math.PI / 180;
+    var projected = pts.map(function(p) {
+        var lat = p.lat * Math.PI / 180;
+        var lon = p.lon * Math.PI / 180;
+        return {
+            x: R * (lon - refLon) * Math.cos(refLat),
+            y: R * (lat - refLat)
+        };
+    });
+    var area = 0;
+    for (var i = 0, j = projected.length - 1; i < projected.length; j = i++) {
+        area += projected[j].x * projected[i].y - projected[i].x * projected[j].y;
+    }
+    return Math.abs(area / 2);
+}
+
+// ============================================================
+// STATE
+// ============================================================
+var imageMeta = null;
+var allMeta = [];
+var img = null;
+var imgW = 0, imgH = 0;
+
+// Viewport transform
+var scale = 1;
+var offsetX = 0, offsetY = 0;
+var minScale = 0.05;
+var maxScale = 50;
+
+// Interaction state
+var isDragging = false;
+var dragStartX = 0, dragStartY = 0;
+var dragOffsetX = 0, dragOffsetY = 0;
+
+// Tools
+var placingPoints = false;
+var showGrid = false;
+var points = [];
+
+// Layer-based annotation system (matches project-workspace)
+var annotationLayers = []; // { id, name, color, description, visible, locked, features:[] }
+var selectedLayerId = null;
+var editModeOn = false;
+var _nextLayerId = 1;
+var _nextFeatureNum = { point: 0, line: 0, polygon: 0, rect: 0, circle: 0, text: 0, freehand: 0 };
+
+// Active annotation tool
+var activeAnnotTool = null; // null, 'point', 'line', 'polygon', 'rect', 'circle', 'text', 'freehand'
+var annotColor = '#00f5ff';
+var annotLineWidth = 2;
+var annotOpacity = 1;
+var annotFillOpacity = 0.15;
+
+// Legacy annotations array for backward compat — now features live inside layers
+var annotations = [];
+var currentDrawing = null;
+var rectStart = null;
+var circleCenter = null;
+var isFreehandDrawing = false;
+
+// Measurement tool
+var activeMeasTool = null;
+var measPoints = [];
+var measurements = [];
+
+// Adjustments
+var brightness = 0;
+var contrast = 0;
+var saturation = 0;
+
+// Canvas refs
+var canvas, ctx;
+var annotCanvas, annotCtx;
+var viewport;
+var gridCanvas, gridCtx;
+var minimapCanvas, minimapCtx;
+
+// Current mouse position in image coords
+var cursorPx = -1, cursorPy = -1;
+
+// ============================================================
+// INIT
+// ============================================================
+document.addEventListener('DOMContentLoaded', function() {
+    if (!checkAuth()) return;
+    checkAppPermission('image-viewer');
+    loadUser();
+
+    canvas = document.getElementById('imageCanvas');
+    ctx = canvas.getContext('2d');
+    annotCanvas = document.getElementById('annotCanvas');
+    annotCtx = annotCanvas.getContext('2d');
+    viewport = document.getElementById('viewport');
+    gridCanvas = document.getElementById('gridCanvas');
+    gridCtx = gridCanvas.getContext('2d');
+    minimapCanvas = document.getElementById('minimapCanvas');
+    minimapCtx = minimapCanvas.getContext('2d');
+
+    // Set report date
+    document.getElementById('reportDate').value = new Date().toISOString().slice(0, 10);
+
+    // Logout
+    document.getElementById('logoutBtn').addEventListener('click', logout);
+
+    // Toolbar buttons
+    document.getElementById('zoomInBtn').addEventListener('click', function() { zoomBy(1.3); });
+    document.getElementById('zoomOutBtn').addEventListener('click', function() { zoomBy(1 / 1.3); });
+    document.getElementById('fitBtn').addEventListener('click', fitToScreen);
+    document.getElementById('gridBtn').addEventListener('click', toggleGrid);
+    document.getElementById('pointBtn').addEventListener('click', function() {
+        if (!editModeOn) { toast('Select a layer and enable editing first', 'info'); return; }
+        setAnnotTool('point');
+    });
+    document.getElementById('openMapBtn').addEventListener('click', openOnMap);
+    document.getElementById('panelToggleBtn').addEventListener('click', togglePanel);
+
+    // Adjustment sliders
+    document.getElementById('brightnessSlider').addEventListener('input', onAdjustChange);
+    document.getElementById('contrastSlider').addEventListener('input', onAdjustChange);
+    document.getElementById('saturationSlider').addEventListener('input', onAdjustChange);
+    document.getElementById('autoAdjBtn').addEventListener('click', autoAdjust);
+    document.getElementById('resetAdjBtn').addEventListener('click', resetAdjust);
+
+    // Panel section toggles
+    document.querySelectorAll('.panel-section-header').forEach(function(hdr) {
+        hdr.addEventListener('click', function() {
+            var chevron = this.querySelector('.chevron');
+            var body = this.nextElementSibling;
+            chevron.classList.toggle('open');
+            body.classList.toggle('open');
+        });
+    });
+
+    // Tab switching
+    document.querySelectorAll('.panel-tab').forEach(function(tab) {
+        tab.addEventListener('click', function() {
+            document.querySelectorAll('.panel-tab').forEach(function(t) { t.classList.remove('active'); });
+            document.querySelectorAll('.tab-content').forEach(function(c) { c.classList.remove('active'); });
+            this.classList.add('active');
+            document.getElementById('tab-' + this.dataset.tab).classList.add('active');
+        });
+    });
+
+    // Layer management
+    function showModal() {
+        document.getElementById('newLayerModal').classList.remove('hidden');
+        document.body.classList.add('modal-open');
+        document.getElementById('newLayerName').focus();
+        document.getElementById('newLayerName').select();
+    }
+    function hideModal() {
+        document.getElementById('newLayerModal').classList.add('hidden');
+        document.body.classList.remove('modal-open');
+    }
+    document.getElementById('addLayerBtn').addEventListener('click', function() {
+        var nameInput = document.getElementById('newLayerName');
+        var colorInput = document.getElementById('newLayerColor');
+        var colors = ['#ef4444','#3b82f6','#22c55e','#f59e0b','#a855f7','#ec4899','#00f5ff','#f97316'];
+        nameInput.value = 'Layer ' + (_nextLayerId + 1);
+        colorInput.value = colors[annotationLayers.length % colors.length];
+        document.getElementById('newLayerModal').querySelector('h3').textContent = 'New Layer';
+        showModal();
+    });
+    document.getElementById('newLayerCancel').addEventListener('click', hideModal);
+    document.getElementById('newLayerConfirm').addEventListener('click', function() {
+        var name = document.getElementById('newLayerName').value.trim();
+        var color = document.getElementById('newLayerColor').value;
+        if (!name) return;
+        hideModal();
+        createLayer(name, color);
+    });
+    document.getElementById('newLayerName').addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') document.getElementById('newLayerConfirm').click();
+        if (e.key === 'Escape') document.getElementById('newLayerCancel').click();
+    });
+    document.getElementById('newLayerModal').addEventListener('click', function(e) {
+        if (e.target === this) hideModal();
+    });
+
+    // Edit mode toggle
+    document.getElementById('editToggleBtn').addEventListener('click', toggleEditMode);
+
+    // Drawing tool buttons
+    document.querySelectorAll('.draw-tool-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            setAnnotTool(this.dataset.tool);
+        });
+    });
+
+    // Style controls
+    document.getElementById('annotColor').addEventListener('input', function() { annotColor = this.value; });
+    document.getElementById('annotLineWidth').addEventListener('input', function() {
+        annotLineWidth = parseFloat(this.value);
+        document.getElementById('annotLineWidthVal').textContent = this.value;
+    });
+    document.getElementById('annotOpacity').addEventListener('input', function() {
+        annotOpacity = parseInt(this.value) / 100;
+        document.getElementById('annotOpacityVal').textContent = this.value;
+    });
+    document.getElementById('annotFillOpacity').addEventListener('input', function() {
+        annotFillOpacity = parseInt(this.value) / 100;
+        document.getElementById('annotFillOpacityVal').textContent = this.value;
+    });
+
+    // Measurement tool buttons
+    document.getElementById('measDistBtn').addEventListener('click', function() { setMeasTool('distance'); });
+    document.getElementById('measAreaBtn').addEventListener('click', function() { setMeasTool('area'); });
+    document.getElementById('measBearingBtn').addEventListener('click', function() { setMeasTool('bearing'); });
+    document.getElementById('measClearBtn').addEventListener('click', clearMeasurement);
+    document.getElementById('computeStatsBtn').addEventListener('click', computeBandStats);
+
+    // Output tab buttons
+    document.getElementById('saveAnnotationsBtn').addEventListener('click', saveAnnotations);
+    document.getElementById('refreshPreviewBtn').addEventListener('click', updateReportPreview);
+    document.getElementById('exportReportHTML').addEventListener('click', exportReportHTML);
+    document.getElementById('exportReportPDF').addEventListener('click', exportReportPDF);
+    document.getElementById('exportViewPNG').addEventListener('click', exportViewPNG);
+    document.getElementById('exportAnnotGeoJSON2').addEventListener('click', exportAnnotationsGeoJSON);
+    document.getElementById('exportAnnotKML').addEventListener('click', exportAnnotationsKML);
+    document.getElementById('exportMeasCSV').addEventListener('click', exportMeasCSV);
+
+    // Viewport interactions
+    setupViewportInteractions();
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', onKeyDown);
+
+    // Resize
+    window.addEventListener('resize', function() {
+        updateCanvasSize();
+        render();
+    });
+
+    // Load metadata then image
+    loadMetadata();
+});
+
+// ============================================================
+// INLINE TEXT INPUT (replaces prompt())
+// ============================================================
+function showTextInput(px, py, callback) {
+    var existing = document.getElementById('inlineTextInput');
+    if (existing) existing.remove();
+    var canvas = document.getElementById('imageCanvas');
+    var rect = canvas.getBoundingClientRect();
+    var inp = document.createElement('input');
+    inp.type = 'text';
+    inp.id = 'inlineTextInput';
+    inp.placeholder = 'Enter label text...';
+    inp.style.cssText = 'position:fixed;z-index:9999;padding:4px 8px;font-size:13px;font-family:var(--font-sans);' +
+        'background:var(--bg-card);border:1px solid var(--accent-cyan);border-radius:var(--radius-sm);color:var(--text-primary);' +
+        'outline:none;min-width:140px;box-shadow:0 4px 16px rgba(0,0,0,0.5);' +
+        'left:' + (rect.left + px / (window.devicePixelRatio || 1)) + 'px;' +
+        'top:' + (rect.top + py / (window.devicePixelRatio || 1)) + 'px;';
+    document.body.appendChild(inp);
+    inp.focus();
+    inp.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') { var v = inp.value.trim(); inp.remove(); callback(v || null); }
+        if (e.key === 'Escape') { inp.remove(); callback(null); }
+    });
+    inp.addEventListener('blur', function() { var v = inp.value.trim(); inp.remove(); callback(v || null); });
+}
+
+// TAB & TOOL MANAGEMENT
+// ============================================================
+function setAnnotTool(tool) {
+    if (!editModeOn && tool) {
+        toast('Enable editing first', 'error');
+        return;
+    }
+    if (activeAnnotTool === tool) {
+        activeAnnotTool = null;
+        placingPoints = false;
+        finishCurrentDrawing();
+    } else {
+        activeAnnotTool = tool;
+        placingPoints = (tool === 'point');
+        activeMeasTool = null;
+        finishCurrentDrawing();
+        clearMeasToolButtons();
+    }
+    isFreehandDrawing = false;
+    updateAnnotToolButtons();
+    viewport.classList.toggle('placing', activeAnnotTool !== null);
+    var toolNames = { point: 'Point', line: 'Line', polygon: 'Polygon', rect: 'Rectangle', circle: 'Circle', text: 'Text Label', freehand: 'Freehand' };
+    setStatus(activeAnnotTool ? toolNames[activeAnnotTool] + ' tool active' : 'Ready');
+    document.getElementById('pointBtn').classList.toggle('active', activeAnnotTool === 'point');
+}
+
+function updateAnnotToolButtons() {
+    document.querySelectorAll('.draw-tool-btn').forEach(function(btn) {
+        btn.classList.toggle('active', btn.dataset.tool === activeAnnotTool);
+    });
+}
+
+function setMeasTool(tool) {
+    if (activeMeasTool === tool) {
+        activeMeasTool = null;
+    } else {
+        activeMeasTool = tool;
+        activeAnnotTool = null;
+        placingPoints = false;
+        finishCurrentDrawing();
+        updateAnnotToolButtons();
+        document.getElementById('pointBtn').classList.remove('active');
+    }
+    measPoints = [];
+    clearMeasToolButtons();
+    document.querySelectorAll('.meas-tool-btn').forEach(function(b) { b.classList.remove('active'); });
+    if (activeMeasTool) {
+        document.getElementById('meas' + activeMeasTool.charAt(0).toUpperCase() + activeMeasTool.slice(1) + 'Btn').classList.add('active');
+    }
+    viewport.classList.toggle('placing', activeMeasTool !== null);
+    var names = { distance: 'Distance', area: 'Area', bearing: 'Bearing' };
+    setStatus(activeMeasTool ? names[activeMeasTool] + ' measurement - click on image' : 'Ready');
+    render();
+}
+
+function clearMeasToolButtons() {}
+
+function finishCurrentDrawing() {
+    if (currentDrawing && currentDrawing.points.length >= 2) {
+        var ftype = currentDrawing.type;
+        _nextFeatureNum[ftype] = (_nextFeatureNum[ftype] || 0) + 1;
+        var feature = {
+            id: 'f-' + Date.now(),
+            type: ftype,
+            name: ftype.charAt(0).toUpperCase() + ftype.slice(1) + ' ' + _nextFeatureNum[ftype],
+            color: annotColor,
+            lineWidth: annotLineWidth,
+            opacity: annotOpacity,
+            fillOpacity: annotFillOpacity,
+            visible: true,
+            points: currentDrawing.points.slice()
+        };
+        if (ftype === 'polygon' || ftype === 'freehand') feature.closed = true;
+        addFeatureToSelectedLayer(feature);
+    }
+    currentDrawing = null;
+    rectStart = null;
+    circleCenter = null;
+    isFreehandDrawing = false;
+    render();
+}
+
+// ============================================================
+// LAYER MANAGEMENT
+// ============================================================
+function createLayer(name, color, description) {
+    var id = 'layer-' + (_nextLayerId++);
+    var layer = {
+        id: id,
+        name: name || 'Layer ' + _nextLayerId,
+        color: color || '#00f5ff',
+        description: description || '',
+        visible: true,
+        locked: false,
+        features: []
+    };
+    annotationLayers.push(layer);
+    selectLayer(id);
+    renderLayerList();
+    toast('Layer created: ' + layer.name, 'success');
+    return layer;
+}
+
+function getLayerById(id) {
+    for (var i = 0; i < annotationLayers.length; i++) {
+        if (annotationLayers[i].id === id) return annotationLayers[i];
+    }
+    return null;
+}
+
+function selectLayer(id) {
+    selectedLayerId = id;
+    editModeOn = false;
+    updateEditModeUI();
+    renderLayerList();
+    renderFeatureList();
+    // Set color picker to layer color
+    var layer = getLayerById(id);
+    if (layer) {
+        annotColor = layer.color;
+        document.getElementById('annotColor').value = layer.color;
+    }
+}
+
+function deleteLayer(id) {
+    annotationLayers = annotationLayers.filter(function(l) { return l.id !== id; });
+    if (selectedLayerId === id) {
+        selectedLayerId = null;
+        editModeOn = false;
+        updateEditModeUI();
+    }
+    rebuildAnnotationsFromLayers();
+    renderLayerList();
+    renderFeatureList();
+    render();
+    toast('Layer deleted', 'info');
+}
+
+function duplicateLayer(id) {
+    var src = getLayerById(id);
+    if (!src) return;
+    var newId = 'layer-' + (_nextLayerId++);
+    var dup = {
+        id: newId,
+        name: src.name + ' Copy',
+        color: src.color,
+        description: src.description,
+        visible: true,
+        locked: false,
+        features: src.features.map(function(f) {
+            var copy = JSON.parse(JSON.stringify(f));
+            copy.id = 'f-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6);
+            copy.layerId = newId;
+            return copy;
+        })
+    };
+    annotationLayers.push(dup);
+    rebuildAnnotationsFromLayers();
+    renderLayerList();
+    render();
+    toast('Layer duplicated: ' + dup.name, 'success');
+}
+
+function toggleLayerVisibility(id) {
+    var layer = getLayerById(id);
+    if (!layer) return;
+    layer.visible = !layer.visible;
+    rebuildAnnotationsFromLayers();
+    renderLayerList();
+    render();
+}
+
+function toggleLayerLock(id) {
+    var layer = getLayerById(id);
+    if (!layer) return;
+    layer.locked = !layer.locked;
+    if (layer.locked && editModeOn && selectedLayerId === id) {
+        editModeOn = false;
+        updateEditModeUI();
+    }
+    renderLayerList();
+}
+
+function toggleEditMode() {
+    if (!selectedLayerId) {
+        toast('Select a layer first', 'error');
+        return;
+    }
+    var layer = getLayerById(selectedLayerId);
+    if (!layer) return;
+    if (layer.locked) {
+        toast('Layer is locked', 'error');
+        return;
+    }
+    editModeOn = !editModeOn;
+    if (!editModeOn) {
+        activeAnnotTool = null;
+        finishCurrentDrawing();
+        updateAnnotToolButtons();
+    }
+    updateEditModeUI();
+    renderLayerList();
+}
+
+function updateEditModeUI() {
+    var btn = document.getElementById('editToggleBtn');
+    var toolsSection = document.getElementById('drawingToolsSection');
+    var layer = selectedLayerId ? getLayerById(selectedLayerId) : null;
+
+    if (editModeOn && layer && !layer.locked) {
+        btn.className = 'edit-toggle-btn on';
+        btn.innerHTML = '<span>&#9998;</span> Editing: ' + escapeHtml(layer.name);
+        btn.disabled = false;
+        toolsSection.classList.remove('disabled');
+    } else {
+        btn.className = 'edit-toggle-btn off';
+        btn.innerHTML = '<span>&#9998;</span> Enable Editing';
+        btn.disabled = !selectedLayerId || (layer && layer.locked);
+        toolsSection.classList.add('disabled');
+    }
+    viewport.classList.toggle('placing', editModeOn && activeAnnotTool !== null);
+}
+
+function addFeatureToSelectedLayer(feature) {
+    if (!selectedLayerId) return;
+    var layer = getLayerById(selectedLayerId);
+    if (!layer) return;
+    feature.layerId = layer.id;
+    layer.features.push(feature);
+    // Also add to flat annotations array for rendering
+    annotations.push(feature);
+    renderFeatureList();
+    renderLayerList();
+    toast(feature.name + ' added to ' + layer.name, 'success');
+}
+
+function rebuildAnnotationsFromLayers() {
+    annotations = [];
+    annotationLayers.forEach(function(layer) {
+        if (!layer.visible) return;
+        layer.features.forEach(function(f) {
+            if (f.visible !== false) annotations.push(f);
+        });
+    });
+}
+
+function getAllFeatures() {
+    var all = [];
+    annotationLayers.forEach(function(layer) {
+        layer.features.forEach(function(f) {
+            all.push({ feature: f, layer: layer });
+        });
+    });
+    return all;
+}
+
+function renderLayerList() {
+    var container = document.getElementById('layerList');
+    if (!container) return;
+    container.innerHTML = '';
+
+    if (annotationLayers.length === 0) {
+        container.innerHTML = '<div class="fl-empty">No layers yet. Click + to add one.</div>';
+        updateEditModeUI();
+        return;
+    }
+
+    annotationLayers.forEach(function(layer) {
+        var card = document.createElement('div');
+        card.className = 'layer-card' + (selectedLayerId === layer.id ? ' selected' : '') + (editModeOn && selectedLayerId === layer.id ? ' editing' : '');
+        card.innerHTML =
+            '<span class="layer-color-dot" style="background:' + layer.color + '"></span>' +
+            '<span class="lc-name">' + escapeHtml(layer.name) + '</span>' +
+            '<span class="lc-count">' + layer.features.length + '</span>' +
+            '<button class="lc-vis' + (layer.visible ? '' : ' off') + '" title="Toggle visibility">' + (layer.visible ? '\u{1F441}' : '\u{1F441}') + '</button>' +
+            '<button class="lc-lock' + (layer.locked ? ' on' : '') + '" title="Toggle lock">' + (layer.locked ? '\u{1F512}' : '\u{1F513}') + '</button>' +
+            '<button class="lc-menu-btn" title="More">\u22EE</button>' +
+            '<div class="layer-ctx-menu" id="ctx-' + layer.id + '">' +
+                '<button class="ctx-menu-item" data-action="rename">Rename</button>' +
+                '<button class="ctx-menu-item" data-action="color">Change Color</button>' +
+                '<button class="ctx-menu-item" data-action="duplicate">Duplicate</button>' +
+                '<button class="ctx-menu-item danger" data-action="delete">Delete</button>' +
+            '</div>';
+
+        card.addEventListener('click', function(e) {
+            if (e.target.closest('.lc-vis') || e.target.closest('.lc-lock') || e.target.closest('.lc-menu-btn') || e.target.closest('.layer-ctx-menu')) return;
+            selectLayer(layer.id);
+        });
+
+        card.querySelector('.lc-vis').addEventListener('click', function(e) {
+            e.stopPropagation();
+            toggleLayerVisibility(layer.id);
+        });
+
+        card.querySelector('.lc-lock').addEventListener('click', function(e) {
+            e.stopPropagation();
+            toggleLayerLock(layer.id);
+        });
+
+        var menuBtn = card.querySelector('.lc-menu-btn');
+        var ctxMenu = card.querySelector('.layer-ctx-menu');
+        menuBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            document.querySelectorAll('.layer-ctx-menu.open').forEach(function(m) { m.classList.remove('open'); });
+            ctxMenu.classList.toggle('open');
+        });
+
+        ctxMenu.querySelectorAll('.ctx-menu-item').forEach(function(item) {
+            item.addEventListener('click', function(e) {
+                e.stopPropagation();
+                ctxMenu.classList.remove('open');
+                var action = this.dataset.action;
+                switch(action) {
+                    case 'rename':
+                        (function(l) {
+                            var nameInput = document.getElementById('newLayerName');
+                            var colorInput = document.getElementById('newLayerColor');
+                            var confirmBtn = document.getElementById('newLayerConfirm');
+                            document.getElementById('newLayerModal').querySelector('h3').textContent = 'Rename Layer';
+                            nameInput.value = l.name;
+                            colorInput.value = l.color;
+                            showModal();
+                            var handler = function() {
+                                var n = nameInput.value.trim();
+                                if (n) { l.name = n; l.color = colorInput.value; renderLayerList(); renderFeatureList(); render(); }
+                                hideModal();
+                                document.getElementById('newLayerModal').querySelector('h3').textContent = 'New Layer';
+                                confirmBtn.removeEventListener('click', handler);
+                            };
+                            confirmBtn.addEventListener('click', handler);
+                        })(layer);
+                        break;
+                    case 'color':
+                        var inp = document.createElement('input');
+                        inp.type = 'color'; inp.value = layer.color;
+                        inp.style.position = 'fixed'; inp.style.opacity = '0';
+                        document.body.appendChild(inp);
+                        inp.addEventListener('input', function() {
+                            layer.color = inp.value;
+                            renderLayerList();
+                            render();
+                        });
+                        inp.addEventListener('change', function() { document.body.removeChild(inp); });
+                        inp.click();
+                        break;
+                    case 'duplicate': duplicateLayer(layer.id); break;
+                    case 'delete':
+                        if (confirm('Delete layer "' + layer.name + '" and all its features?')) deleteLayer(layer.id);
+                        break;
+                }
+            });
+        });
+
+        container.appendChild(card);
+    });
+
+    updateEditModeUI();
+
+    // Close ctx menus on outside click
+    setTimeout(function() {
+        document.addEventListener('click', function() {
+            document.querySelectorAll('.layer-ctx-menu.open').forEach(function(m) { m.classList.remove('open'); });
+        }, { once: true });
+    }, 0);
+}
+
+function renderFeatureList() {
+    var container = document.getElementById('featureListContainer');
+    var label = document.getElementById('featureListLabel');
+    if (!container) return;
+
+    if (!selectedLayerId) {
+        container.innerHTML = '<div class="fl-empty">Select a layer to view features</div>';
+        if (label) label.textContent = 'Features';
+        return;
+    }
+
+    var layer = getLayerById(selectedLayerId);
+    if (!layer) {
+        container.innerHTML = '<div class="fl-empty">Layer not found</div>';
+        return;
+    }
+
+    if (label) label.textContent = layer.name + ' (' + layer.features.length + ')';
+
+    if (layer.features.length === 0) {
+        container.innerHTML = '<div class="fl-empty">No features. Enable editing and draw.</div>';
+        return;
+    }
+
+    container.innerHTML = '';
+    layer.features.forEach(function(f, idx) {
+        var typeIcon = '\u{1F4CD}'; // pin
+        if (f.type === 'line' || f.type === 'freehand') typeIcon = '\u2799';
+        else if (f.type === 'polygon') typeIcon = '\u2B1F';
+        else if (f.type === 'rect') typeIcon = '\u25AD';
+        else if (f.type === 'circle') typeIcon = '\u25EF';
+        else if (f.type === 'text') typeIcon = 'T';
+
+        var measStr = '';
+        if (f.type === 'line' || f.type === 'freehand') {
+            if (f.points && f.points.length >= 2) {
+                var len = polylineLength(f.points);
+                measStr = len < 1000 ? len.toFixed(0) + 'm' : (len / 1000).toFixed(2) + 'km';
+            }
+        } else if ((f.type === 'polygon' || f.type === 'rect') && f.points && f.points.length >= 3) {
+            var area = polygonArea(f.points);
+            measStr = area < 1e6 ? area.toFixed(0) + 'm\u00B2' : (area / 1e6).toFixed(4) + 'km\u00B2';
+        } else if (f.type === 'circle' && f.radius) {
+            measStr = f.radius < 1000 ? f.radius.toFixed(0) + 'm' : (f.radius / 1000).toFixed(2) + 'km';
+        }
+
+        var item = document.createElement('div');
+        item.className = 'fl-item';
+        item.innerHTML =
+            '<span class="fl-type-icon">' + typeIcon + '</span>' +
+            '<span class="fl-name">' + escapeHtml(f.name || f.type) + '</span>' +
+            (measStr ? '<span class="fl-meas">' + measStr + '</span>' : '') +
+            '<button class="fl-del-btn" data-idx="' + idx + '" title="Delete">\u2715</button>';
+
+        item.addEventListener('click', function(e) {
+            if (e.target.closest('.fl-del-btn')) return;
+            // Zoom to feature
+            if (f.points && f.points.length > 0) {
+                var cx = 0, cy = 0;
+                f.points.forEach(function(p) { cx += p.px; cy += p.py; });
+                cx /= f.points.length; cy /= f.points.length;
+                var vr = viewport.getBoundingClientRect();
+                offsetX = vr.width / 2 - cx * scale;
+                offsetY = vr.height / 2 - cy * scale;
+                render();
+            }
+        });
+
+        item.querySelector('.fl-del-btn').addEventListener('click', function(e) {
+            e.stopPropagation();
+            layer.features.splice(idx, 1);
+            rebuildAnnotationsFromLayers();
+            renderFeatureList();
+            renderLayerList();
+            render();
+            toast('Feature deleted', 'info');
+        });
+
+        container.appendChild(item);
+    });
+}
+
+// Legacy compat
+function updateAnnotLayerList() {
+    renderLayerList();
+    renderFeatureList();
+}
+
+// ============================================================
+// QUERY PARAMS
+// ============================================================
+var _params = new URLSearchParams(window.location.search);
+var _rasterId = _params.get('raster_id');
+var _projectId = _params.get('project_id');
+
+// ============================================================
+// AUTH HELPER
+// ============================================================
+function authHeaders() {
+    var token = localStorage.getItem('intel_globe_token');
+    var h = { 'Content-Type': 'application/json' };
+    if (token) h['Authorization'] = 'Bearer ' + token;
+    return h;
+}
+function authFetch(url, opts) {
+    opts = opts || {};
+    opts.credentials = 'include';
+    if (!opts.headers) opts.headers = authHeaders();
+    return fetch(url, opts);
+}
+
+// ============================================================
+// METADATA & IMAGE LOADING
+// ============================================================
+function loadMetadata() {
+    if (!_rasterId) {
+        showImageError('No raster specified in the URL.');
+        toast('No raster_id specified in URL', 'error');
+        return;
+    }
+
+    showLoading('Loading raster info...');
+
+    fetch('/api/rasters/' + _rasterId + '/info', { headers: authHeaders() })
+        .then(function(r) {
+            if (!r.ok) throw new Error('Failed to load raster info (' + r.status + ')');
+            return r.json();
+        })
+        .then(function(data) {
+            imageMeta = {
+                id: data.id || _rasterId,
+                name: data.name || data.original_filename || 'Raster',
+                file: data.original_filename || '',
+                width: data.width || 0,
+                height: data.height || 0,
+                crs: data.crs || data.srs || 'Unknown',
+                bands: data.bands || data.band_count || '--',
+                bounds_wgs84: data.bounds_wgs84 || data.bounds || null,
+                preview: '/api/rasters/' + _rasterId + '/stream',
+                thumbnail: '/api/rasters/' + _rasterId + '/thumbnail'
+            };
+            loadImage(imageMeta);
+            // Load existing annotations if project context
+            if (_projectId) loadAnnotations();
+        })
+        .catch(function(err) {
+            showImageError('Imagery unavailable — could not load raster info.');
+            toast('Failed to load raster info: ' + err.message, 'error');
+            console.error(err);
+        });
+}
+
+function loadImage(meta) {
+    showLoading('Loading ' + meta.name + '...');
+    document.getElementById('imageNameDisplay').textContent = meta.name;
+    document.title = meta.name + ' — Image Viewer — Abyss';
+
+    // Timeout guard: if nothing loads within 20s, surface an error state instead of hanging.
+    clearImgLoadTimeout();
+    _imgLoadTimeout = setTimeout(function() {
+        showImageError('Imagery is taking too long to load.');
+    }, 20000);
+
+    img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = function() {
+        imgW = img.naturalWidth;
+        imgH = img.naturalHeight;
+        updateCanvasSize();
+        fitToScreen();
+        renderMinimap();
+        updateInfoPanel();
+        hideLoading();
+        toast('Loaded: ' + meta.name, 'success');
+        setStatus('Image loaded (' + imgW + ' x ' + imgH + ')');
+    };
+    img.onerror = function() {
+        // Fallback to thumbnail if stream fails
+        if (img.src !== meta.thumbnail) {
+            img.src = meta.thumbnail;
+            return;
+        }
+        showImageError('Imagery unavailable — the raster could not be loaded.');
+    };
+    // Use auth token via fetch + blob for image loading
+    fetch(meta.preview, { headers: authHeaders() })
+        .then(function(r) {
+            if (!r.ok) throw new Error('Stream failed');
+            return r.blob();
+        })
+        .then(function(blob) {
+            img.src = URL.createObjectURL(blob);
+        })
+        .catch(function() {
+            // Fallback to thumbnail
+            fetch(meta.thumbnail, { headers: authHeaders() })
+                .then(function(r) { return r.blob(); })
+                .then(function(blob) { img.src = URL.createObjectURL(blob); })
+                .catch(function() {
+                    showImageError('Imagery unavailable — the raster could not be loaded.');
+                });
+        });
+}
+
+// ============================================================
+// ANNOTATION SAVE / LOAD (API)
+// ============================================================
+function loadAnnotations() {
+    if (!_projectId || !_rasterId) return;
+    fetch('/api/annotations?project_id=' + _projectId + '&raster_id=' + _rasterId, { headers: authHeaders() })
+        .then(function(r) {
+            if (!r.ok) return null;
+            return r.json();
+        })
+        .then(function(data) {
+            if (!data || !data.layers) return;
+            // Restore layers
+            data.layers.forEach(function(l) {
+                var layer = createLayer(l.name, l.color, l.description);
+                (l.features || []).forEach(function(f) {
+                    f.layerId = layer.id;
+                    layer.features.push(f);
+                });
+            });
+            rebuildAnnotationsFromLayers();
+            renderLayerList();
+            render();
+            if (data.layers.length > 0) toast('Loaded ' + data.layers.length + ' annotation layer(s)', 'info');
+        })
+        .catch(function(err) {
+            console.warn('Could not load annotations:', err.message);
+        });
+}
+
+function saveAnnotations() {
+    if (!_projectId || !_rasterId) {
+        toast('No project context — cannot save to server. Export locally instead.', 'info');
+        return;
+    }
+    var payload = {
+        project_id: _projectId,
+        raster_id: _rasterId,
+        layers: annotationLayers.map(function(l) {
+            return {
+                name: l.name,
+                color: l.color,
+                description: l.description || '',
+                features: l.features
+            };
+        })
+    };
+    fetch('/api/annotations', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify(payload)
+    })
+    .then(function(r) {
+        if (!r.ok) throw new Error('Save failed (' + r.status + ')');
+        return r.json();
+    })
+    .then(function() {
+        toast('Annotations saved to project', 'success');
+    })
+    .catch(function(err) {
+        toast('Failed to save annotations: ' + err.message, 'error');
+    });
+}
+
+var _imgLoadTimeout = null;
+
+function clearImgLoadTimeout() {
+    if (_imgLoadTimeout) { clearTimeout(_imgLoadTimeout); _imgLoadTimeout = null; }
+}
+
+function showLoading(text) {
+    var overlay = document.getElementById('loadingOverlay');
+    if (!overlay) return;
+    overlay.style.display = 'flex';
+    // Rebuild the default spinner structure in case an error state replaced it.
+    if (!overlay.querySelector('.loading-spinner') || !overlay.querySelector('.loading-text')) {
+        overlay.innerHTML = '<div class="loading-spinner"></div><div class="loading-text"></div>';
+    }
+    overlay.querySelector('.loading-text').textContent = text || 'Loading...';
+}
+
+function hideLoading() {
+    clearImgLoadTimeout();
+    document.getElementById('loadingOverlay').style.display = 'none';
+}
+
+// Explicit error state so the viewport never hangs on an infinite spinner.
+function showImageError(msg) {
+    clearImgLoadTimeout();
+    var overlay = document.getElementById('loadingOverlay');
+    if (!overlay) return;
+    overlay.style.display = 'flex';
+    overlay.innerHTML =
+        '<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:0.4;color:var(--text-muted)">' +
+            '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 16l5-5 4 4 3-3 6 6"/><line x1="4" y1="4" x2="20" y2="20"/></svg>' +
+        '<div class="loading-text">' + escapeHtml(msg || 'Imagery unavailable') + '</div>' +
+        '<button id="imgRetryBtn" class="tool-btn" style="padding:6px 16px">Retry</button>';
+    var rb = document.getElementById('imgRetryBtn');
+    if (rb) rb.addEventListener('click', function() { showLoading('Loading imagery...'); loadMetadata(); });
+    setStatus(msg || 'Imagery unavailable');
+}
+
+function setStatus(msg) {
+    document.getElementById('statusMsg').textContent = msg;
+}
+
+// ============================================================
+// CANVAS RENDERING
+// ============================================================
+function updateCanvasSize() {
+    var rect = viewport.getBoundingClientRect();
+    canvas.width = rect.width;
+    canvas.height = rect.height;
+    annotCanvas.width = rect.width;
+    annotCanvas.height = rect.height;
+    annotCanvas.style.width = rect.width + 'px';
+    annotCanvas.style.height = rect.height + 'px';
+    gridCanvas.width = rect.width;
+    gridCanvas.height = rect.height;
+    gridCanvas.style.width = rect.width + 'px';
+    gridCanvas.style.height = rect.height + 'px';
+}
+
+function render() {
+    if (!img || !imgW) return;
+    var w = canvas.width;
+    var h = canvas.height;
+
+    ctx.clearRect(0, 0, w, h);
+
+    // Apply CSS filters for adjustments
+    var filterStr = '';
+    filterStr += 'brightness(' + (1 + brightness / 100) + ') ';
+    filterStr += 'contrast(' + (1 + contrast / 100) + ') ';
+    filterStr += 'saturate(' + (1 + saturation / 100) + ')';
+    ctx.filter = filterStr;
+
+    ctx.save();
+    ctx.translate(offsetX, offsetY);
+    ctx.scale(scale, scale);
+    ctx.drawImage(img, 0, 0, imgW, imgH);
+    ctx.restore();
+
+    ctx.filter = 'none';
+
+    // Render grid if active
+    if (showGrid) renderGrid();
+    else { gridCtx.clearRect(0, 0, gridCanvas.width, gridCanvas.height); }
+
+    // Render annotations on annotation canvas
+    renderAnnotations();
+
+    // Update point markers
+    updatePointMarkers();
+
+    // Update minimap viewport indicator
+    updateMinimapViewport();
+
+    // Update zoom display
+    document.getElementById('zoomDisplay').textContent = Math.round(scale * 100) + '%';
+}
+
+function renderAnnotations() {
+    var w = annotCanvas.width;
+    var h = annotCanvas.height;
+    annotCtx.clearRect(0, 0, w, h);
+
+    // Draw features from ALL visible layers
+    annotationLayers.forEach(function(layer) {
+        if (!layer.visible) return;
+        layer.features.forEach(function(annot) {
+            if (annot.visible === false) return;
+            annotCtx.save();
+            var c = annot.color || layer.color;
+            var lw = annot.lineWidth || 2;
+            var op = annot.opacity !== undefined ? annot.opacity : 1;
+            var fop = annot.fillOpacity !== undefined ? annot.fillOpacity : 0.15;
+            annotCtx.globalAlpha = op;
+            annotCtx.strokeStyle = c;
+            annotCtx.fillStyle = c;
+            annotCtx.lineWidth = lw;
+            annotCtx.setLineDash([]);
+
+            if (annot.type === 'point') {
+                annot.points.forEach(function(pt) {
+                    var sx = pt.px * scale + offsetX;
+                    var sy = pt.py * scale + offsetY;
+                    annotCtx.beginPath();
+                    annotCtx.arc(sx, sy, 5, 0, Math.PI * 2);
+                    annotCtx.fill();
+                    annotCtx.strokeStyle = '#fff';
+                    annotCtx.lineWidth = 1.5;
+                    annotCtx.stroke();
+                });
+            } else if (annot.type === 'line' || annot.type === 'freehand') {
+                if (annot.points.length >= 2) {
+                    annotCtx.beginPath();
+                    annot.points.forEach(function(pt, i) {
+                        var sx = pt.px * scale + offsetX;
+                        var sy = pt.py * scale + offsetY;
+                        if (i === 0) annotCtx.moveTo(sx, sy); else annotCtx.lineTo(sx, sy);
+                    });
+                    annotCtx.stroke();
+                    if (annot.type === 'line') {
+                        annotCtx.setLineDash([]);
+                        annot.points.forEach(function(pt) {
+                            var sx = pt.px * scale + offsetX;
+                            var sy = pt.py * scale + offsetY;
+                            annotCtx.beginPath();
+                            annotCtx.arc(sx, sy, 3, 0, Math.PI * 2);
+                            annotCtx.fill();
+                        });
+                    }
+                }
+            } else if (annot.type === 'polygon' || annot.type === 'rect') {
+                if (annot.points.length >= 3) {
+                    annotCtx.beginPath();
+                    annot.points.forEach(function(pt, i) {
+                        var sx = pt.px * scale + offsetX;
+                        var sy = pt.py * scale + offsetY;
+                        if (i === 0) annotCtx.moveTo(sx, sy); else annotCtx.lineTo(sx, sy);
+                    });
+                    annotCtx.closePath();
+                    annotCtx.globalAlpha = fop;
+                    annotCtx.fill();
+                    annotCtx.globalAlpha = op;
+                    annotCtx.stroke();
+                }
+            } else if (annot.type === 'circle') {
+                if (annot.center && annot.radiusPx) {
+                    var sx = annot.center.px * scale + offsetX;
+                    var sy = annot.center.py * scale + offsetY;
+                    var sr = annot.radiusPx * scale;
+                    annotCtx.beginPath();
+                    annotCtx.arc(sx, sy, sr, 0, Math.PI * 2);
+                    annotCtx.globalAlpha = fop;
+                    annotCtx.fill();
+                    annotCtx.globalAlpha = op;
+                    annotCtx.stroke();
+                    // Center dot
+                    annotCtx.beginPath();
+                    annotCtx.arc(sx, sy, 3, 0, Math.PI * 2);
+                    annotCtx.fill();
+                }
+            } else if (annot.type === 'text') {
+                annot.points.forEach(function(pt) {
+                    var sx = pt.px * scale + offsetX;
+                    var sy = pt.py * scale + offsetY;
+                    annotCtx.font = '13px "JetBrains Mono"';
+                    annotCtx.fillStyle = c;
+                    annotCtx.fillText(annot.text || '', sx, sy);
+                });
+            }
+            annotCtx.restore();
+        });
+    });
+
+    // Draw in-progress drawing
+    if (currentDrawing && currentDrawing.points.length > 0) {
+        annotCtx.save();
+        annotCtx.strokeStyle = annotColor;
+        annotCtx.fillStyle = annotColor;
+        annotCtx.lineWidth = annotLineWidth;
+        annotCtx.setLineDash([6, 4]);
+
+        annotCtx.beginPath();
+        currentDrawing.points.forEach(function(pt, i) {
+            var sx = pt.px * scale + offsetX;
+            var sy = pt.py * scale + offsetY;
+            if (i === 0) annotCtx.moveTo(sx, sy); else annotCtx.lineTo(sx, sy);
+        });
+        if (currentDrawing.tempPx !== undefined) {
+            var tsx = currentDrawing.tempPx * scale + offsetX;
+            var tsy = currentDrawing.tempPy * scale + offsetY;
+            annotCtx.lineTo(tsx, tsy);
+        }
+        annotCtx.stroke();
+
+        annotCtx.setLineDash([]);
+        currentDrawing.points.forEach(function(pt) {
+            var sx = pt.px * scale + offsetX;
+            var sy = pt.py * scale + offsetY;
+            annotCtx.beginPath();
+            annotCtx.arc(sx, sy, 3, 0, Math.PI * 2);
+            annotCtx.fill();
+        });
+        annotCtx.restore();
+    }
+
+    // Draw circle preview
+    if (circleCenter && currentDrawing && currentDrawing.type === 'circle') {
+        annotCtx.save();
+        annotCtx.strokeStyle = annotColor;
+        annotCtx.lineWidth = annotLineWidth;
+        annotCtx.setLineDash([6, 4]);
+        var ccx = circleCenter.px * scale + offsetX;
+        var ccy = circleCenter.py * scale + offsetY;
+        if (currentDrawing.tempPx !== undefined) {
+            var dx = currentDrawing.tempPx - circleCenter.px;
+            var dy = currentDrawing.tempPy - circleCenter.py;
+            var r = Math.sqrt(dx * dx + dy * dy) * scale;
+            annotCtx.beginPath();
+            annotCtx.arc(ccx, ccy, r, 0, Math.PI * 2);
+            annotCtx.stroke();
+        }
+        annotCtx.setLineDash([]);
+        annotCtx.fillStyle = annotColor;
+        annotCtx.beginPath();
+        annotCtx.arc(ccx, ccy, 3, 0, Math.PI * 2);
+        annotCtx.fill();
+        annotCtx.restore();
+    }
+
+    // Draw measurement points/lines
+    if (measPoints.length > 0) {
+        annotCtx.save();
+        annotCtx.strokeStyle = '#f59e0b';
+        annotCtx.fillStyle = '#f59e0b';
+        annotCtx.lineWidth = 2;
+        annotCtx.setLineDash([4, 4]);
+
+        if (measPoints.length >= 2) {
+            annotCtx.beginPath();
+            measPoints.forEach(function(pt, i) {
+                var sx = pt.px * scale + offsetX;
+                var sy = pt.py * scale + offsetY;
+                if (i === 0) annotCtx.moveTo(sx, sy); else annotCtx.lineTo(sx, sy);
+            });
+            if (activeMeasTool === 'area') annotCtx.closePath();
+            annotCtx.stroke();
+        }
+
+        annotCtx.setLineDash([]);
+        measPoints.forEach(function(pt) {
+            var sx = pt.px * scale + offsetX;
+            var sy = pt.py * scale + offsetY;
+            annotCtx.beginPath();
+            annotCtx.arc(sx, sy, 4, 0, Math.PI * 2);
+            annotCtx.fill();
+        });
+        annotCtx.restore();
+    }
+}
+
+function renderGrid() {
+    var w = gridCanvas.width;
+    var h = gridCanvas.height;
+    gridCtx.clearRect(0, 0, w, h);
+
+    // Adaptive grid: pick step so lines are 20-80px apart on screen
+    var targetSpacing = 40; // pixels between grid lines on screen
+    var rawStep = targetSpacing / scale;
+    // Snap to a nice number: 1, 2, 5, 10, 20, 50, 100, 200, 500...
+    var mag = Math.pow(10, Math.floor(Math.log10(rawStep)));
+    var residual = rawStep / mag;
+    var step;
+    if (residual < 1.5) step = mag;
+    else if (residual < 3.5) step = 2 * mag;
+    else if (residual < 7.5) step = 5 * mag;
+    else step = 10 * mag;
+    step = Math.max(1, Math.round(step));
+
+    var screenStep = step * scale;
+    if (screenStep < 8) return;
+
+    gridCtx.strokeStyle = 'rgba(0,245,255,0.12)';
+    gridCtx.lineWidth = 0.5;
+
+    var startX = Math.floor(-offsetX / scale / step) * step;
+    var startY = Math.floor(-offsetY / scale / step) * step;
+    var endX = Math.ceil((w - offsetX) / scale / step) * step;
+    var endY = Math.ceil((h - offsetY) / scale / step) * step;
+
+    startX = Math.max(0, startX);
+    startY = Math.max(0, startY);
+    endX = Math.min(imgW, endX);
+    endY = Math.min(imgH, endY);
+
+    gridCtx.beginPath();
+    for (var x = startX; x <= endX; x += step) {
+        var sx = x * scale + offsetX;
+        gridCtx.moveTo(sx, Math.max(0, offsetY));
+        gridCtx.lineTo(sx, Math.min(h, imgH * scale + offsetY));
+    }
+    for (var y = startY; y <= endY; y += step) {
+        var sy = y * scale + offsetY;
+        gridCtx.moveTo(Math.max(0, offsetX), sy);
+        gridCtx.lineTo(Math.min(w, imgW * scale + offsetX), sy);
+    }
+    gridCtx.stroke();
+
+    // Draw labels if spacing is wide enough
+    if (screenStep >= 30) {
+        gridCtx.font = '9px "JetBrains Mono", monospace';
+        gridCtx.fillStyle = 'rgba(0,245,255,0.4)';
+        for (var x = startX; x <= endX; x += step) {
+            var sx = x * scale + offsetX;
+            var labelY = Math.max(12, offsetY + 12);
+            if (labelY < h) gridCtx.fillText(x, sx + 2, labelY);
+        }
+        for (var y = startY; y <= endY; y += step) {
+            var sy = y * scale + offsetY;
+            var labelX = Math.max(2, offsetX + 2);
+            if (labelX < w) gridCtx.fillText(y, labelX, sy - 2);
+        }
+    }
+}
+
+// ============================================================
+// MINIMAP
+// ============================================================
+function renderMinimap() {
+    if (!img || !imgW) return;
+    var mc = document.getElementById('minimapCanvas');
+    var container = document.getElementById('minimap');
+    var cw = container.clientWidth;
+    var ch = container.clientHeight;
+
+    var aspect = imgW / imgH;
+    var dw, dh;
+    if (aspect > 1) { dw = cw; dh = cw / aspect; }
+    else { dh = ch; dw = ch * aspect; }
+    mc.width = cw;
+    mc.height = ch;
+
+    minimapCtx.clearRect(0, 0, cw, ch);
+    minimapCtx.fillStyle = '#0a0a0f';
+    minimapCtx.fillRect(0, 0, cw, ch);
+
+    var dx = (cw - dw) / 2;
+    var dy = (ch - dh) / 2;
+    minimapCtx.drawImage(img, dx, dy, dw, dh);
+
+    minimapCanvas._imgRect = { x: dx, y: dy, w: dw, h: dh };
+}
+
+function updateMinimapViewport() {
+    if (!img || !imgW || !minimapCanvas._imgRect) return;
+    var mr = minimapCanvas._imgRect;
+    var vp = viewport.getBoundingClientRect();
+
+    var visLeft = -offsetX / scale;
+    var visTop = -offsetY / scale;
+    var visW = vp.width / scale;
+    var visH = vp.height / scale;
+
+    var el = document.getElementById('minimapViewport');
+    var sx = mr.x + (visLeft / imgW) * mr.w;
+    var sy = mr.y + (visTop / imgH) * mr.h;
+    var sw = (visW / imgW) * mr.w;
+    var sh = (visH / imgH) * mr.h;
+
+    sx = Math.max(mr.x, sx);
+    sy = Math.max(mr.y, sy);
+    sw = Math.min(mr.w - (sx - mr.x), sw);
+    sh = Math.min(mr.h - (sy - mr.y), sh);
+
+    el.style.left = sx + 'px';
+    el.style.top = sy + 'px';
+    el.style.width = Math.max(4, sw) + 'px';
+    el.style.height = Math.max(4, sh) + 'px';
+}
+
+// ============================================================
+// PAN & ZOOM
+// ============================================================
+function setupViewportInteractions() {
+    viewport.addEventListener('mousedown', onMouseDown);
+    viewport.addEventListener('mousemove', onMouseMove);
+    viewport.addEventListener('mouseup', onMouseUp);
+    viewport.addEventListener('mouseleave', onMouseUp);
+    viewport.addEventListener('wheel', onWheel, { passive: false });
+    viewport.addEventListener('dblclick', onDblClick);
+}
+
+function onMouseDown(e) {
+    if (e.button !== 0) return;
+
+    var rect = viewport.getBoundingClientRect();
+    var mx = e.clientX - rect.left;
+    var my = e.clientY - rect.top;
+    var px = (mx - offsetX) / scale;
+    var py = (my - offsetY) / scale;
+    var inBounds = px >= 0 && px < imgW && py >= 0 && py < imgH;
+
+    // Measurement tool click
+    if (activeMeasTool && img && inBounds) {
+        var geo = pixelToGeo(px, py);
+        measPoints.push({ px: px, py: py, lat: geo.lat, lon: geo.lon });
+        handleMeasurement();
+        render();
+        return;
+    }
+
+    // Freehand drawing
+    if (activeAnnotTool === 'freehand' && editModeOn && img && inBounds) {
+        isFreehandDrawing = true;
+        var geo = pixelToGeo(px, py);
+        currentDrawing = { type: 'freehand', points: [{ px: px, py: py, lat: geo.lat, lon: geo.lon }] };
+        render();
+        return;
+    }
+
+    // Annotation tool click
+    if (activeAnnotTool && img && inBounds) {
+        handleAnnotClick(px, py, e);
+        return;
+    }
+
+    isDragging = true;
+    dragStartX = e.clientX;
+    dragStartY = e.clientY;
+    dragOffsetX = offsetX;
+    dragOffsetY = offsetY;
+    viewport.classList.add('dragging');
+}
+
+function onMouseMove(e) {
+    var rect = viewport.getBoundingClientRect();
+    var mx = e.clientX - rect.left;
+    var my = e.clientY - rect.top;
+    var px = (mx - offsetX) / scale;
+    var py = (my - offsetY) / scale;
+
+    cursorPx = px;
+    cursorPy = py;
+
+    if (isDragging) {
+        offsetX = dragOffsetX + (e.clientX - dragStartX);
+        offsetY = dragOffsetY + (e.clientY - dragStartY);
+        render();
+        return;
+    }
+
+    // Freehand drawing in progress
+    if (isFreehandDrawing && currentDrawing) {
+        var geo = pixelToGeo(px, py);
+        currentDrawing.points.push({ px: px, py: py, lat: geo.lat, lon: geo.lon });
+        render();
+        return;
+    }
+
+    // Rubber-band for in-progress drawing
+    if (currentDrawing && currentDrawing.points.length > 0) {
+        currentDrawing.tempPx = px;
+        currentDrawing.tempPy = py;
+        render();
+    }
+
+    // Update coordinate display
+    if (img && imgW) {
+        if (px >= 0 && px < imgW && py >= 0 && py < imgH) {
+            document.getElementById('pixelCoord').textContent =
+                Math.round(px) + ', ' + Math.round(py);
+
+            if (imageMeta && imageMeta.bounds_wgs84) {
+                var geo = pixelToGeo(px, py);
+                document.getElementById('geoCoordDD').textContent = formatDD(geo.lat, geo.lon);
+                document.getElementById('geoCoordDMS').textContent = formatDMS(geo.lat, geo.lon);
+
+                // Analysis tab coordinate readout
+                document.getElementById('readoutPixel').textContent = Math.round(px) + ', ' + Math.round(py);
+                document.getElementById('readoutDD').textContent = formatDD(geo.lat, geo.lon);
+                document.getElementById('readoutDMS').textContent = formatDMS(geo.lat, geo.lon);
+                document.getElementById('readoutMGRS').textContent = toMGRS(geo.lat, geo.lon);
+            }
+
+            // Pixel inspector
+            updatePixelInspector(Math.round(px), Math.round(py));
+        } else {
+            document.getElementById('pixelCoord').textContent = '--, --';
+            document.getElementById('geoCoordDD').textContent = '--, --';
+            document.getElementById('geoCoordDMS').textContent = '--, --';
+        }
+    }
+}
+
+function onMouseUp(e) {
+    if (isFreehandDrawing && currentDrawing) {
+        isFreehandDrawing = false;
+        if (currentDrawing.points.length >= 2) {
+            _nextFeatureNum.freehand = (_nextFeatureNum.freehand || 0) + 1;
+            var feature = {
+                id: 'f-' + Date.now(),
+                type: 'freehand',
+                name: 'Freehand ' + _nextFeatureNum.freehand,
+                color: annotColor,
+                lineWidth: annotLineWidth,
+                opacity: annotOpacity,
+                fillOpacity: annotFillOpacity,
+                visible: true,
+                points: currentDrawing.points.slice()
+            };
+            addFeatureToSelectedLayer(feature);
+        }
+        currentDrawing = null;
+        render();
+        return;
+    }
+    if (isDragging) {
+        isDragging = false;
+        viewport.classList.remove('dragging');
+    }
+}
+
+function onWheel(e) {
+    e.preventDefault();
+    if (!img) return;
+
+    var rect = viewport.getBoundingClientRect();
+    var mx = e.clientX - rect.left;
+    var my = e.clientY - rect.top;
+
+    var delta = e.deltaY > 0 ? 0.85 : 1.18;
+    var newScale = scale * delta;
+    newScale = Math.max(minScale, Math.min(maxScale, newScale));
+
+    var ratio = newScale / scale;
+    offsetX = mx - (mx - offsetX) * ratio;
+    offsetY = my - (my - offsetY) * ratio;
+    scale = newScale;
+
+    render();
+}
+
+function onDblClick(e) {
+    // If drawing line or polygon, finish on double-click
+    if (currentDrawing && (currentDrawing.type === 'line' || currentDrawing.type === 'polygon')) {
+        e.preventDefault();
+        e.stopPropagation();
+        finishCurrentDrawing();
+        return;
+    }
+
+    // If measuring area, finish on double-click
+    if (activeMeasTool === 'area' && measPoints.length >= 3) {
+        handleMeasurement(true);
+        render();
+        return;
+    }
+
+    // Default: double-click to zoom in
+    var rect = viewport.getBoundingClientRect();
+    var mx = e.clientX - rect.left;
+    var my = e.clientY - rect.top;
+    zoomTo(scale * 2, mx, my);
+}
+
+function zoomBy(factor) {
+    var rect = viewport.getBoundingClientRect();
+    var cx = rect.width / 2;
+    var cy = rect.height / 2;
+    zoomTo(scale * factor, cx, cy);
+}
+
+function zoomTo(newScale, cx, cy) {
+    newScale = Math.max(minScale, Math.min(maxScale, newScale));
+    var ratio = newScale / scale;
+    offsetX = cx - (cx - offsetX) * ratio;
+    offsetY = cy - (cy - offsetY) * ratio;
+    scale = newScale;
+    render();
+}
+
+function fitToScreen() {
+    if (!img || !imgW) return;
+    var rect = viewport.getBoundingClientRect();
+    var vw = rect.width;
+    var vh = rect.height;
+
+    var scaleX = vw / imgW;
+    var scaleY = vh / imgH;
+    scale = Math.min(scaleX, scaleY) * 0.95;
+
+    offsetX = (vw - imgW * scale) / 2;
+    offsetY = (vh - imgH * scale) / 2;
+
+    render();
+}
+
+// ============================================================
+// COORDINATE CONVERSION
+// ============================================================
+function pixelToGeo(px, py) {
+    if (!imageMeta || !imageMeta.bounds_wgs84) return { lat: 0, lon: 0 };
+    var b = imageMeta.bounds_wgs84;
+    var lon = b.west + (px / imgW) * (b.east - b.west);
+    var lat = b.north - (py / imgH) * (b.north - b.south);
+    return { lat: lat, lon: lon };
+}
+
+function geoToPixel(lat, lon) {
+    if (!imageMeta || !imageMeta.bounds_wgs84) return { x: 0, y: 0 };
+    var b = imageMeta.bounds_wgs84;
+    var x = ((lon - b.west) / (b.east - b.west)) * imgW;
+    var y = ((b.north - lat) / (b.north - b.south)) * imgH;
+    return { x: x, y: y };
+}
+
+// ============================================================
+// ANNOTATION CLICK HANDLING
+// ============================================================
+function handleAnnotClick(px, py, e) {
+    if (!editModeOn || !selectedLayerId) return;
+    var layer = getLayerById(selectedLayerId);
+    if (!layer || layer.locked) return;
+
+    var geo = pixelToGeo(px, py);
+    var pt = { px: px, py: py, lat: geo.lat, lon: geo.lon };
+
+    if (activeAnnotTool === 'point') {
+        _nextFeatureNum.point = (_nextFeatureNum.point || 0) + 1;
+        var feature = {
+            id: 'f-' + Date.now(),
+            type: 'point',
+            name: 'Point ' + _nextFeatureNum.point,
+            color: annotColor,
+            lineWidth: annotLineWidth,
+            opacity: annotOpacity,
+            fillOpacity: annotFillOpacity,
+            visible: true,
+            points: [pt]
+        };
+        addFeatureToSelectedLayer(feature);
+        // Point features are stored on the layer and drawn on the annotation canvas.
+        // The legacy `points` array is intentionally not used here to avoid double-rendering
+        // and desync on delete.
+        render();
+        return;
+    }
+
+    if (activeAnnotTool === 'line' || activeAnnotTool === 'polygon') {
+        if (!currentDrawing) {
+            currentDrawing = { type: activeAnnotTool, points: [pt] };
+            setStatus(activeAnnotTool === 'line' ?
+                'Click to add points, double-click to finish' :
+                'Click to add vertices, double-click to close');
+        } else {
+            currentDrawing.points.push(pt);
+        }
+        render();
+        return;
+    }
+
+    if (activeAnnotTool === 'rect') {
+        if (!rectStart) {
+            rectStart = pt;
+            setStatus('Click second corner for rectangle');
+        } else {
+            var p1 = rectStart;
+            var p2 = pt;
+            var geo1 = pixelToGeo(p1.px, p2.py);
+            var geo2 = pixelToGeo(p2.px, p1.py);
+            var rectPts = [
+                p1,
+                { px: p2.px, py: p1.py, lat: geo2.lat, lon: geo2.lon },
+                p2,
+                { px: p1.px, py: p2.py, lat: geo1.lat, lon: geo1.lon }
+            ];
+            _nextFeatureNum.rect = (_nextFeatureNum.rect || 0) + 1;
+            var feature = {
+                id: 'f-' + Date.now(),
+                type: 'rect',
+                name: 'Rectangle ' + _nextFeatureNum.rect,
+                color: annotColor,
+                lineWidth: annotLineWidth,
+                opacity: annotOpacity,
+                fillOpacity: annotFillOpacity,
+                visible: true,
+                points: rectPts,
+                closed: true
+            };
+            addFeatureToSelectedLayer(feature);
+            rectStart = null;
+            render();
+            setStatus('Rectangle tool active');
+        }
+        return;
+    }
+
+    if (activeAnnotTool === 'circle') {
+        if (!circleCenter) {
+            circleCenter = pt;
+            currentDrawing = { type: 'circle', points: [pt] };
+            setStatus('Click or drag to set radius');
+        } else {
+            var dx = px - circleCenter.px;
+            var dy = py - circleCenter.py;
+            var radiusPx = Math.sqrt(dx * dx + dy * dy);
+            var geoC = pixelToGeo(circleCenter.px, circleCenter.py);
+            var geoE = pixelToGeo(circleCenter.px + radiusPx, circleCenter.py);
+            var radiusM = haversine(geoC.lat, geoC.lon, geoE.lat, geoE.lon);
+            // Generate circle points for polygon representation
+            var circlePts = [];
+            for (var a = 0; a < 360; a += 5) {
+                var rad = a * Math.PI / 180;
+                var cpx = circleCenter.px + radiusPx * Math.cos(rad);
+                var cpy = circleCenter.py + radiusPx * Math.sin(rad);
+                var cg = pixelToGeo(cpx, cpy);
+                circlePts.push({ px: cpx, py: cpy, lat: cg.lat, lon: cg.lon });
+            }
+            _nextFeatureNum.circle = (_nextFeatureNum.circle || 0) + 1;
+            var feature = {
+                id: 'f-' + Date.now(),
+                type: 'circle',
+                name: 'Circle ' + _nextFeatureNum.circle,
+                color: annotColor,
+                lineWidth: annotLineWidth,
+                opacity: annotOpacity,
+                fillOpacity: annotFillOpacity,
+                visible: true,
+                points: circlePts,
+                center: circleCenter,
+                radiusPx: radiusPx,
+                radius: radiusM
+            };
+            addFeatureToSelectedLayer(feature);
+            circleCenter = null;
+            currentDrawing = null;
+            render();
+            setStatus('Circle tool active');
+        }
+        return;
+    }
+
+    if (activeAnnotTool === 'text') {
+        showTextInput(px, py, function(label) {
+            if (label) {
+                _nextFeatureNum.text = (_nextFeatureNum.text || 0) + 1;
+                var feature = {
+                    id: 'f-' + Date.now(),
+                    type: 'text',
+                    name: 'Text ' + _nextFeatureNum.text,
+                    color: annotColor,
+                    lineWidth: annotLineWidth,
+                    opacity: annotOpacity,
+                    fillOpacity: annotFillOpacity,
+                    visible: true,
+                    points: [pt],
+                    text: label
+                };
+                addFeatureToSelectedLayer(feature);
+                render();
+            }
+        });
+        return;
+    }
+
+    if (activeAnnotTool === 'freehand') {
+        // Freehand is handled in mousedown/move/up
+        return;
+    }
+}
+
+// ============================================================
+// MEASUREMENT HANDLING
+// ============================================================
+function handleMeasurement(forceFinish) {
+    var resultEl = document.getElementById('measResult');
+
+    if (activeMeasTool === 'distance') {
+        if (measPoints.length >= 2) {
+            var d = haversine(measPoints[0].lat, measPoints[0].lon, measPoints[1].lat, measPoints[1].lon);
+            var html = '<span class="meas-val">Distance:</span><br>';
+            html += d.toFixed(1) + ' m<br>';
+            html += (d / 1000).toFixed(4) + ' km<br>';
+            html += (d / 1852).toFixed(4) + ' nm<br>';
+            html += (d / 1609.344).toFixed(4) + ' mi';
+            resultEl.innerHTML = html;
+            resultEl.style.display = 'block';
+            measurements.push({ type: 'distance', points: measPoints.slice(), value_m: d });
+            measPoints = [];
+            setStatus('Distance measured');
+        }
+    } else if (activeMeasTool === 'bearing') {
+        if (measPoints.length >= 2) {
+            var b = bearing(measPoints[0].lat, measPoints[0].lon, measPoints[1].lat, measPoints[1].lon);
+            var mils = b * 6400 / 360;
+            var d2 = haversine(measPoints[0].lat, measPoints[0].lon, measPoints[1].lat, measPoints[1].lon);
+            var html = '<span class="meas-val">Bearing:</span><br>';
+            html += b.toFixed(2) + '\u00B0<br>';
+            html += mils.toFixed(1) + ' mils<br>';
+            html += '<span class="meas-val">Distance:</span> ' + (d2 / 1000).toFixed(4) + ' km';
+            resultEl.innerHTML = html;
+            resultEl.style.display = 'block';
+            measurements.push({ type: 'bearing', points: measPoints.slice(), bearing_deg: b, distance_m: d2 });
+            measPoints = [];
+            setStatus('Bearing measured');
+        }
+    } else if (activeMeasTool === 'area') {
+        if (forceFinish && measPoints.length >= 3) {
+            var area = polygonArea(measPoints);
+            var html = '<span class="meas-val">Area:</span><br>';
+            html += area.toFixed(1) + ' m\u00B2<br>';
+            html += (area / 1e6).toFixed(6) + ' km\u00B2';
+            resultEl.innerHTML = html;
+            resultEl.style.display = 'block';
+            measurements.push({ type: 'area', points: measPoints.slice(), value_sqm: area });
+            measPoints = [];
+            setStatus('Area measured');
+        } else if (!forceFinish) {
+            setStatus('Click vertices, double-click to close (' + measPoints.length + ' pts)');
+        }
+    }
+}
+
+function clearMeasurement() {
+    measPoints = [];
+    document.getElementById('measResult').style.display = 'none';
+    document.getElementById('measResult').innerHTML = '';
+    render();
+}
+
+// ============================================================
+// PIXEL INSPECTOR
+// ============================================================
+function updatePixelInspector(px, py) {
+    if (!img || !ctx) return;
+    try {
+        // Read pixel from the rendered canvas (includes adjustments)
+        var sx = Math.round(px * scale + offsetX);
+        var sy = Math.round(py * scale + offsetY);
+        if (sx < 0 || sy < 0 || sx >= canvas.width || sy >= canvas.height) return;
+        var data = ctx.getImageData(sx, sy, 1, 1).data;
+        var r = data[0], g = data[1], b = data[2];
+        var hex = '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).toUpperCase();
+        document.getElementById('pixelSwatch').style.background = hex;
+        document.getElementById('pixelVals').innerHTML =
+            'R: ' + r + '  G: ' + g + '  B: ' + b + '<br>Hex: ' + hex;
+    } catch(e) {}
+}
+
+// ============================================================
+// BAND STATISTICS
+// ============================================================
+function computeBandStats() {
+    if (!img || !ctx) { toast('No image loaded', 'error'); return; }
+
+    // Get visible area from canvas
+    var w = canvas.width;
+    var h = canvas.height;
+    var data;
+    try {
+        data = ctx.getImageData(0, 0, w, h).data;
+    } catch(e) { toast('Cannot read pixel data', 'error'); return; }
+
+    var rMin = 255, rMax = 0, gMin = 255, gMax = 0, bMin = 255, bMax = 0;
+    var rSum = 0, gSum = 0, bSum = 0;
+    var rSumSq = 0, gSumSq = 0, bSumSq = 0;
+    var count = 0;
+
+    for (var i = 0; i < data.length; i += 4) {
+        // Skip fully transparent pixels (outside image)
+        if (data[i + 3] === 0) continue;
+        var r = data[i], g = data[i + 1], b = data[i + 2];
+        if (r < rMin) rMin = r; if (r > rMax) rMax = r;
+        if (g < gMin) gMin = g; if (g > gMax) gMax = g;
+        if (b < bMin) bMin = b; if (b > bMax) bMax = b;
+        rSum += r; gSum += g; bSum += b;
+        rSumSq += r * r; gSumSq += g * g; bSumSq += b * b;
+        count++;
+    }
+
+    if (count === 0) { toast('No visible pixels', 'error'); return; }
+
+    var rMean = rSum / count, gMean = gSum / count, bMean = bSum / count;
+    var rStd = Math.sqrt(rSumSq / count - rMean * rMean);
+    var gStd = Math.sqrt(gSumSq / count - gMean * gMean);
+    var bStd = Math.sqrt(bSumSq / count - bMean * bMean);
+
+    document.getElementById('statR').textContent = rMin + ' / ' + rMax;
+    document.getElementById('statG').textContent = gMin + ' / ' + gMax;
+    document.getElementById('statB').textContent = bMin + ' / ' + bMax;
+    document.getElementById('statRm').textContent = rMean.toFixed(1) + ' / ' + rStd.toFixed(1);
+    document.getElementById('statGm').textContent = gMean.toFixed(1) + ' / ' + gStd.toFixed(1);
+    document.getElementById('statBm').textContent = bMean.toFixed(1) + ' / ' + bStd.toFixed(1);
+
+    toast('Band statistics computed (' + count + ' pixels)', 'success');
+}
+
+// ============================================================
+// POINT PLACEMENT (legacy, integrates with annotations)
+// ============================================================
+function togglePointTool() {
+    setAnnotTool(activeAnnotTool === 'point' ? null : 'point');
+}
+
+function placePoint(e) {
+    var rect = viewport.getBoundingClientRect();
+    var mx = e.clientX - rect.left;
+    var my = e.clientY - rect.top;
+
+    var px = (mx - offsetX) / scale;
+    var py = (my - offsetY) / scale;
+
+    if (px < 0 || px >= imgW || py < 0 || py >= imgH) {
+        toast('Click inside the image', 'error');
+        return;
+    }
+
+    var geo = pixelToGeo(px, py);
+    var point = {
+        id: Date.now(),
+        px: Math.round(px),
+        py: Math.round(py),
+        lat: geo.lat,
+        lon: geo.lon
+    };
+
+    points.push(point);
+    updatePointsList();
+    render();
+    toast('Point #' + points.length + ' placed at pixel (' + point.px + ', ' + point.py + ')', 'success');
+}
+
+function updatePointMarkers() {
+    var container = document.getElementById('pointMarkersContainer');
+    container.innerHTML = '';
+
+    points.forEach(function(pt, i) {
+        var sx = pt.px * scale + offsetX;
+        var sy = pt.py * scale + offsetY;
+
+        var marker = document.createElement('div');
+        marker.className = 'point-marker';
+        marker.style.left = sx + 'px';
+        marker.style.top = sy + 'px';
+        container.appendChild(marker);
+
+        var label = document.createElement('div');
+        label.className = 'point-marker-label';
+        label.style.left = sx + 'px';
+        label.style.top = sy + 'px';
+        label.textContent = '#' + (i + 1);
+        container.appendChild(label);
+    });
+}
+
+function updatePointsList() {
+    // Legacy points list — elements removed in layer-based UI
+    // Points are now tracked as features in layers
+}
+
+// (Layer list and feature list rendering is above in LAYER MANAGEMENT section)
+
+// ============================================================
+// EXPORT FUNCTIONS
+// ============================================================
+function exportAnnotationsGeoJSON() {
+    var features = [];
+
+    annotationLayers.forEach(function(layer) {
+        layer.features.forEach(function(annot) {
+            var feat = { type: 'Feature', properties: {
+                type: annot.type, color: annot.color || layer.color,
+                name: annot.name, layer: layer.name, layerColor: layer.color
+            }};
+            if (annot.type === 'point') {
+                feat.geometry = { type: 'Point', coordinates: [annot.points[0].lon, annot.points[0].lat] };
+            } else if (annot.type === 'line' || annot.type === 'freehand') {
+                feat.geometry = { type: 'LineString', coordinates: annot.points.map(function(p) { return [p.lon, p.lat]; }) };
+                feat.properties.length_m = polylineLength(annot.points);
+            } else if (annot.type === 'polygon' || annot.type === 'rect') {
+                var coords = annot.points.map(function(p) { return [p.lon, p.lat]; });
+                coords.push(coords[0]);
+                feat.geometry = { type: 'Polygon', coordinates: [coords] };
+                feat.properties.area_sqm = polygonArea(annot.points);
+            } else if (annot.type === 'circle') {
+                // Export as polygon ring
+                var coords = annot.points.map(function(p) { return [p.lon, p.lat]; });
+                coords.push(coords[0]);
+                feat.geometry = { type: 'Polygon', coordinates: [coords] };
+                feat.properties.radius_m = annot.radius;
+            } else if (annot.type === 'text') {
+                feat.geometry = { type: 'Point', coordinates: [annot.points[0].lon, annot.points[0].lat] };
+                feat.properties.label = annot.text;
+            }
+            features.push(feat);
+        });
+    });
+
+    if (features.length === 0) { toast('No annotations to export', 'error'); return; }
+
+    var geojson = { type: 'FeatureCollection', features: features };
+    downloadFile(JSON.stringify(geojson, null, 2), (imageMeta ? imageMeta.name : 'annotations') + '.geojson', 'application/json');
+    toast('Exported ' + features.length + ' features as GeoJSON', 'success');
+}
+
+function exportAnnotationsKML() {
+    var folders = '';
+
+    annotationLayers.forEach(function(layer) {
+        if (layer.features.length === 0) return;
+        var placemarks = '';
+        layer.features.forEach(function(annot) {
+            var name = escapeHtml(annot.name || annot.type);
+            if (annot.type === 'point') {
+                placemarks += '<Placemark><name>' + name + '</name>' +
+                    '<Point><coordinates>' + annot.points[0].lon + ',' + annot.points[0].lat + ',0</coordinates></Point></Placemark>\n';
+            } else if (annot.type === 'line' || annot.type === 'freehand') {
+                var coords = annot.points.map(function(p) { return p.lon + ',' + p.lat + ',0'; }).join(' ');
+                placemarks += '<Placemark><name>' + name + '</name><LineString><coordinates>' + coords + '</coordinates></LineString></Placemark>\n';
+            } else if (annot.type === 'polygon' || annot.type === 'rect' || annot.type === 'circle') {
+                var coords = annot.points.map(function(p) { return p.lon + ',' + p.lat + ',0'; });
+                coords.push(coords[0]);
+                placemarks += '<Placemark><name>' + name + '</name><Polygon><outerBoundaryIs><LinearRing><coordinates>' +
+                    coords.join(' ') + '</coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark>\n';
+            } else if (annot.type === 'text') {
+                placemarks += '<Placemark><name>' + escapeHtml(annot.text || 'Label') + '</name>' +
+                    '<Point><coordinates>' + annot.points[0].lon + ',' + annot.points[0].lat + ',0</coordinates></Point></Placemark>\n';
+            }
+        });
+        folders += '<Folder><name>' + escapeHtml(layer.name) + '</name>\n' + placemarks + '</Folder>\n';
+    });
+
+    if (!folders) { toast('No annotations to export', 'error'); return; }
+
+    var kml = '<?xml version="1.0" encoding="UTF-8"?>\n' +
+        '<kml xmlns="http://www.opengis.net/kml/2.2">\n<Document>\n' +
+        '<name>' + (imageMeta ? imageMeta.name : 'Annotations') + '</name>\n' +
+        folders + '</Document>\n</kml>';
+    downloadFile(kml, (imageMeta ? imageMeta.name : 'annotations') + '.kml', 'application/vnd.google-earth.kml+xml');
+    toast('Exported annotations as KML', 'success');
+}
+
+function exportMeasCSV() {
+    if (measurements.length === 0) { toast('No measurements to export', 'error'); return; }
+    var csv = 'Type,Value,Unit,Point1_Lat,Point1_Lon,Point2_Lat,Point2_Lon\n';
+    measurements.forEach(function(m) {
+        if (m.type === 'distance') {
+            csv += 'Distance,' + m.value_m.toFixed(2) + ',meters,' +
+                m.points[0].lat.toFixed(6) + ',' + m.points[0].lon.toFixed(6) + ',' +
+                m.points[1].lat.toFixed(6) + ',' + m.points[1].lon.toFixed(6) + '\n';
+        } else if (m.type === 'bearing') {
+            csv += 'Bearing,' + m.bearing_deg.toFixed(2) + ',degrees,' +
+                m.points[0].lat.toFixed(6) + ',' + m.points[0].lon.toFixed(6) + ',' +
+                m.points[1].lat.toFixed(6) + ',' + m.points[1].lon.toFixed(6) + '\n';
+        } else if (m.type === 'area') {
+            csv += 'Area,' + m.value_sqm.toFixed(2) + ',sq_meters,' +
+                m.points[0].lat.toFixed(6) + ',' + m.points[0].lon.toFixed(6) + ',,\n';
+        }
+    });
+    downloadFile(csv, (imageMeta ? imageMeta.name : 'measurements') + '_measurements.csv', 'text/csv');
+    toast('Exported ' + measurements.length + ' measurements as CSV', 'success');
+}
+
+function exportViewPNG() {
+    if (!img) { toast('No image loaded', 'error'); return; }
+    // Create a temporary canvas combining image + annotations
+    var tempCanvas = document.createElement('canvas');
+    tempCanvas.width = canvas.width;
+    tempCanvas.height = canvas.height;
+    var tempCtx = tempCanvas.getContext('2d');
+    tempCtx.drawImage(canvas, 0, 0);
+    tempCtx.drawImage(annotCanvas, 0, 0);
+    tempCanvas.toBlob(function(blob) {
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = (imageMeta ? imageMeta.name : 'view') + '_screenshot.png';
+        a.click();
+        URL.revokeObjectURL(url);
+        toast('Current view exported as PNG', 'success');
+    });
+}
+
+function exportFullPNG() {
+    if (!img) { toast('No image loaded', 'error'); return; }
+    var tempCanvas = document.createElement('canvas');
+    tempCanvas.width = imgW;
+    tempCanvas.height = imgH;
+    var tempCtx = tempCanvas.getContext('2d');
+    tempCtx.drawImage(img, 0, 0);
+    tempCanvas.toBlob(function(blob) {
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = (imageMeta ? imageMeta.name : 'full') + '_full.png';
+        a.click();
+        URL.revokeObjectURL(url);
+        toast('Full image exported as PNG', 'success');
+    });
+}
+
+function downloadFile(content, filename, mimeType) {
+    var blob = new Blob([content], { type: mimeType });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+function exportPoints() {
+    exportAnnotationsGeoJSON();
+}
+
+// ============================================================
+// REPORT GENERATION
+// ============================================================
+function getReportData() {
+    var totalFeatures = 0;
+    annotationLayers.forEach(function(l) { totalFeatures += l.features.length; });
+    return {
+        title: document.getElementById('reportTitle').value || 'Imagery Analysis Report',
+        classification: document.getElementById('reportClassification').value,
+        author: document.getElementById('reportAuthor').value || 'Unknown',
+        date: document.getElementById('reportDate').value || new Date().toISOString().slice(0, 10),
+        notes: document.getElementById('reportNotes').value || '',
+        imageName: imageMeta ? imageMeta.name : 'No image',
+        imageFile: imageMeta ? (imageMeta.file || '') : '',
+        crs: imageMeta ? (imageMeta.crs || 'Unknown') : 'Unknown',
+        bounds: imageMeta ? imageMeta.bounds_wgs84 : null,
+        dims: imgW + ' x ' + imgH,
+        layerCount: annotationLayers.length,
+        featureCount: totalFeatures,
+        layers: annotationLayers
+    };
+}
+
+function updateReportPreview() {
+    var d = getReportData();
+    var container = document.getElementById('reportPreview');
+    var html = '';
+
+    html += '<div class="classification-banner ' + d.classification.replace(' ', '_') + '">' + d.classification + '</div>';
+    html += '<div class="rp-heading">' + escapeHtml(d.title) + '</div>';
+    html += '<div class="rp-row"><span class="rp-key">Author</span><span class="rp-val">' + escapeHtml(d.author) + '</span></div>';
+    html += '<div class="rp-row"><span class="rp-key">Date</span><span class="rp-val">' + d.date + '</span></div>';
+    html += '<div class="rp-row"><span class="rp-key">Image</span><span class="rp-val">' + escapeHtml(d.imageName) + '</span></div>';
+    html += '<div class="rp-row"><span class="rp-key">CRS</span><span class="rp-val">' + d.crs + '</span></div>';
+    html += '<div class="rp-row"><span class="rp-key">Dimensions</span><span class="rp-val">' + d.dims + '</span></div>';
+    if (d.bounds) {
+        html += '<div class="rp-row"><span class="rp-key">Bounds</span><span class="rp-val">' +
+            d.bounds.south.toFixed(4) + ',' + d.bounds.west.toFixed(4) + ' &rarr; ' +
+            d.bounds.north.toFixed(4) + ',' + d.bounds.east.toFixed(4) + '</span></div>';
+    }
+    html += '<div class="rp-row"><span class="rp-key">Layers</span><span class="rp-val">' + d.layerCount + '</span></div>';
+    html += '<div class="rp-row"><span class="rp-key">Features</span><span class="rp-val">' + d.featureCount + '</span></div>';
+
+    if (d.notes) {
+        html += '<div class="rp-row" style="margin-top:4px"><span class="rp-key">Notes</span></div>';
+        html += '<div style="color:var(--text-secondary);font-size:9px;padding:2px 0;">' + escapeHtml(d.notes) + '</div>';
+    }
+
+    d.layers.forEach(function(layer) {
+        html += '<div class="rp-layer">';
+        html += '<div class="rp-layer-name"><span class="rp-layer-dot" style="background:' + layer.color + '"></span>' +
+            escapeHtml(layer.name) + ' (' + layer.features.length + ')</div>';
+        layer.features.forEach(function(f) {
+            var meas = '';
+            if ((f.type === 'line' || f.type === 'freehand') && f.points.length >= 2) {
+                var len = polylineLength(f.points);
+                meas = ' - ' + (len < 1000 ? len.toFixed(0) + 'm' : (len / 1000).toFixed(2) + 'km');
+            } else if ((f.type === 'polygon' || f.type === 'rect') && f.points.length >= 3) {
+                var area = polygonArea(f.points);
+                meas = ' - ' + (area < 1e6 ? area.toFixed(0) + 'm\u00B2' : (area / 1e6).toFixed(4) + 'km\u00B2');
+            } else if (f.type === 'circle' && f.radius) {
+                meas = ' - r=' + (f.radius < 1000 ? f.radius.toFixed(0) + 'm' : (f.radius / 1000).toFixed(2) + 'km');
+            }
+            html += '<div class="rp-feature">' + escapeHtml(f.name || f.type) + meas + '</div>';
+        });
+        html += '</div>';
+    });
+
+    container.innerHTML = html;
+}
+
+function generateReportHTML() {
+    var d = getReportData();
+    var cls = d.classification.replace(' ', '_');
+    var clsColor = { UNCLASSIFIED: '#22c55e', CONFIDENTIAL: '#3b82f6', SECRET: '#ef4444', TOP_SECRET: '#a855f7' }[cls] || '#22c55e';
+
+    // Generate screenshot data URL
+    var screenshotDataUrl = '';
+    if (img) {
+        var tc = document.createElement('canvas');
+        tc.width = canvas.width; tc.height = canvas.height;
+        var tctx = tc.getContext('2d');
+        tctx.drawImage(canvas, 0, 0);
+        tctx.drawImage(annotCanvas, 0, 0);
+        screenshotDataUrl = tc.toDataURL('image/png');
+    }
+
+    var html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>' + escapeHtml(d.title) + '</title>';
+    // Theme-init for the standalone report. The closing script tag is split into two
+    // string pieces so its verbatim sequence never appears here and cannot terminate this page.
+    html += '<scr' + 'ipt>(function(){document.documentElement.setAttribute("data-theme","dark");try{localStorage.removeItem("glyph_theme");}catch(e){}})()</scr' + 'ipt>';
+    html += '<style>body{font-family:Arial,sans-serif;max-width:900px;margin:0 auto;padding:20px;background:#fff;color:#333}';
+    html += '.cls-banner{text-align:center;padding:6px;font-weight:700;letter-spacing:2px;color:' + clsColor + ';border:2px solid ' + clsColor + ';margin-bottom:16px}';
+    html += 'h1{font-size:22px;margin-bottom:8px} .meta{display:flex;flex-wrap:wrap;gap:16px;margin-bottom:16px;font-size:13px;color:#666}';
+    html += '.meta span{font-weight:600;color:#333} table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13px}';
+    html += 'th,td{padding:6px 10px;border:1px solid #ddd;text-align:left} th{background:#f5f5f5;font-weight:600}';
+    html += '.layer-section{margin:16px 0} .layer-title{font-size:15px;font-weight:600;display:flex;align-items:center;gap:6px;margin-bottom:8px}';
+    html += '.layer-dot{width:12px;height:12px;border-radius:50%;display:inline-block}';
+    html += '.screenshot{max-width:100%;border:1px solid #ddd;margin:12px 0} .notes{background:#f9f9f9;padding:12px;border-radius:6px;margin:12px 0;font-size:13px}';
+    html += '</style></head><body>';
+    html += '<div class="cls-banner">' + d.classification + '</div>';
+    html += '<h1>' + escapeHtml(d.title) + '</h1>';
+    html += '<div class="meta"><div>Author: <span>' + escapeHtml(d.author) + '</span></div>';
+    html += '<div>Date: <span>' + d.date + '</span></div>';
+    html += '<div>Image: <span>' + escapeHtml(d.imageName) + '</span></div>';
+    html += '<div>CRS: <span>' + d.crs + '</span></div>';
+    html += '<div>Dimensions: <span>' + d.dims + '</span></div></div>';
+
+    if (d.bounds) {
+        html += '<div class="meta"><div>Bounds: <span>' +
+            d.bounds.south.toFixed(6) + ', ' + d.bounds.west.toFixed(6) + ' to ' +
+            d.bounds.north.toFixed(6) + ', ' + d.bounds.east.toFixed(6) + '</span></div></div>';
+    }
+
+    html += '<div class="meta"><div>Layers: <span>' + d.layerCount + '</span></div>';
+    html += '<div>Total Features: <span>' + d.featureCount + '</span></div></div>';
+
+    if (d.notes) {
+        html += '<div class="notes"><strong>Notes:</strong> ' + escapeHtml(d.notes) + '</div>';
+    }
+
+    if (screenshotDataUrl) {
+        html += '<h2>Annotated View</h2>';
+        html += '<img class="screenshot" src="' + screenshotDataUrl + '">';
+    }
+
+    d.layers.forEach(function(layer) {
+        html += '<div class="layer-section">';
+        html += '<div class="layer-title"><span class="layer-dot" style="background:' + layer.color + '"></span>' +
+            escapeHtml(layer.name) + ' (' + layer.features.length + ' features)</div>';
+        if (layer.features.length > 0) {
+            html += '<table><tr><th>Name</th><th>Type</th><th>Measurement</th><th>Coordinates</th></tr>';
+            layer.features.forEach(function(f) {
+                var meas = '--';
+                if ((f.type === 'line' || f.type === 'freehand') && f.points.length >= 2) {
+                    var len = polylineLength(f.points);
+                    meas = (len / 1000).toFixed(3) + ' km';
+                } else if ((f.type === 'polygon' || f.type === 'rect') && f.points.length >= 3) {
+                    var area = polygonArea(f.points);
+                    meas = (area / 1e6).toFixed(6) + ' km\u00B2';
+                } else if (f.type === 'circle' && f.radius) {
+                    meas = 'r=' + (f.radius / 1000).toFixed(3) + ' km';
+                }
+                var coordStr = '--';
+                if (f.points && f.points.length > 0) {
+                    coordStr = f.points[0].lat.toFixed(6) + ', ' + f.points[0].lon.toFixed(6);
+                    if (f.points.length > 1) coordStr += ' (+' + (f.points.length - 1) + ' pts)';
+                }
+                html += '<tr><td>' + escapeHtml(f.name || f.type) + '</td><td>' + f.type + '</td><td>' + meas + '</td><td>' + coordStr + '</td></tr>';
+            });
+            html += '</table>';
+        }
+        html += '</div>';
+    });
+
+    html += '<div class="cls-banner" style="margin-top:24px">' + d.classification + '</div>';
+    html += '</body></html>';
+    return html;
+}
+
+function exportReportHTML() {
+    var html = generateReportHTML();
+    var d = getReportData();
+    downloadFile(html, (d.imageName || 'report') + '_report.html', 'text/html');
+    toast('Report exported as HTML', 'success');
+}
+
+function exportReportPDF() {
+    var html = generateReportHTML();
+    var win = window.open('', '_blank');
+    win.document.write(html);
+    win.document.close();
+    setTimeout(function() { win.print(); }, 500);
+    toast('Print dialog opened for PDF export', 'info');
+}
+
+// ============================================================
+// ADJUSTMENTS
+// ============================================================
+function onAdjustChange() {
+    brightness = parseInt(document.getElementById('brightnessSlider').value);
+    contrast = parseInt(document.getElementById('contrastSlider').value);
+    saturation = parseInt(document.getElementById('saturationSlider').value);
+
+    document.getElementById('brightnessVal').textContent = brightness;
+    document.getElementById('contrastVal').textContent = contrast;
+    document.getElementById('saturationVal').textContent = saturation;
+
+    render();
+}
+
+function autoAdjust() {
+    brightness = 15;
+    contrast = 30;
+    saturation = 0;
+
+    document.getElementById('brightnessSlider').value = brightness;
+    document.getElementById('contrastSlider').value = contrast;
+    document.getElementById('saturationSlider').value = saturation;
+    document.getElementById('brightnessVal').textContent = brightness;
+    document.getElementById('contrastVal').textContent = contrast;
+    document.getElementById('saturationVal').textContent = saturation;
+
+    render();
+    toast('Auto 95% histogram applied', 'info');
+}
+
+function resetAdjust() {
+    brightness = 0;
+    contrast = 0;
+    saturation = 0;
+
+    document.getElementById('brightnessSlider').value = 0;
+    document.getElementById('contrastSlider').value = 0;
+    document.getElementById('saturationSlider').value = 0;
+    document.getElementById('brightnessVal').textContent = '0';
+    document.getElementById('contrastVal').textContent = '0';
+    document.getElementById('saturationVal').textContent = '0';
+
+    render();
+    toast('Adjustments reset', 'info');
+}
+
+// ============================================================
+// GRID TOGGLE
+// ============================================================
+function toggleGrid() {
+    showGrid = !showGrid;
+    document.getElementById('gridBtn').classList.toggle('active', showGrid);
+    render();
+}
+
+// ============================================================
+// PANEL TOGGLE
+// ============================================================
+function togglePanel() {
+    var panel = document.getElementById('rightPanel');
+    panel.classList.toggle('collapsed');
+    document.getElementById('panelToggleBtn').classList.toggle('active', !panel.classList.contains('collapsed'));
+    setTimeout(function() {
+        updateCanvasSize();
+        render();
+    }, 250);
+}
+
+// ============================================================
+// OPEN ON MAP
+// ============================================================
+function openOnMap() {
+    if (!imageMeta) {
+        toast('No image loaded', 'error');
+        return;
+    }
+    var url = 'project-workspace.html';
+    if (_projectId) url += '?id=' + _projectId;
+    else if (_rasterId) url += '?raster_id=' + _rasterId;
+    window.open(url, '_blank');
+}
+
+// ============================================================
+// IMAGE INFO PANEL
+// ============================================================
+function updateInfoPanel() {
+    if (!imageMeta) return;
+    var b = imageMeta.bounds_wgs84;
+    var html = '';
+    html += '<div class="info-row"><span class="info-key">Name</span><span class="info-val">' + imageMeta.name + '</span></div>';
+    html += '<div class="info-row"><span class="info-key">Original</span><span class="info-val">' + (imageMeta.file || '--') + '</span></div>';
+    html += '<div class="info-row"><span class="info-key">Source Dims</span><span class="info-val">' + imageMeta.width + ' x ' + imageMeta.height + '</span></div>';
+    html += '<div class="info-row"><span class="info-key">Preview</span><span class="info-val">' + imgW + ' x ' + imgH + '</span></div>';
+    html += '<div class="info-row"><span class="info-key">CRS</span><span class="info-val">' + (imageMeta.crs || '--') + '</span></div>';
+    html += '<div class="info-row"><span class="info-key">Bands</span><span class="info-val">' + (imageMeta.bands || '--') + '</span></div>';
+
+    if (b) {
+        html += '<div class="info-row"><span class="info-key">North</span><span class="info-val">' + b.north.toFixed(6) + '</span></div>';
+        html += '<div class="info-row"><span class="info-key">South</span><span class="info-val">' + b.south.toFixed(6) + '</span></div>';
+        html += '<div class="info-row"><span class="info-key">East</span><span class="info-val">' + b.east.toFixed(6) + '</span></div>';
+        html += '<div class="info-row"><span class="info-key">West</span><span class="info-val">' + b.west.toFixed(6) + '</span></div>';
+        html += '<div class="info-row"><span class="info-key">Pixel Extent</span><span class="info-val">0,0 &rarr; ' + imgW + ',' + imgH + '</span></div>';
+    }
+
+    document.getElementById('infoContent').innerHTML = html;
+}
+
+// ============================================================
+// KEYBOARD SHORTCUTS
+// ============================================================
+function onKeyDown(e) {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+
+    if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        saveAnnotations();
+        return;
+    }
+
+    switch (e.key) {
+        case '+': case '=': zoomBy(1.3); e.preventDefault(); break;
+        case '-': case '_': zoomBy(1 / 1.3); e.preventDefault(); break;
+        case '0': fitToScreen(); e.preventDefault(); break;
+        case 'g': case 'G': toggleGrid(); e.preventDefault(); break;
+        case 'p': case 'P':
+            if (editModeOn) setAnnotTool(activeAnnotTool === 'point' ? null : 'point');
+            e.preventDefault(); break;
+        case 'l': case 'L':
+            if (editModeOn) setAnnotTool(activeAnnotTool === 'line' ? null : 'line');
+            e.preventDefault(); break;
+        case 'e': case 'E':
+            if (selectedLayerId) toggleEditMode();
+            e.preventDefault(); break;
+        case 'i': case 'I': togglePanel(); e.preventDefault(); break;
+        case 'Escape':
+            if (activeAnnotTool) { setAnnotTool(null); }
+            if (activeMeasTool) { setMeasTool(null); }
+            if (currentDrawing) { currentDrawing = null; circleCenter = null; isFreehandDrawing = false; render(); }
+            break;
+    }
+}
+</script>
+<script>
+(function(){
+  var lang = localStorage.getItem('glyph_lang') || 'en';
+  if (lang === 'en') return;
+  fetch('/libs/i18n/' + lang + '.json')
+    .then(function(r) { return r.ok ? r.json() : null; })
+    .then(function(tr) {
+      if (!tr) return;
+      document.querySelectorAll('[data-i18n]').forEach(function(el) {
+        var key = el.getAttribute('data-i18n');
+        if (!tr[key]) return;
+        if (el.childElementCount === 0) el.textContent = tr[key];
+        else { var nodes = el.childNodes; for (var i = nodes.length - 1; i >= 0; i--) { if (nodes[i].nodeType === 3 && nodes[i].textContent.trim()) { nodes[i].textContent = ' ' + tr[key]; break; } } }
+      });
+      document.querySelectorAll('[data-i18n-placeholder]').forEach(function(el) {
+        var key = el.getAttribute('data-i18n-placeholder');
+        if (tr[key]) el.placeholder = tr[key];
+      });
+    }).catch(function(){});
+})();
+</script>
+</body>
+</html>

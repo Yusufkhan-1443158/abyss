@@ -1,0 +1,25 @@
+{
+  "id": "bathymetry_v1",
+  "name": "Bathymetric Survey",
+  "version": 1,
+  "description": "Auto-filled bathymetry report. Section content is baked into bathymetry_reports.sections by services/report_builder.py; the client renderer iterates and dispatches on `type`.",
+  "sections": [
+    { "key": "cover",         "type": "cover",  "title": "Cover" },
+    { "key": "metadata",      "type": "kv",     "title": "Survey Metadata" },
+    { "key": "executive",     "type": "prose",  "title": "Executive Summary" },
+    { "key": "source",        "type": "image",  "title": "Source Imagery" },
+    { "key": "depth_map",     "type": "raster", "title": "Depth Map" },
+    { "key": "cross_section", "type": "chart",  "title": "Depth Cross-section" },
+    { "key": "statistics",    "type": "stats",  "title": "Depth Statistics" },
+    { "key": "methodology",   "type": "prose",  "title": "Methodology & Caveats" }
+  ],
+  "section_types": {
+    "cover":  "Title block: report code, site, classification, model, timestamp.",
+    "kv":     "Key/value rows: { rows: [[label, value], ...] }.",
+    "prose":  "Paragraph text: { text }.",
+    "image":  "Image with caption: { url, caption }.",
+    "raster": "Depth product thumbnail + depth colour-bar legend: { raster_id, url, max_depth_m, caption }.",
+    "chart":  "Inline SVG cross-section: { profile: { distance_m[], depth_m[] } }.",
+    "stats":  "Stat tiles: { stats: { min_m, max_m, mean_m, std_m, coverage_pct } }."
+  }
+}

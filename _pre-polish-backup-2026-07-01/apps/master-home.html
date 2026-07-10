@@ -1,0 +1,1708 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Abyss — Home</title>
+<script>(function(){document.documentElement.setAttribute('data-theme','dark');try{localStorage.removeItem('glyph_theme');}catch(e){}var l=localStorage.getItem('glyph_lang')||'en';if(l==='ar'){document.documentElement.setAttribute('dir','rtl');document.documentElement.setAttribute('lang','ar');}})();</script>
+<link rel="stylesheet" href="/libs/abyss-theme.css">
+<script src="/libs/abyss-auth.js"></script>
+<script src="/libs/abyss-logo.js"></script>
+<script src="/libs/abyss-intro.js"></script>
+<style>
+  /* ========== RESET & BASE ========== */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: var(--bg, #0a0a0f);
+    color: var(--text, #e0e0e0);
+    overflow-x: hidden;
+  }
+  /* CSS variables defined in /libs/abyss-theme.css */
+
+  /* ========== 1. GLOBE BACKGROUND (7A) — FULL PAGE ========== */
+  .globe-bg {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  .globe-sphere {
+    position: absolute;
+    width: 1521px;
+    height: 1521px;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    background:
+      radial-gradient(circle at 35% 35%, rgba(0,245,255,0.05) 0%, transparent 50%),
+      radial-gradient(circle at 65% 65%, rgba(0,100,140,0.04) 0%, transparent 40%),
+      radial-gradient(circle, rgba(0,50,70,0.25) 0%, rgba(0,20,40,0.06) 55%, transparent 70%);
+    box-shadow:
+      inset 0 0 160px rgba(0,245,255,0.04),
+      0 0 120px rgba(0,245,255,0.03);
+  }
+
+  /* Orbital rings — BRIGHTER with vivid cyan glow */
+  .orbital-ring {
+    position: absolute;
+    border-radius: 50%;
+    top: 50%;
+    left: 50%;
+  }
+  .orbital-ring-1 {
+    width: 1014px; height: 1014px;
+    margin-left: -507px; margin-top: -608px;
+    border: 1.5px dashed rgba(0,245,255,0.12);
+    animation: orbit-rotate 55s linear infinite;
+    box-shadow: 0 0 20px rgba(0,245,255,0.06), inset 0 0 20px rgba(0,245,255,0.03);
+  }
+  .orbital-ring-2 {
+    width: 1318px; height: 811px;
+    margin-left: -659px; margin-top: -507px;
+    border: 1px solid rgba(0,245,255,0.10);
+    animation: orbit-rotate 80s linear infinite reverse;
+    box-shadow: 0 0 30px rgba(0,245,255,0.05), inset 0 0 30px rgba(0,245,255,0.02);
+  }
+  .orbital-ring-3 {
+    width: 1555px; height: 608px;
+    margin-left: -777px; margin-top: -406px;
+    border: 1px dotted rgba(0,245,255,0.08);
+    animation: orbit-rotate 70s linear infinite;
+    box-shadow: 0 0 25px rgba(0,245,255,0.04);
+  }
+  .orbital-ring-4 {
+    width: 845px; height: 845px;
+    margin-left: -422px; margin-top: -524px;
+    border: 1px solid rgba(0,245,255,0.06);
+    animation: orbit-rotate 100s linear infinite;
+    box-shadow: 0 0 40px rgba(0,245,255,0.03);
+  }
+  @keyframes orbit-rotate {
+    0%   { transform: rotateX(60deg) rotateZ(0deg); }
+    100% { transform: rotateX(60deg) rotateZ(360deg); }
+  }
+
+  /* Grid overlay */
+  .globe-grid {
+    position: absolute; inset: 0;
+    background:
+      repeating-linear-gradient(90deg, rgba(0,245,255,0.012) 0px, transparent 1px, transparent 120px),
+      repeating-linear-gradient(0deg, rgba(0,245,255,0.012) 0px, transparent 1px, transparent 100px);
+  }
+
+  /* Pulsing dots */
+  .globe-dot {
+    position: absolute;
+    width: 4px; height: 4px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 10px var(--accent), 0 0 25px var(--accent-glow);
+    animation: dot-pulse 3s ease-in-out infinite;
+  }
+  .globe-dot:nth-child(1)  { top: 28%; left: 22%; animation-delay: 0s; }
+  .globe-dot:nth-child(2)  { top: 35%; left: 48%; animation-delay: 0.8s; }
+  .globe-dot:nth-child(3)  { top: 42%; left: 72%; animation-delay: 1.6s; }
+  .globe-dot:nth-child(4)  { top: 55%; left: 30%; animation-delay: 0.4s; }
+  .globe-dot:nth-child(5)  { top: 60%; left: 62%; animation-delay: 2.0s; }
+  .globe-dot:nth-child(6)  { top: 25%; left: 65%; animation-delay: 1.2s; }
+  .globe-dot:nth-child(7)  { top: 68%; left: 45%; animation-delay: 0.6s; }
+  .globe-dot:nth-child(8)  { top: 38%; left: 38%; animation-delay: 2.4s; }
+  .globe-dot:nth-child(9)  { top: 50%; left: 80%; animation-delay: 1.8s; }
+  .globe-dot:nth-child(10) { top: 72%; left: 25%; animation-delay: 1.0s; }
+  .globe-dot:nth-child(11) { top: 30%; left: 55%; animation-delay: 2.2s; }
+  .globe-dot:nth-child(12) { top: 45%; left: 15%; animation-delay: 0.2s; }
+  @keyframes dot-pulse {
+    0%, 100% { opacity: 0.2; transform: scale(1); }
+    50%      { opacity: 1; transform: scale(2); }
+  }
+
+  /* Continent silhouettes */
+  .continent {
+    position: absolute;
+    background: rgba(0,245,255,0.025);
+    border-radius: 40%;
+    filter: blur(10px);
+  }
+  .continent-1 { width: 200px; height: 160px; top: 25%; left: 18%; transform: rotate(-15deg); }
+  .continent-2 { width: 120px; height: 200px; top: 30%; left: 45%; transform: rotate(5deg); }
+  .continent-3 { width: 260px; height: 180px; top: 35%; left: 60%; transform: rotate(-8deg); }
+  .continent-4 { width: 140px; height: 100px; top: 60%; left: 25%; transform: rotate(12deg); }
+  .continent-5 { width: 180px; height: 120px; top: 65%; left: 55%; transform: rotate(-5deg); }
+
+  /* Ambient glow at center */
+  .globe-ambient {
+    position: absolute;
+    top: 50%; left: 50%;
+    width: 1014px; height: 1014px;
+    transform: translate(-50%, -50%);
+    background: radial-gradient(circle, rgba(0,245,255,0.04) 0%, transparent 70%);
+    animation: ambient-breathe 8s ease-in-out infinite;
+  }
+  @keyframes ambient-breathe {
+    0%, 100% { opacity: 0.6; transform: translate(-50%, -50%) scale(1); }
+    50%      { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
+  }
+
+  /* ========== 2. TOP BAR — GLASS MORPHISM ========== */
+  .top-bar {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 28px;
+    height: 64px;
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border-bottom: 1px solid var(--glass-border);
+    box-shadow: 0 4px 30px rgba(0,0,0,0.3);
+  }
+
+  .top-bar-left {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .logo-mark {
+    width: 38px; height: 38px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, rgba(0,245,255,0.15), rgba(0,245,255,0.04));
+    border: 1px solid rgba(0,245,255,0.25);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; font-weight: 800;
+    color: var(--accent);
+    letter-spacing: -1px;
+    text-shadow: 0 0 12px rgba(0,245,255,0.5);
+  }
+  .logo-text {
+    font-size: 17px;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+
+  .top-bar-center {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    max-width: 500px;
+    margin: 0 auto;
+  }
+  .broadcast-pill {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 16px;
+    border-radius: 20px;
+    background: rgba(0,245,255,0.06);
+    border: 1px solid rgba(0,245,255,0.12);
+    font-size: 12px;
+    color: var(--accent2);
+    white-space: nowrap;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .broadcast-live {
+    font-size: 9px;
+    font-weight: 700;
+    background: var(--accent);
+    color: #000;
+    padding: 2px 7px;
+    border-radius: 4px;
+    letter-spacing: 1px;
+    flex-shrink: 0;
+    animation: live-blink 2s ease-in-out infinite;
+  }
+  @keyframes live-blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+
+  .top-bar-right {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .user-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    color: rgba(255,255,255,0.7);
+  }
+  .user-avatar {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent-dim), rgba(0,245,255,0.05));
+    border: 1px solid rgba(0,245,255,0.2);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700; color: var(--accent);
+  }
+  .btn-logout {
+    padding: 6px 14px;
+    border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.08);
+    background: rgba(255,255,255,0.03);
+    color: var(--text-dim);
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: inherit;
+  }
+  .btn-logout:hover {
+    border-color: rgba(255,64,96,0.3);
+    color: var(--danger);
+    background: rgba(255,64,96,0.06);
+  }
+
+  /* ========== 3. SEARCH BAR (7D) ========== */
+  .search-section {
+    position: relative;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-top: 100px;
+  }
+  .search-wrapper {
+    width: 520px;
+    max-width: 90vw;
+  }
+  .search-input-container {
+    position: relative;
+  }
+  .search-input {
+    width: 100%;
+    padding: 16px 24px 16px 48px;
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 16px;
+    font-size: 16px;
+    color: #fff;
+    outline: none;
+    font-family: inherit;
+    transition: all 0.3s;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.4), 0 0 1px rgba(0,245,255,0.15);
+  }
+  .search-input:focus {
+    border-color: rgba(0,245,255,0.35);
+    box-shadow: 0 8px 40px rgba(0,0,0,0.4), 0 0 40px rgba(0,245,255,0.08);
+  }
+  .search-input::placeholder {
+    color: rgba(255,255,255,0.25);
+  }
+  .search-icon {
+    position: absolute;
+    left: 18px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 16px;
+    color: rgba(255,255,255,0.3);
+    pointer-events: none;
+  }
+
+  /* AI Toggle */
+  .ai-toggle {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.08);
+    background: rgba(255,255,255,0.04);
+    color: rgba(255,255,255,0.4);
+    font-size: 11px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.3s;
+    white-space: nowrap;
+  }
+  .ai-toggle:hover {
+    border-color: rgba(167,139,250,0.3);
+    color: #a78bfa;
+    background: rgba(167,139,250,0.08);
+  }
+  .ai-toggle.active {
+    border-color: rgba(167,139,250,0.5);
+    color: #a78bfa;
+    background: rgba(167,139,250,0.12);
+    box-shadow: 0 0 16px rgba(167,139,250,0.15);
+  }
+  .search-input.ai-mode {
+    border-color: rgba(167,139,250,0.35);
+    box-shadow: 0 8px 40px rgba(0,0,0,0.4), 0 0 40px rgba(167,139,250,0.08);
+  }
+  .search-input.ai-mode::placeholder {
+    color: rgba(167,139,250,0.35);
+  }
+
+  /* Tag pills */
+  .search-tags {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-top: 14px;
+  }
+  .search-tag {
+    padding: 6px 14px;
+    border-radius: 20px;
+    border: 1px solid rgba(255,255,255,0.08);
+    background: rgba(255,255,255,0.03);
+    color: rgba(255,255,255,0.5);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    user-select: none;
+    font-family: inherit;
+  }
+  .search-tag:hover {
+    border-color: rgba(0,245,255,0.25);
+    color: var(--accent);
+    background: rgba(0,245,255,0.06);
+  }
+  .search-tag.active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(0,245,255,0.1);
+    box-shadow: 0 0 12px rgba(0,245,255,0.1);
+  }
+
+  /* ========== 4. HERO CARDS CAROUSEL (7E) ========== */
+  .hero-section {
+    position: relative;
+    z-index: 10;
+    display: flex;
+    justify-content: center;
+    padding: 36px 0 0;
+  }
+  .hero-carousel {
+    width: 70%;
+    max-width: 900px;
+    min-width: 320px;
+    position: relative;
+    height: 260px;
+    overflow: hidden;
+    border-radius: 18px;
+  }
+  .hero-slide {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    transition: opacity 0.7s ease, transform 0.7s ease;
+    transform: scale(0.97);
+    pointer-events: none;
+  }
+  .hero-slide.active {
+    opacity: 1;
+    transform: scale(1);
+    pointer-events: all;
+  }
+  .hero-card {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    border-radius: 18px;
+    overflow: hidden;
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border: 1px solid var(--glass-border);
+    box-shadow: 0 12px 48px rgba(0,0,0,0.5), 0 0 1px rgba(0,245,255,0.1);
+  }
+  .hero-visual {
+    flex: 0 0 45%;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero-visual::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent 60%, var(--glass-bg) 100%);
+  }
+  .hero-info {
+    flex: 1;
+    padding: 28px 32px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+  .hero-badge {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    font-weight: 700;
+    margin-bottom: 10px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .hero-badge.report { color: var(--accent); }
+  .hero-badge.collection { color: var(--success); }
+  .hero-badge.project { color: var(--warn); }
+  .hero-badge.announcement { color: #a78bfa; }
+
+  .hero-badge-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+  .hero-badge.report .hero-badge-dot { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+  .hero-badge.collection .hero-badge-dot { background: var(--success); box-shadow: 0 0 8px var(--success); }
+  .hero-badge.project .hero-badge-dot { background: var(--warn); box-shadow: 0 0 8px var(--warn); }
+  .hero-badge.announcement .hero-badge-dot { background: #a78bfa; box-shadow: 0 0 8px #a78bfa; }
+
+  .hero-title {
+    font-size: 20px;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 8px;
+    line-height: 1.3;
+  }
+  .hero-desc {
+    font-size: 13px;
+    color: rgba(255,255,255,0.5);
+    line-height: 1.6;
+    margin-bottom: 16px;
+  }
+  .hero-meta {
+    display: flex;
+    gap: 20px;
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+  .hero-meta strong {
+    color: rgba(255,255,255,0.8);
+    font-weight: 600;
+  }
+
+  /* Visual backgrounds per card type */
+  .vis-map {
+    width: 100%; height: 100%;
+    background:
+      radial-gradient(ellipse at 30% 40%, rgba(0,245,255,0.08), transparent 60%),
+      radial-gradient(ellipse at 70% 50%, rgba(0,100,140,0.06), transparent 50%),
+      repeating-linear-gradient(90deg, rgba(0,245,255,0.02) 0px, transparent 1px, transparent 60px),
+      repeating-linear-gradient(0deg, rgba(0,245,255,0.02) 0px, transparent 1px, transparent 40px),
+      linear-gradient(135deg, #0c1218, #0a1018);
+  }
+  .vis-sat {
+    width: 100%; height: 100%;
+    background:
+      radial-gradient(circle at 45% 45%, rgba(30,60,30,0.6), transparent 60%),
+      radial-gradient(circle at 55% 55%, rgba(20,40,50,0.4), transparent 50%),
+      linear-gradient(135deg, #0c1610, #0a1018, #0e0e14);
+  }
+  .vis-project {
+    width: 100%; height: 100%;
+    background:
+      radial-gradient(circle at 50% 50%, rgba(0,245,255,0.05), transparent 50%),
+      linear-gradient(135deg, #0e1018, #101420);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .vis-announcement {
+    width: 100%; height: 100%;
+    background:
+      radial-gradient(circle at 40% 40%, rgba(167,139,250,0.08), transparent 50%),
+      radial-gradient(circle at 60% 60%, rgba(100,80,200,0.05), transparent 50%),
+      linear-gradient(135deg, #12101e, #0e0e18);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .vis-announcement-icon {
+    font-size: 64px;
+    opacity: 0.15;
+  }
+
+  /* Mini bars for project visual */
+  .mini-bars {
+    display: flex;
+    align-items: flex-end;
+    gap: 6px;
+    height: 100px;
+    padding: 0 40px;
+  }
+  .mini-bar {
+    width: 16px;
+    border-radius: 4px 4px 0 0;
+    background: linear-gradient(180deg, var(--accent), rgba(0,245,255,0.2));
+    opacity: 0.3;
+  }
+
+  /* Map pins in hero visual */
+  .hero-pin {
+    position: absolute;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    z-index: 1;
+  }
+  .hero-pin::after {
+    content: '';
+    position: absolute;
+    inset: -4px;
+    border-radius: 50%;
+    border: 1px solid;
+    animation: hero-pin-ring 2s ease-out infinite;
+    opacity: 0;
+  }
+  .hero-pin.cyan { background: var(--accent); }
+  .hero-pin.cyan::after { border-color: var(--accent); }
+  .hero-pin.red { background: var(--danger); }
+  .hero-pin.red::after { border-color: var(--danger); }
+  @keyframes hero-pin-ring {
+    0% { transform: scale(1); opacity: 0.5; }
+    100% { transform: scale(3); opacity: 0; }
+  }
+
+  /* Carousel dots */
+  .hero-dots {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 16px;
+    position: relative;
+    z-index: 10;
+  }
+  .hero-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.15);
+    cursor: pointer;
+    transition: all 0.3s;
+    border: none;
+    padding: 0;
+  }
+  .hero-dot:hover {
+    background: rgba(255,255,255,0.3);
+  }
+  .hero-dot.active {
+    background: var(--accent);
+    box-shadow: 0 0 10px rgba(0,245,255,0.4);
+    width: 24px;
+    border-radius: 4px;
+  }
+
+  /* ========== 5. STATS ROW ========== */
+  .stats-row {
+    position: relative;
+    z-index: 10;
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    padding: 28px 0 0;
+    flex-wrap: wrap;
+  }
+  .stat-pill {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 22px;
+    border-radius: 14px;
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border: 1px solid var(--glass-border);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    transition: all 0.25s;
+  }
+  .stat-pill:hover {
+    border-color: rgba(0,245,255,0.2);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 30px rgba(0,0,0,0.4), 0 0 15px rgba(0,245,255,0.04);
+  }
+  .stat-number {
+    font-size: 22px;
+    font-weight: 700;
+    color: #fff;
+  }
+  .stat-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-dim);
+  }
+  .stat-pill .stat-icon {
+    font-size: 16px;
+    opacity: 0.6;
+  }
+  .stat-pill.live .stat-number {
+    color: var(--success);
+  }
+  .stat-pill.live {
+    border-color: rgba(0,230,118,0.15);
+  }
+
+  /* ========== 6. DOCK (macOS STYLE) ========== */
+  .dock {
+    position: fixed;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: flex-end;
+    gap: 6px;
+    padding: 12px 22px 12px;
+    background: rgba(15, 15, 22, 0.92);
+    border: 1px solid var(--glass-border);
+    border-radius: 26px;
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    z-index: 100;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.5), 0 0 1px rgba(0,245,255,0.1);
+  }
+  .dock-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+    padding: 4px;
+    text-decoration: none;
+  }
+  .dock-item:hover {
+    transform: scale(1.4) translateY(-10px);
+  }
+  .dock-item:hover .dock-icon {
+    box-shadow: 0 0 18px var(--accent-glow), 0 0 40px rgba(0,245,255,0.1);
+    border-color: rgba(0,245,255,0.3);
+    background: var(--bg3);
+  }
+  .dock-icon {
+    width: 58px; height: 58px;
+    border-radius: 15px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    transition: all 0.2s;
+    color: var(--accent);
+  }
+  .dock-icon svg { width: 26px; height: 26px; }
+  .search-tag svg { width: 14px; height: 14px; vertical-align: -2px; margin-right: 2px; }
+  .stat-icon svg { width: 18px; height: 18px; }
+  .vis-announcement-icon svg { width: 64px; height: 64px; }
+  .dock-label {
+    font-size: 10px;
+    color: var(--text-dim);
+    white-space: nowrap;
+    opacity: 1;
+    transition: opacity 0.2s;
+    pointer-events: none;
+  }
+  .dock-item:hover .dock-label {
+    opacity: 1;
+    color: var(--accent);
+  }
+  .dock-sep {
+    width: 1px;
+    height: 36px;
+    background: rgba(255,255,255,0.06);
+    margin: 0 8px;
+    align-self: center;
+  }
+
+  /* ========== LAYOUT CONTAINER ========== */
+  .page-content {
+    position: relative;
+    z-index: 1;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    padding-bottom: 100px;
+  }
+
+  /* ========== SCROLLBAR ========== */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.15); }
+
+  /* ========== CLASSIFICATION BADGES ========== */
+  .classification {
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    display: inline-block;
+  }
+  .classification.ts { background: rgba(255,64,96,0.2); color: var(--danger); }
+  .classification.s  { background: rgba(255,171,0,0.2); color: var(--warn); }
+  .classification.u  { background: rgba(0,230,118,0.2); color: var(--success); }
+
+  /* ========== RESPONSIVE ========== */
+  @media (max-width: 768px) {
+    .hero-carousel { width: 92%; }
+    .hero-card { flex-direction: column; }
+    .hero-visual { flex: 0 0 120px; }
+    .hero-visual::after {
+      background: linear-gradient(180deg, transparent 60%, var(--glass-bg) 100%);
+    }
+    .search-wrapper { width: 92vw; }
+    .top-bar-center { display: none; }
+    .dock { gap: 2px; padding: 6px 10px 6px; }
+    .dock-icon { width: 42px; height: 42px; }
+    .dock-icon svg { width: 20px; height: 20px; }
+  }
+
+  /* Dock stays consistent across monitor sizes */
+
+  /* ========== AI ASSISTANT PANEL (dormant stub) ========== */
+  .assistant-panel {
+    position: fixed;
+    top: 0; right: 0;
+    height: 100vh;
+    width: 380px;
+    max-width: 92vw;
+    display: flex;
+    flex-direction: column;
+    background: rgba(14, 12, 22, 0.97);
+    backdrop-filter: blur(28px);
+    -webkit-backdrop-filter: blur(28px);
+    border-left: 1px solid rgba(167,139,250,0.22);
+    box-shadow: -16px 0 60px rgba(0,0,0,0.55);
+    transform: translateX(100%);
+    transition: transform 0.38s cubic-bezier(0.16, 1, 0.3, 1);
+    z-index: 200;
+  }
+  .assistant-panel.open { transform: translateX(0); }
+  .assistant-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 18px 20px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .assistant-title {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 15px; font-weight: 700; color: #fff;
+  }
+  .assistant-badge {
+    font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;
+    padding: 3px 8px; border-radius: 6px;
+    background: rgba(167,139,250,0.15); color: #a78bfa;
+    border: 1px solid rgba(167,139,250,0.3);
+  }
+  .assistant-close {
+    width: 30px; height: 30px; border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.08);
+    background: rgba(255,255,255,0.03);
+    color: var(--text-dim, #b8b8c8);
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    transition: all 0.2s;
+  }
+  .assistant-close:hover { color: #fff; border-color: rgba(255,255,255,0.2); }
+  .assistant-body {
+    flex: 1; overflow-y: auto;
+    padding: 20px; display: flex; flex-direction: column; gap: 12px;
+  }
+  .assistant-empty {
+    margin: auto 0; text-align: center;
+    display: flex; flex-direction: column; align-items: center; gap: 10px;
+    padding: 24px 8px;
+  }
+  .assistant-empty-icon { color: #a78bfa; opacity: 0.55; }
+  .assistant-empty-title { font-size: 14px; font-weight: 600; color: rgba(255,255,255,0.8); }
+  .assistant-empty-sub { font-size: 12px; line-height: 1.6; color: rgba(255,255,255,0.42); max-width: 280px; }
+  .assistant-msg {
+    max-width: 85%;
+    padding: 10px 14px; border-radius: 12px;
+    font-size: 13px; line-height: 1.55;
+    white-space: pre-wrap; word-break: break-word;
+  }
+  .assistant-msg.from-user {
+    align-self: flex-end;
+    background: rgba(0,245,255,0.10);
+    border: 1px solid rgba(0,245,255,0.2);
+    color: #d6fbff;
+  }
+  .assistant-msg.from-ai {
+    align-self: flex-start;
+    background: rgba(167,139,250,0.10);
+    border: 1px solid rgba(167,139,250,0.22);
+    color: #ece7ff;
+  }
+  .assistant-input-row {
+    display: flex; gap: 8px; padding: 16px 18px;
+    border-top: 1px solid rgba(255,255,255,0.06);
+  }
+  .assistant-input {
+    flex: 1; padding: 11px 14px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 10px; color: #fff; font-size: 13px; font-family: inherit; outline: none;
+    transition: border-color 0.2s;
+  }
+  .assistant-input:focus { border-color: rgba(167,139,250,0.45); }
+  .assistant-input::placeholder { color: rgba(255,255,255,0.3); }
+  .assistant-send {
+    width: 42px; border-radius: 10px;
+    border: 1px solid rgba(167,139,250,0.35);
+    background: rgba(167,139,250,0.15); color: #c4b5fd;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    transition: all 0.2s;
+  }
+  .assistant-send:hover { background: rgba(167,139,250,0.28); color: #fff; }
+  [data-theme="light"] .assistant-panel {
+    background: rgba(245,243,252,0.97);
+    border-left-color: rgba(124,58,237,0.2);
+  }
+  [data-theme="light"] .assistant-title { color: #1a1030; }
+  [data-theme="light"] .assistant-input { color: #1a1030; background: rgba(20,10,40,0.04); border-color: rgba(20,10,40,0.12); }
+  [data-theme="light"] .assistant-msg.from-user { color: #084c54; }
+  [data-theme="light"] .assistant-msg.from-ai { color: #2a1a4a; }
+
+  /* ===== LIGHT THEME ===== */
+  [data-theme="light"] .top-bar {
+    background: rgba(230,235,245,0.92);
+    border-bottom-color: rgba(0,20,50,0.1);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+  }
+  [data-theme="light"] .logo-text { color: #6d28d9; }
+  [data-theme="light"] .stellaria-logo { filter: none !important; }
+  [data-theme="light"] .user-avatar {
+    background: rgba(109,40,217,0.1);
+    border-color: #6d28d9;
+    color: #6d28d9;
+  }
+  [data-theme="light"] .user-info span { color: #0a0f1e; }
+  [data-theme="light"] .btn-logout {
+    color: #0a0f1e;
+    border-color: rgba(0,20,50,0.15);
+  }
+  [data-theme="light"] .search-input {
+    background: rgba(255,255,255,0.7);
+    border-color: rgba(0,20,50,0.15);
+    color: #2d1b69;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.06), 0 0 1px rgba(109,40,217,0.1);
+  }
+  [data-theme="light"] .search-input:focus {
+    border-color: rgba(109,40,217,0.3);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.06), 0 0 20px rgba(109,40,217,0.06);
+  }
+  [data-theme="light"] .search-input::placeholder { color: rgba(45,27,105,0.35); font-weight: 400; }
+  [data-theme="light"] .search-icon { color: rgba(109,40,217,0.4); }
+  [data-theme="light"] .search-tag {
+    border-color: rgba(0,20,50,0.12);
+    color: rgba(0,20,50,0.6);
+  }
+  [data-theme="light"] .search-tag:hover,
+  [data-theme="light"] .search-tag.active {
+    border-color: #6d28d9;
+    color: #6d28d9;
+    background: rgba(109,40,217,0.06);
+  }
+  [data-theme="light"] .ai-toggle {
+    color: rgba(0,20,50,0.5);
+    border-color: rgba(0,20,50,0.1);
+  }
+  [data-theme="light"] .hero-card {
+    background: rgba(230,235,245,0.85);
+    border-color: rgba(0,20,50,0.1);
+  }
+  [data-theme="light"] .hero-label { color: #6d28d9; }
+  [data-theme="light"] .hero-title { color: #0a0f1e; }
+  [data-theme="light"] .hero-desc { color: rgba(0,20,50,0.55); }
+  [data-theme="light"] .hero-link { color: #6d28d9; }
+  [data-theme="light"] .stat-pill {
+    background: rgba(230,235,245,0.85);
+    border-color: rgba(0,20,50,0.1);
+  }
+  [data-theme="light"] .stat-number { color: #6d28d9; }
+  [data-theme="light"] .stat-label { color: rgba(0,20,50,0.55); }
+  [data-theme="light"] .stat-icon { color: #6d28d9; }
+  [data-theme="light"] .dock {
+    background: rgba(230,235,245,0.95);
+    border-color: rgba(0,20,50,0.12);
+    box-shadow: 0 8px 40px rgba(0,0,0,0.08);
+  }
+  [data-theme="light"] .dock-icon {
+    background: rgba(255,255,255,0.7);
+    border-color: rgba(0,20,50,0.1);
+    color: #6d28d9;
+  }
+  [data-theme="light"] .dock-item:hover .dock-icon {
+    border-color: #6d28d9;
+    color: #fff;
+    background: #6d28d9;
+    box-shadow: 0 0 18px rgba(109,40,217,0.3);
+  }
+  [data-theme="light"] .dock-item:hover .dock-label { color: #6d28d9; }
+  [data-theme="light"] .dock-sep { background: rgba(0,20,50,0.08); }
+  [data-theme="light"] .broadcast-pill {
+    background: rgba(255,255,255,0.6);
+    border-color: rgba(0,20,50,0.1);
+    color: rgba(0,20,50,0.6);
+  }
+  [data-theme="light"] .carousel-dot { background: rgba(0,20,50,0.15); }
+  [data-theme="light"] .carousel-dot.active { background: #6d28d9; }
+  [data-theme="light"] #themeToggle {
+    border-color: rgba(0,20,50,0.15);
+    background: rgba(255,255,255,0.5);
+    color: #0a0f1e;
+  }
+  [data-theme="light"] .globe-bg { opacity: 0.6; filter: invert(1) hue-rotate(180deg) saturate(1.5); }
+</style>
+</head>
+<body>
+
+<!-- ======================== GLOBE BACKGROUND ======================== -->
+<div class="globe-bg">
+  <div class="globe-grid"></div>
+  <div class="continent continent-1"></div>
+  <div class="continent continent-2"></div>
+  <div class="continent continent-3"></div>
+  <div class="continent continent-4"></div>
+  <div class="continent continent-5"></div>
+  <div class="globe-sphere"></div>
+  <div class="orbital-ring orbital-ring-1"></div>
+  <div class="orbital-ring orbital-ring-2"></div>
+  <div class="orbital-ring orbital-ring-3"></div>
+  <div class="orbital-ring orbital-ring-4"></div>
+  <div class="globe-dot"></div>
+  <div class="globe-dot"></div>
+  <div class="globe-dot"></div>
+  <div class="globe-dot"></div>
+  <div class="globe-dot"></div>
+  <div class="globe-dot"></div>
+  <div class="globe-dot"></div>
+  <div class="globe-dot"></div>
+  <div class="globe-dot"></div>
+  <div class="globe-dot"></div>
+  <div class="globe-dot"></div>
+  <div class="globe-dot"></div>
+  <div class="globe-ambient"></div>
+</div>
+
+<!-- ======================== TOP BAR ======================== -->
+<div class="top-bar">
+  <div class="top-bar-left">
+    <span id="abyss-brand"></span>
+    <script src="/libs/abyss-logo.js"></script>
+    <script>document.getElementById('abyss-brand').innerHTML = AbyssLogo.lockup({ size: 32, href: 'master-home.html' });</script>
+  </div>
+  <div class="top-bar-center">
+    <div class="broadcast-pill" id="broadcastPill">
+      <span class="broadcast-live" data-i18n="home.broadcast.live" data-ltr>LIVE</span>
+      <span id="broadcastText" data-i18n="home.broadcast.default">System operational</span>
+    </div>
+  </div>
+  <div class="top-bar-right">
+    <button id="langToggle" class="glyph-lang-toggle" title="عربي / English" onclick="(function(){var l=localStorage.getItem('glyph_lang')||'en';localStorage.setItem('glyph_lang',l==='ar'?'en':'ar');location.reload();})()" style="width:32px;height:32px;border-radius:8px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.04);color:var(--text-dim,#e0e0e0);cursor:pointer;font-size:12px;font-weight:700;font-family:'Noto Sans Arabic',sans-serif;display:flex;align-items:center;justify-content:center;transition:all 0.2s;"></button>
+    <script>document.getElementById('langToggle').textContent=localStorage.getItem('glyph_lang')==='ar'?'EN':'ع';</script>
+    <div class="user-info">
+      <div class="user-avatar" data-abyss-user-initials>··</div>
+      <span data-abyss-user-name>—</span>
+    </div>
+    <button class="btn-logout" data-i18n="nav.signout" onclick="if(window.AbyssAuth)AbyssAuth.logout()">Sign Out</button>
+  </div>
+</div>
+
+<!-- ======================== PAGE CONTENT ======================== -->
+<div class="page-content">
+
+  <!-- SEARCH BAR -->
+  <div class="search-section">
+    <div class="search-wrapper">
+      <div class="search-input-container">
+        <span class="search-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span>
+        <input
+          type="text"
+          class="search-input"
+          id="globalSearch"
+          placeholder="Search reports and collections..."
+          data-i18n-placeholder="search.placeholder"
+          autocomplete="off"
+          spellcheck="false"
+        />
+        <button class="ai-toggle" id="aiToggle" type="button" title="Ask the Abyss Assistant" onclick="if (window.AbyssAssistant) AbyssAssistant.open();"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M12 3l1.9 4.8L18.5 9l-4.6 1.2L12 15l-1.9-4.8L5.5 9l4.6-1.2L12 3z"/></svg> Ask AI</button>
+      </div>
+      <div class="search-tags" id="searchTags">
+        <button class="search-tag" data-app="reports-browse" data-url="reports-browse.html" data-i18n="nav.reports"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg> Reports</button>
+        <button class="search-tag" data-app="collections-browse" data-url="collections-browse.html" data-i18n="nav.collections"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg> Collections</button>
+        <button class="search-tag" data-app="bathymetry-studio" data-url="bathymetry-studio.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg> Studio</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- HERO CAROUSEL -->
+  <div class="hero-section">
+    <div class="hero-carousel" id="heroCarousel">
+
+      <!-- Slide 1: Latest Intelligence Report -->
+      <div class="hero-slide active" data-index="0">
+        <div class="hero-card">
+          <div class="hero-visual">
+            <div class="vis-map">
+              <div class="hero-pin cyan" style="top:35%; left:40%;"></div>
+              <div class="hero-pin red" style="top:50%; left:55%;"></div>
+              <div class="hero-pin cyan" style="top:30%; left:65%;"></div>
+            </div>
+          </div>
+          <div class="hero-info">
+            <div class="hero-badge report">
+              <span class="hero-badge-dot"></span>
+              <span data-i18n="home.hero.latest_report">LATEST REPORT</span>
+            </div>
+            <div class="hero-title" id="heroReportTitle" data-i18n="home.hero.loading">Loading...</div>
+            <div class="hero-desc" id="heroReportDesc" data-i18n="home.hero.fetching_report">Fetching latest report data...</div>
+            <div class="hero-meta" id="heroReportMeta">
+              <span>&nbsp;</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Slide 2: Newest Satellite Collection -->
+      <div class="hero-slide" data-index="1">
+        <div class="hero-card">
+          <div class="hero-visual">
+            <div class="vis-sat"></div>
+          </div>
+          <div class="hero-info">
+            <div class="hero-badge collection">
+              <span class="hero-badge-dot"></span>
+              <span data-i18n="home.hero.new_collection">NEW COLLECTION</span>
+            </div>
+            <div class="hero-title" id="heroCollectionTitle" data-i18n="home.hero.loading">Loading...</div>
+            <div class="hero-desc" id="heroCollectionDesc" data-i18n="home.hero.fetching_collection">Fetching latest collection data...</div>
+            <div class="hero-meta" id="heroCollectionMeta">
+              <span>&nbsp;</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Slide 3: Active Project -->
+      <!-- Slide 3: System Announcement -->
+      <div class="hero-slide" data-index="2">
+        <div class="hero-card">
+          <div class="hero-visual">
+            <div class="vis-announcement">
+              <div class="vis-announcement-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
+            </div>
+          </div>
+          <div class="hero-info">
+            <div class="hero-badge announcement">
+              <span class="hero-badge-dot"></span>
+              <span data-i18n="home.hero.system_announcement">SYSTEM ANNOUNCEMENT</span>
+            </div>
+            <div class="hero-title" id="heroAnnouncementTitle" data-i18n="home.hero.loading">Loading...</div>
+            <div class="hero-desc" id="heroAnnouncementDesc" data-i18n="home.hero.fetching_announcements">Fetching announcements...</div>
+            <div class="hero-meta" id="heroAnnouncementMeta">
+              <span>&nbsp;</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Carousel dots -->
+  <div class="hero-dots" id="heroDots">
+    <button class="hero-dot active" data-slide="0"></button>
+    <button class="hero-dot" data-slide="1"></button>
+    <button class="hero-dot" data-slide="2"></button>
+  </div>
+
+  <!-- STATS ROW -->
+  <div class="stats-row">
+    <div class="stat-pill">
+      <span class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></span>
+      <div>
+        <div class="stat-number" id="statReports" data-ltr>&mdash;</div>
+        <div class="stat-label" data-i18n="home.stats.reports">Reports</div>
+      </div>
+    </div>
+    <div class="stat-pill">
+      <span class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg></span>
+      <div>
+        <div class="stat-number" id="statCollections" data-ltr>&mdash;</div>
+        <div class="stat-label" data-i18n="home.stats.collections">Collections</div>
+      </div>
+    </div>
+    <div class="stat-pill live">
+      <span class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="6" fill="currentColor" stroke="none"/></svg></span>
+      <div>
+        <div class="stat-number" id="statUsersLive" data-ltr>1</div>
+        <div class="stat-label" data-i18n="home.stats.users_live">Users Live</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ============ AI ASSISTANT (dormant; flip window.ABYSS_AI_ENABLED + wire /api/chat) ============ -->
+<aside class="assistant-panel" id="assistantPanel" aria-hidden="true" aria-label="Abyss Assistant">
+  <div class="assistant-head">
+    <div class="assistant-title">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;color:#a78bfa"><path d="M12 3l1.9 4.8L18.5 9l-4.6 1.2L12 15l-1.9-4.8L5.5 9l4.6-1.2L12 3z"/><path d="M19 14l.7 2.3L22 17l-2.3.7L19 20l-.7-2.3L16 17l2.3-.7L19 14z"/></svg>
+      <span>Abyss Assistant</span>
+      <span class="assistant-badge">Soon</span>
+    </div>
+    <button class="assistant-close" id="assistantClose" title="Close" aria-label="Close assistant">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+  <div class="assistant-body" id="assistantBody">
+    <div class="assistant-empty" id="assistantEmpty">
+      <div class="assistant-empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:40px;height:40px"><path d="M12 3l1.9 4.8L18.5 9l-4.6 1.2L12 15l-1.9-4.8L5.5 9l4.6-1.2L12 3z"/><path d="M19 14l.7 2.3L22 17l-2.3.7L19 20l-.7-2.3L16 17l2.3-.7L19 14z"/></svg></div>
+      <div class="assistant-empty-title">Ask the Abyss assistant</div>
+      <div class="assistant-empty-sub">Ask anything about the platform and how to use it. Data-grounded answers over your surveys, reports, and collections are coming next.</div>
+    </div>
+  </div>
+  <div class="assistant-input-row">
+    <input class="assistant-input" id="assistantInput" type="text" placeholder="Ask the assistant…" autocomplete="off" spellcheck="false">
+    <button class="assistant-send" id="assistantSend" title="Send" aria-label="Send">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+    </button>
+  </div>
+</aside>
+
+<!-- ======================== DOCK ======================== -->
+<div class="dock" id="dock">
+  <!-- Abyss apps -->
+  <a class="dock-item" href="collections-browse.html" title="Collections" data-app="collections-browse">
+    <div class="dock-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg></div>
+    <span class="dock-label" data-i18n="nav.collections">Collections</span>
+  </a>
+  <a class="dock-item" href="bathymetry-studio.html" title="Studio" data-app="bathymetry-studio">
+    <div class="dock-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></div>
+    <span class="dock-label">Studio</span>
+  </a>
+  <a class="dock-item" href="reports-browse.html" title="Reports" data-app="reports-browse">
+    <div class="dock-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div>
+    <span class="dock-label" data-i18n="nav.reports">Reports</span>
+  </a>
+
+  <a class="dock-item" href="#" title="Abyss Assistant" data-app="assistant" id="dockAssistant" onclick="event.preventDefault(); if (window.AbyssAssistant) AbyssAssistant.toggle();">
+    <div class="dock-icon" style="color:#a78bfa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 4.8L18.5 9l-4.6 1.2L12 15l-1.9-4.8L5.5 9l4.6-1.2L12 3z"/><path d="M19 14l.7 2.3L22 17l-2.3.7L19 20l-.7-2.3L16 17l2.3-.7L19 14z"/></svg></div>
+    <span class="dock-label">Assistant</span>
+  </a>
+
+  <div class="dock-sep"></div>
+
+  <a class="dock-item" href="admin.html" title="Admin" data-app="admin">
+    <div class="dock-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></div>
+    <span class="dock-label" data-i18n="nav.admin">Admin</span>
+  </a>
+</div>
+
+<script>
+(function() {
+  'use strict';
+
+  // ===== Operational auth: session guard + identity + silent refresh =====
+  window.ABYSS_AI_ENABLED = true; // live: POSTs /api/chat (basic Claude assistant; DB-grounding is Phase 2)
+  if (window.AbyssAuth) {
+    if (!AbyssAuth.checkAuth()) return;   // no session → repair cookie session or redirect to login
+    AbyssAuth.startAutoRefresh();
+    AbyssAuth.loadUser();                 // fills [data-abyss-user-name] / [data-abyss-user-initials] from /api/auth/me
+  }
+
+  // ======================== SEARCH TAG BEHAVIOR ========================
+  const searchInput = document.getElementById('globalSearch');
+  const tags = document.querySelectorAll('.search-tag');
+  var _isAr = (localStorage.getItem('glyph_lang') === 'ar');
+  const defaultPlaceholder = _isAr ? '\u0627\u0644\u0628\u062d\u062b \u0641\u064a \u0627\u0644\u062a\u0642\u0627\u0631\u064a\u0631\u060c \u0627\u0644\u0645\u0634\u0627\u0631\u064a\u0639\u060c \u0627\u0644\u0645\u062c\u0645\u0648\u0639\u0627\u062a...' : 'Search reports and collections...';
+  const aiPlaceholder = _isAr ? '\u0627\u0633\u0623\u0644 \u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064a \u0639\u0646 \u0628\u064a\u0627\u0646\u0627\u062a \u0627\u0644\u0627\u0633\u062a\u062e\u0628\u0627\u0631\u0627\u062a...' : 'Ask AI anything about your intelligence data...';
+  let activeTag = null;
+  const aiMode = false;  // Ask-AI removed in Abyss; kept as a const for the refs below.
+  void aiPlaceholder;
+
+  tags.forEach(tag => {
+    tag.addEventListener('click', () => {
+      const app = tag.dataset.app;
+
+      if (activeTag === tag) {
+        // Deselect
+        tag.classList.remove('active');
+        activeTag = null;
+        searchInput.placeholder = aiMode ? aiPlaceholder : defaultPlaceholder;
+      } else {
+        // Deselect previous
+        if (activeTag) activeTag.classList.remove('active');
+        // Select new
+        tag.classList.add('active');
+        activeTag = tag;
+        const label = app.charAt(0).toUpperCase() + app.slice(1);
+        searchInput.placeholder = aiMode ? aiPlaceholder : `Search ${label.toLowerCase()}...`;
+      }
+
+      searchInput.focus();
+    });
+  });
+
+  searchInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      const query = searchInput.value.trim();
+      if (!query) return;
+
+      if (activeTag) {
+        const url = activeTag.dataset.url;
+        window.location.href = `${url}?q=${encodeURIComponent(query)}`;
+      } else {
+        // Global search → Reports browse.
+        window.location.href = `reports-browse.html?q=${encodeURIComponent(query)}`;
+      }
+    }
+  });
+
+  // ======================== HERO CAROUSEL ========================
+  const slides = document.querySelectorAll('.hero-slide');
+  const dots = document.querySelectorAll('.hero-dot');
+  const carousel = document.getElementById('heroCarousel');
+  let currentSlide = 0;
+  let autoRotateTimer = null;
+  let isPaused = false;
+
+  function goToSlide(index) {
+    slides[currentSlide].classList.remove('active');
+    dots[currentSlide].classList.remove('active');
+    currentSlide = index;
+    slides[currentSlide].classList.add('active');
+    dots[currentSlide].classList.add('active');
+  }
+
+  function nextSlide() {
+    goToSlide((currentSlide + 1) % slides.length);
+  }
+
+  function startAutoRotate() {
+    stopAutoRotate();
+    autoRotateTimer = setInterval(() => {
+      if (!isPaused) nextSlide();
+    }, 6000);
+  }
+
+  function stopAutoRotate() {
+    if (autoRotateTimer) {
+      clearInterval(autoRotateTimer);
+      autoRotateTimer = null;
+    }
+  }
+
+  // Pause on hover
+  carousel.addEventListener('mouseenter', () => { isPaused = true; });
+  carousel.addEventListener('mouseleave', () => { isPaused = false; });
+
+  // Dot navigation
+  dots.forEach(dot => {
+    dot.addEventListener('click', () => {
+      goToSlide(parseInt(dot.dataset.slide, 10));
+      startAutoRotate(); // reset timer on manual nav
+    });
+  });
+
+  startAutoRotate();
+
+  // ======================== PERMISSION-BASED FILTERING ========================
+  (async function applyPermissions() {
+    try {
+      const userRaw = localStorage.getItem('intel_globe_user');
+      const token = localStorage.getItem('intel_globe_token');
+      if (!userRaw || !token) return; // no auth info — show everything (graceful)
+
+      const user = JSON.parse(userRaw);
+      const username = user.username;
+      if (!username) return;
+
+      const af = (window.AbyssAuth && AbyssAuth.authFetch)
+        ? AbyssAuth.authFetch
+        : function (u) { return fetch(u, { headers: { 'Authorization': `Bearer ${token}` } }); };
+      const res = await af(`/api/permissions/${encodeURIComponent(username)}`);
+      if (!res.ok) return; // API unavailable — show everything
+
+      const data = await res.json();
+      if (data.is_admin) return; // admin sees all
+
+      const isAdmin = !!data.is_admin;
+      const allowedAppsList = (data.allowed_apps || []).map(a => a.app_name);
+
+      // Hide admin icon/tag for non-admins regardless of allowed_apps
+      if (!isAdmin) {
+        document.querySelectorAll('.dock-item[data-app="admin"], .search-tag[data-app="admin"]').forEach(el => {
+          el.style.display = 'none';
+        });
+        // Also hide admin in topbar (injected by abyss-theme.js)
+        const topbarAdmin = document.querySelector('#glyph-app-dock .glyph-topbar-app-icon[data-app="admin"]');
+        if (topbarAdmin) topbarAdmin.style.display = 'none';
+      }
+
+      // If admin, show all — done
+      if (isAdmin) return;
+
+      // Empty allowed_apps means no restrictions configured — show all (except admin, handled above)
+      if (allowedAppsList.length === 0) return;
+
+      const allowedApps = new Set(allowedAppsList);
+
+      // Filter search tags
+      document.querySelectorAll('.search-tag[data-app]').forEach(tag => {
+        if (tag.dataset.app === 'admin') return; // already handled
+        if (!allowedApps.has(tag.dataset.app)) {
+          tag.style.display = 'none';
+        }
+      });
+
+      // Filter dock items
+      document.querySelectorAll('.dock-item[data-app]').forEach(item => {
+        if (item.dataset.app === 'admin') return; // already handled
+        if (!allowedApps.has(item.dataset.app)) {
+          item.style.display = 'none';
+        }
+      });
+
+      // Also filter topbar app icons (injected by abyss-theme.js)
+      document.querySelectorAll('#glyph-app-dock .glyph-topbar-app-icon[data-app]').forEach(item => {
+        const appName = item.getAttribute('data-app');
+        if (appName === 'admin') return; // already handled
+        if (!allowedApps.has(appName)) {
+          item.style.display = 'none';
+        }
+      });
+    } catch (e) {
+      // Fetch failure or parse error — graceful degradation, show everything
+      console.warn('Permission check failed, showing all apps:', e);
+    }
+  })();
+
+  // ======================== DOCK MAGNIFICATION ========================
+  const dock = document.getElementById('dock');
+  const dockItems = dock.querySelectorAll('.dock-item');
+
+  dock.addEventListener('mousemove', (e) => {
+    const dockRect = dock.getBoundingClientRect();
+    const mouseX = e.clientX;
+
+    dockItems.forEach(item => {
+      const itemRect = item.getBoundingClientRect();
+      const itemCenter = itemRect.left + itemRect.width / 2;
+      const distance = Math.abs(mouseX - itemCenter);
+      const maxDistance = 120;
+
+      if (distance < maxDistance) {
+        const scale = 1 + (1 - distance / maxDistance) * 0.35;
+        const translateY = -(1 - distance / maxDistance) * 10;
+        item.style.transform = `scale(${scale}) translateY(${translateY}px)`;
+      } else {
+        item.style.transform = '';
+      }
+    });
+  });
+
+  dock.addEventListener('mouseleave', () => {
+    dockItems.forEach(item => {
+      item.style.transform = '';
+    });
+  });
+
+  // ======================== LIVE DASHBOARD DATA ========================
+  (async function loadDashboardData() {
+    // All dashboard reads go through authFetch so a 60-min access-token expiry
+    // triggers a silent refresh instead of blanking the dashboard.
+    var af = (window.AbyssAuth && AbyssAuth.authFetch)
+      ? AbyssAuth.authFetch
+      : function (u) { return fetch(u, { credentials: 'include' }); };
+
+    // i18n helper for JS-rendered strings
+    function _t(key, fallback) {
+      if (window.GlyphI18n && window.GlyphI18n.translations()) {
+        var tr = window.GlyphI18n.translations();
+        return tr[key] || fallback;
+      }
+      return fallback;
+    }
+
+    function formatDate(iso) {
+      if (!iso) return '';
+      var d = new Date(iso);
+      var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      return (d.getDate() < 10 ? '0' : '') + d.getDate() + ' ' + months[d.getMonth()] + ' ' + d.getFullYear();
+    }
+
+    function truncate(str, max) {
+      if (!str) return '';
+      return str.length > max ? str.substring(0, max) + '...' : str;
+    }
+
+    // --- Stats ---
+    function countFromResponse(d) {
+      if (Array.isArray(d)) return d.length;
+      if (d && typeof d === 'object') {
+        if (typeof d.total === 'number') return d.total;
+        if (Array.isArray(d.items)) return d.items.length;
+        if (Array.isArray(d.data)) return d.data.length;
+        if (typeof d.count === 'number') return d.count;
+      }
+      return 0;
+    }
+
+    var reportsP = af('/api/reports').then(function(r) {
+      if (!r.ok) return null;
+      var total = r.headers.get('X-Total-Count');
+      if (total) return parseInt(total, 10);
+      return r.json().then(countFromResponse);
+    }).catch(function() { return null; });
+
+    var collectionsP = af('/api/rasters/').then(function(r) {
+      if (!r.ok) return null;
+      return r.json().then(countFromResponse);
+    }).catch(function() { return null; });
+
+    // --- Hero slide data ---
+    var latestReportP = af('/api/reports?limit=1&sort=-created_at')
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .catch(function() { return null; });
+
+    var latestCollectionP = af('/api/rasters/?limit=1&sort=-created_at')
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .catch(function() { return null; });
+
+    var settingsP = af('/api/settings/public')
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .catch(function() { return null; });
+
+    // Resolve all in parallel
+    var results = await Promise.all([
+      reportsP, collectionsP, latestReportP, latestCollectionP, settingsP
+    ]);
+
+    var reportsCount = results[0];
+    var collectionsCount = results[1];
+    var latestReport = results[2];
+    var latestCollection = results[3];
+    var settings = results[4];
+
+    // --- Update stats ---
+    var elReports = document.getElementById('statReports');
+    var elCollections = document.getElementById('statCollections');
+    if (elReports) elReports.textContent = (reportsCount !== null) ? reportsCount : '\u2014';
+    if (elCollections) elCollections.textContent = (collectionsCount !== null) ? collectionsCount : '\u2014';
+
+    // --- Update broadcast banner ---
+    var broadcastPill = document.getElementById('broadcastPill');
+    var broadcastText = document.getElementById('broadcastText');
+    if (settings && settings.broadcasts && settings.broadcasts.length > 0) {
+      var latest = settings.broadcasts[settings.broadcasts.length - 1];
+      var msg = (typeof latest === 'string') ? latest : (latest.message || latest.text || JSON.stringify(latest));
+      if (broadcastText) broadcastText.textContent = msg;
+    } else if (settings === null) {
+      // API failed — keep default text
+    } else {
+      // API returned but no broadcasts — hide the pill
+      if (broadcastPill) broadcastPill.style.display = 'none';
+    }
+
+    // --- Hero Slide 1: Latest Report ---
+    var report = Array.isArray(latestReport) ? latestReport[0] : (latestReport && latestReport.items ? latestReport.items[0] : latestReport);
+    var rtTitle = document.getElementById('heroReportTitle');
+    var rtDesc = document.getElementById('heroReportDesc');
+    var rtMeta = document.getElementById('heroReportMeta');
+    if (report && report.title) {
+      if (rtTitle) rtTitle.textContent = report.title;
+      if (rtDesc) rtDesc.textContent = truncate(report.description || report.summary || 'No description available.', 200);
+      if (rtMeta) {
+        var metaHtml = '';
+        if (report.region) metaHtml += '<span><strong>Region:</strong> ' + report.region + '</span>';
+        metaHtml += '<span><strong>Date:</strong> ' + formatDate(report.created_at || report.date) + '</span>';
+        if (report.classification) metaHtml += '<span class="classification">' + report.classification + '</span>';
+        rtMeta.innerHTML = metaHtml || '<span>&nbsp;</span>';
+      }
+    } else {
+      if (rtTitle) rtTitle.textContent = _t('home.hero.no_reports', 'No reports yet');
+      if (rtDesc) rtDesc.textContent = _t('home.hero.no_reports_desc', 'Upload your first PDF to get started.');
+      if (rtMeta) rtMeta.innerHTML = '<span><a href="reports-browse.html" style="color:var(--accent);">' + _t('home.hero.go_to_reports', 'Go to Reports') + ' &rarr;</a></span>';
+    }
+
+    // --- Hero Slide 2: Latest Collection ---
+    var coll = Array.isArray(latestCollection) ? latestCollection[0] : (latestCollection && latestCollection.items ? latestCollection.items[0] : latestCollection);
+    var ctTitle = document.getElementById('heroCollectionTitle');
+    var ctDesc = document.getElementById('heroCollectionDesc');
+    var ctMeta = document.getElementById('heroCollectionMeta');
+    if (coll && (coll.name || coll.title)) {
+      if (ctTitle) ctTitle.textContent = coll.name || coll.title;
+      if (ctDesc) ctDesc.textContent = truncate(coll.description || 'Collection available for viewing.', 200);
+      if (ctMeta) {
+        var cMetaHtml = '';
+        if (coll.sensor || coll.source) cMetaHtml += '<span><strong>Sensor:</strong> ' + (coll.sensor || coll.source) + '</span>';
+        cMetaHtml += '<span><strong>Date:</strong> ' + formatDate(coll.created_at || coll.date) + '</span>';
+        if (coll.frame_count || coll.count) cMetaHtml += '<span><strong>Frames:</strong> ' + (coll.frame_count || coll.count) + '</span>';
+        ctMeta.innerHTML = cMetaHtml || '<span>&nbsp;</span>';
+      }
+    } else {
+      if (ctTitle) ctTitle.textContent = _t('home.hero.no_collections', 'No collections yet');
+      if (ctDesc) ctDesc.textContent = _t('home.hero.no_collections_desc', 'Ingest your first satellite imagery collection.');
+      if (ctMeta) ctMeta.innerHTML = '<span><a href="collections-browse.html" style="color:var(--accent);">' + _t('home.hero.go_to_collections', 'Go to Collections') + ' &rarr;</a></span>';
+    }
+
+    // --- Hero Slide 3: System Announcement ---
+    var atTitle = document.getElementById('heroAnnouncementTitle');
+    var atDesc = document.getElementById('heroAnnouncementDesc');
+    var atMeta = document.getElementById('heroAnnouncementMeta');
+    if (settings && settings.broadcasts && settings.broadcasts.length > 0) {
+      var ann = settings.broadcasts[settings.broadcasts.length - 1];
+      if (typeof ann === 'string') {
+        if (atTitle) atTitle.textContent = 'System Broadcast';
+        if (atDesc) atDesc.textContent = ann;
+        if (atMeta) atMeta.innerHTML = '<span><strong>By:</strong> System Admin</span>';
+      } else {
+        if (atTitle) atTitle.textContent = ann.title || 'System Broadcast';
+        if (atDesc) atDesc.textContent = truncate(ann.message || ann.text || '', 200);
+        if (atMeta) {
+          var aMetaHtml = '';
+          if (ann.created_at || ann.date) aMetaHtml += '<span><strong>Posted:</strong> ' + formatDate(ann.created_at || ann.date) + '</span>';
+          if (ann.author) aMetaHtml += '<span><strong>By:</strong> ' + ann.author + '</span>';
+          atMeta.innerHTML = aMetaHtml || '<span><strong>By:</strong> System Admin</span>';
+        }
+      }
+    } else {
+      if (atTitle) atTitle.textContent = _t('home.hero.no_announcements', 'No announcements');
+      if (atDesc) atDesc.textContent = _t('home.hero.no_announcements_desc', 'System is operational. No current broadcasts.');
+      if (atMeta) atMeta.innerHTML = '<span><strong>' + _t('common.status', 'Status') + ':</strong> ' + _t('common.all_systems_normal', 'All systems normal') + '</span>';
+    }
+  })();
+
+})();
+
+// ======================== AI ASSISTANT (dormant stub) ========================
+// A complete UI seam for a future LLM assistant. While window.ABYSS_AI_ENABLED
+// is falsy it just acknowledges input; flip the flag and implement POST /api/chat
+// to bring it live — no other change needed here.
+window.AbyssAssistant = (function () {
+  var panel, body, input, empty;
+  function isOpen() { return panel && panel.classList.contains('open'); }
+  function open() {
+    if (!panel) return;
+    panel.classList.add('open');
+    panel.setAttribute('aria-hidden', 'false');
+    setTimeout(function () { if (input) input.focus(); }, 320);
+  }
+  function close() {
+    if (!panel) return;
+    panel.classList.remove('open');
+    panel.setAttribute('aria-hidden', 'true');
+  }
+  function toggle() { isOpen() ? close() : open(); }
+  function addMsg(role, text) {
+    if (empty) empty.style.display = 'none';
+    var m = document.createElement('div');
+    m.className = 'assistant-msg ' + (role === 'user' ? 'from-user' : 'from-ai');
+    m.textContent = text;
+    body.appendChild(m);
+    body.scrollTop = body.scrollHeight;
+  }
+  function ask(query) {
+    query = (query || '').trim();
+    if (!query) return;
+    addMsg('user', query);
+    if (!window.ABYSS_AI_ENABLED) {
+      addMsg('ai', 'The Abyss assistant isn’t enabled yet — it’s coming soon. Your question was noted.');
+      return;
+    }
+    var af = (window.AbyssAuth && AbyssAuth.authFetch) ? AbyssAuth.authFetch : function (u, o) { return fetch(u, o); };
+    af('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: query })
+    }).then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) { addMsg('ai', (d && (d.reply || d.message || d.content)) || 'No response.'); })
+      .catch(function () { addMsg('ai', 'Assistant is unavailable right now.'); });
+  }
+  function init() {
+    panel = document.getElementById('assistantPanel');
+    if (!panel) return;
+    body = document.getElementById('assistantBody');
+    input = document.getElementById('assistantInput');
+    empty = document.getElementById('assistantEmpty');
+    var closeBtn = document.getElementById('assistantClose');
+    var sendBtn = document.getElementById('assistantSend');
+    if (closeBtn) closeBtn.addEventListener('click', close);
+    if (sendBtn) sendBtn.addEventListener('click', function () { var q = input.value; input.value = ''; ask(q); });
+    if (input) input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { var q = input.value; input.value = ''; ask(q); } });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && isOpen()) close(); });
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+  return { open: open, close: close, toggle: toggle, ask: ask, init: init };
+})();
+
+// ======================== I18N TRANSLATION LOADER ========================
+(function() {
+  var lang = localStorage.getItem('glyph_lang') || 'en';
+  if (lang === 'en') return;
+
+  fetch('/libs/i18n/' + lang + '.json')
+    .then(function(r) { return r.ok ? r.json() : null; })
+    .then(function(tr) {
+      if (!tr) return;
+
+      // Expose globally for _t() helper used by dashboard data loader
+      window.GlyphI18n = {
+        t: function(key) { return tr[key] || key; },
+        translations: function() { return tr; },
+        isRTL: function() { return document.documentElement.getAttribute('dir') === 'rtl'; },
+        apply: function() { applyTr(tr); }
+      };
+
+      applyTr(tr);
+
+      function applyTr(translations) {
+        // data-i18n: replace text content
+        document.querySelectorAll('[data-i18n]').forEach(function(el) {
+          var key = el.getAttribute('data-i18n');
+          if (!translations[key]) return;
+          if (el.childElementCount === 0) {
+            el.textContent = translations[key];
+          } else {
+            // Replace last text node (preserves child SVGs)
+            var nodes = el.childNodes;
+            for (var i = nodes.length - 1; i >= 0; i--) {
+              if (nodes[i].nodeType === 3 && nodes[i].textContent.trim()) {
+                nodes[i].textContent = ' ' + translations[key];
+                break;
+              }
+            }
+          }
+        });
+
+        // data-i18n-placeholder
+        document.querySelectorAll('[data-i18n-placeholder]').forEach(function(el) {
+          var key = el.getAttribute('data-i18n-placeholder');
+          if (translations[key]) el.placeholder = translations[key];
+        });
+      }
+    })
+    .catch(function() {});
+})();
+</script>
+
+<!-- Global upload queue: tray UI + beforeunload guard. Loaded on master-home so
+     the tray follows the user across pages within a session. -->
+<script src="/libs/glyph-upload-queue.js"></script>
+
+</body>
+</html>
