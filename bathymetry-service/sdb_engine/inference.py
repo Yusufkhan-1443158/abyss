@@ -104,13 +104,27 @@ def _cluster_sigma(cluster: np.ndarray, meta: Dict) -> np.ndarray:
     return sigma
 
 
+def _coastline_cut(water: np.ndarray, bbox4326) -> tuple:
+    """Union the vendored vector-coastline LAND into `water` (land-authoritative:
+    only removes water, never adds). Returns (water, info_or_None)."""
+    if bbox4326 is None:
+        return water, None
+    from .coastline_mask import coastline_land_for
+    land, info = coastline_land_for(bbox4326, water.shape)
+    if land is not None:
+        water = water & ~land
+    return water, info
+
+
 def infer(bands: np.ndarray, band_names: Optional[List[str]] = None,
           max_depth: float = MAX_DEPTH_M, resolution_m: float = 10.0,
-          src_dtype=None) -> Dict:
+          src_dtype=None, bbox4326=None) -> Dict:
     """Full inference: {'depth', 'sigma', 'method', 'calibrated', ...}.
 
     `src_dtype` is the on-disk dtype of the source raster (callers often cast
-    to float before handing bands over); it disambiguates 8-bit imagery."""
+    to float before handing bands over); it disambiguates 8-bit imagery.
+    `bbox4326` ([w, s, e, n]) enables the vector-coastline land cut where a
+    committed regional GPKG covers the area."""
     bands = np.asarray(bands)
     if bands.ndim != 3:
         raise ValueError(f"expected (C, H, W) bands, got shape {bands.shape}")
@@ -121,14 +135,17 @@ def infer(bands: np.ndarray, band_names: Optional[List[str]] = None,
 
     has_nir = "nir" in named
     if has_nir:
-        return _infer_multispectral(named, max_depth, dn_scale, resolution_m)
-    return _infer_rgb_fallback(named, max_depth, dn_scale)
+        return _infer_multispectral(named, max_depth, dn_scale, resolution_m,
+                                    bbox4326=bbox4326)
+    return _infer_rgb_fallback(named, max_depth, dn_scale, bbox4326=bbox4326)
 
 
-def _infer_multispectral(named, max_depth, dn_scale, resolution_m) -> Dict:
+def _infer_multispectral(named, max_depth, dn_scale, resolution_m,
+                         bbox4326=None) -> Dict:
     from . import uae_rf, uae_cnn
 
     water, ndwi = ndwi_water_mask(named["green"], named["nir"])
+    water, coast_info = _coastline_cut(water, bbox4326)
     s2 = {
         "blue": named["blue"], "green": named["green"], "red": named["red"],
         "coastal": named.get("coastal", named["blue"]), "nir": named["nir"],
@@ -166,6 +183,13 @@ def _infer_multispectral(named, max_depth, dn_scale, resolution_m) -> Dict:
     sigma = np.where(np.isfinite(depth), sigma, np.nan).astype(np.float32)
 
     valid = np.isfinite(depth)
+    mask = {
+        "kind": "ndwi",
+        "water_pct": round(100.0 * float(water.mean()), 1),
+        "otsu_threshold_diagnostic": ndwi_otsu_threshold(ndwi),
+    }
+    if coast_info is not None:
+        mask["coastline"] = coast_info
     return {
         "depth": depth.astype(np.float32),
         "sigma": sigma,
@@ -180,26 +204,29 @@ def _infer_multispectral(named, max_depth, dn_scale, resolution_m) -> Dict:
         "max_depth_m": float(max_depth),
         "band_mapping": sorted(named.keys()),
         "dn_scale_applied": dn_scale,
-        "mask": {
-            "kind": "ndwi",
-            "water_pct": round(100.0 * float(water.mean()), 1),
-            "otsu_threshold_diagnostic": ndwi_otsu_threshold(ndwi),
-        },
+        "mask": mask,
         "n_valid": int(valid.sum()),
     }
 
 
-def _infer_rgb_fallback(named, max_depth, dn_scale) -> Dict:
+def _infer_rgb_fallback(named, max_depth, dn_scale, bbox4326=None) -> Dict:
     b = np.asarray(named["blue"], dtype=np.float64)
     r = np.asarray(named["red"], dtype=np.float64)
     bwi = (b - r) / (b + r + 1e-9)
     water = np.isfinite(bwi) & (bwi > 0.05)
+    water, coast_info = _coastline_cut(water, bbox4326)
 
     ratio = stumpf_log_ratio(named["blue"], named["green"])
     depth = percentile_stumpf(ratio, water, max_depth=max_depth)
     depth = np.where(water, depth, np.nan).astype(np.float32)
     valid = np.isfinite(depth)
 
+    mask = {
+        "kind": "blue_water_index",
+        "water_pct": round(100.0 * float(water.mean()), 1),
+    }
+    if coast_info is not None:
+        mask["coastline"] = coast_info
     return {
         "depth": depth,
         "sigma": None,
@@ -215,10 +242,7 @@ def _infer_rgb_fallback(named, max_depth, dn_scale) -> Dict:
         "max_depth_m": float(max_depth),
         "band_mapping": sorted(named.keys()),
         "dn_scale_applied": dn_scale,
-        "mask": {
-            "kind": "blue_water_index",
-            "water_pct": round(100.0 * float(water.mean()), 1),
-        },
+        "mask": mask,
         "n_valid": int(valid.sum()),
     }
 

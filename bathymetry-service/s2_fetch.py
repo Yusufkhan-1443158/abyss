@@ -50,10 +50,12 @@ def _cache_client():
     )
 
 
-def _cache_key(bbox, start_date, end_date, max_cloud, max_px):
+def _cache_key(bbox, start_date, end_date, max_cloud, max_px, scene_id=None):
     w, s, e, n = bbox
     raw = (f"{round(w, 5)},{round(s, 5)},{round(e, 5)},{round(n, 5)}"
            f"|{start_date}|{end_date}|{max_cloud}|{max_px}")
+    if scene_id:
+        raw += f"|{scene_id}"
     return "s2_" + hashlib.sha1(raw.encode()).hexdigest()[:24] + ".npz"
 
 
@@ -124,62 +126,14 @@ def _read_band(href, dst_crs, dst_transform, width, height, resampling):
             return vrt.read(1)
 
 
-def fetch_s2(bbox, start_date="2023-01-01", end_date="2024-12-31",
-             max_cloud=40, max_px=1024, use_cache=True):
-    """Fetch a least-cloudy Sentinel-2 L2A scene for bbox=[W,S,E,N].
-
-    Cached: the warped band stack for a given (area, dates, cloud, resolution)
-    is stored in MinIO and reused on subsequent calls — so repeat surveys and
-    re-inference after a model change never re-pull from Planetary Computer.
-    """
-    cache_client = None
-    cache_obj = _cache_key(bbox, start_date, end_date, max_cloud, max_px)
-    if use_cache:
-        try:
-            cache_client = _cache_client()
-            if not cache_client.bucket_exists(S2_CACHE_BUCKET):
-                cache_client.make_bucket(S2_CACHE_BUCKET)
-            try:
-                resp = cache_client.get_object(S2_CACHE_BUCKET, cache_obj)
-                try:
-                    blob = resp.read()
-                finally:
-                    resp.close()
-                    resp.release_conn()
-                log.info("S2 cache HIT %s (no re-pull)", cache_obj)
-                return _deserialize_s2(blob)
-            except Exception:
-                log.info("S2 cache MISS %s — fetching from Planetary Computer", cache_obj)
-        except Exception as ex:
-            log.warning("S2 cache unavailable (%s) — fetching live", ex)
-            cache_client = None
-
-    try:
-        import planetary_computer as pc
-        import pystac_client
-        from rasterio.enums import Resampling
-    except Exception as ex:  # pragma: no cover
-        raise S2FetchError(f"S2 deps unavailable: {ex}")
+def _warp_item(item, bbox, max_px):
+    """Warp one signed STAC item's bands onto the bbox target grid and build
+    the s2 dict (bands, NDWI, water mask, georef). Shared by the single-scene
+    and multi-scene fetch paths — output identical to the original inline code."""
+    from rasterio.enums import Resampling
 
     w, s, e, n = bbox
-    cat = pystac_client.Client.open(PC_STAC, modifier=pc.sign_inplace)
-    search = cat.search(
-        collections=[COLLECTION],
-        bbox=[w, s, e, n],
-        datetime=f"{start_date}/{end_date}",
-        query={"eo:cloud_cover": {"lt": max_cloud}},
-        sortby=[{"field": "properties.eo:cloud_cover", "direction": "asc"}],
-        max_items=10,
-    )
-    items = list(search.items())
-    if not items:
-        raise S2FetchError(
-            f"No Sentinel-2 scene with cloud<{max_cloud}% for bbox {bbox} "
-            f"in {start_date}..{end_date}. Try a wider date range / cloud limit.")
-    item = items[0]
     cloud = item.properties.get("eo:cloud_cover")
-    log.info("S2 scene %s cloud=%.1f%%", item.id, cloud or -1)
-
     width, height, transform = _target_grid(bbox, max_px=max_px)
     dst_crs = "EPSG:4326"
 
@@ -233,7 +187,7 @@ def fetch_s2(bbox, start_date="2023-01-01", end_date="2024-12-31",
         water = ndwi > 0.1
     water_mask = water.astype(bool)
 
-    s2 = {
+    return {
         "blue": bands["blue"], "green": green, "red": bands["red"],
         "nir": nir, "coastal": bands.get("coastal", bands["blue"]),
         "ndwi": ndwi, "water_mask": water_mask,
@@ -242,6 +196,65 @@ def fetch_s2(bbox, start_date="2023-01-01", end_date="2024-12-31",
         "scene_id": item.id, "cloud_cover": cloud,
         "acquired": item.properties.get("datetime"),
     }
+
+
+def fetch_s2(bbox, start_date="2023-01-01", end_date="2024-12-31",
+             max_cloud=40, max_px=1024, use_cache=True):
+    """Fetch a least-cloudy Sentinel-2 L2A scene for bbox=[W,S,E,N].
+
+    Cached: the warped band stack for a given (area, dates, cloud, resolution)
+    is stored in MinIO and reused on subsequent calls — so repeat surveys and
+    re-inference after a model change never re-pull from Planetary Computer.
+    """
+    cache_client = None
+    cache_obj = _cache_key(bbox, start_date, end_date, max_cloud, max_px)
+    if use_cache:
+        try:
+            cache_client = _cache_client()
+            if not cache_client.bucket_exists(S2_CACHE_BUCKET):
+                cache_client.make_bucket(S2_CACHE_BUCKET)
+            try:
+                resp = cache_client.get_object(S2_CACHE_BUCKET, cache_obj)
+                try:
+                    blob = resp.read()
+                finally:
+                    resp.close()
+                    resp.release_conn()
+                log.info("S2 cache HIT %s (no re-pull)", cache_obj)
+                return _deserialize_s2(blob)
+            except Exception:
+                log.info("S2 cache MISS %s — fetching from Planetary Computer", cache_obj)
+        except Exception as ex:
+            log.warning("S2 cache unavailable (%s) — fetching live", ex)
+            cache_client = None
+
+    try:
+        import planetary_computer as pc
+        import pystac_client
+        from rasterio.enums import Resampling
+    except Exception as ex:  # pragma: no cover
+        raise S2FetchError(f"S2 deps unavailable: {ex}")
+
+    w, s, e, n = bbox
+    cat = pystac_client.Client.open(PC_STAC, modifier=pc.sign_inplace)
+    search = cat.search(
+        collections=[COLLECTION],
+        bbox=[w, s, e, n],
+        datetime=f"{start_date}/{end_date}",
+        query={"eo:cloud_cover": {"lt": max_cloud}},
+        sortby=[{"field": "properties.eo:cloud_cover", "direction": "asc"}],
+        max_items=10,
+    )
+    items = list(search.items())
+    if not items:
+        raise S2FetchError(
+            f"No Sentinel-2 scene with cloud<{max_cloud}% for bbox {bbox} "
+            f"in {start_date}..{end_date}. Try a wider date range / cloud limit.")
+    item = items[0]
+    log.info("S2 scene %s cloud=%.1f%%",
+             item.id, item.properties.get("eo:cloud_cover") or -1)
+
+    s2 = _warp_item(item, bbox, max_px)
 
     # Store the warped band stack so this ROI never re-pulls (model-independent).
     if use_cache and cache_client is not None:
@@ -255,3 +268,89 @@ def fetch_s2(bbox, start_date="2023-01-01", end_date="2024-12-31",
             log.warning("S2 cache store failed: %s", ex)
 
     return s2
+
+
+def fetch_s2_scenes(bbox, start_date="2023-01-01", end_date="2024-12-31",
+                    max_cloud=40, n_scenes=3, max_px=1024, use_cache=True):
+    """Fetch up to `n_scenes` distinct-date Sentinel-2 L2A scenes for
+    bbox=[W,S,E,N], cloud-ascending. Same STAC search as fetch_s2; each scene's
+    warped band stack is cached per (area, dates, cloud, resolution, scene_id).
+    Returns a non-empty list of s2 dicts (raises S2FetchError otherwise)."""
+    try:
+        import planetary_computer as pc
+        import pystac_client
+    except Exception as ex:  # pragma: no cover
+        raise S2FetchError(f"S2 deps unavailable: {ex}")
+
+    n_scenes = max(1, int(n_scenes))
+    w, s, e, n = bbox
+    cat = pystac_client.Client.open(PC_STAC, modifier=pc.sign_inplace)
+    search = cat.search(
+        collections=[COLLECTION],
+        bbox=[w, s, e, n],
+        datetime=f"{start_date}/{end_date}",
+        query={"eo:cloud_cover": {"lt": max_cloud}},
+        sortby=[{"field": "properties.eo:cloud_cover", "direction": "asc"}],
+        max_items=max(10, n_scenes * 5),
+    )
+    items = list(search.items())
+    if not items:
+        raise S2FetchError(
+            f"No Sentinel-2 scene with cloud<{max_cloud}% for bbox {bbox} "
+            f"in {start_date}..{end_date}. Try a wider date range / cloud limit.")
+
+    picked, seen_dates = [], set()
+    for item in items:
+        day = str(item.properties.get("datetime") or item.id)[:10]
+        if day in seen_dates:
+            continue
+        seen_dates.add(day)
+        picked.append(item)
+        if len(picked) >= n_scenes:
+            break
+
+    cache_client = None
+    if use_cache:
+        try:
+            cache_client = _cache_client()
+            if not cache_client.bucket_exists(S2_CACHE_BUCKET):
+                cache_client.make_bucket(S2_CACHE_BUCKET)
+        except Exception as ex:
+            log.warning("S2 cache unavailable (%s) — fetching live", ex)
+            cache_client = None
+
+    scenes = []
+    for item in picked:
+        cache_obj = _cache_key(bbox, start_date, end_date, max_cloud, max_px,
+                               scene_id=item.id)
+        if cache_client is not None:
+            try:
+                resp = cache_client.get_object(S2_CACHE_BUCKET, cache_obj)
+                try:
+                    blob = resp.read()
+                finally:
+                    resp.close()
+                    resp.release_conn()
+                log.info("S2 cache HIT %s (%s)", cache_obj, item.id)
+                scenes.append(_deserialize_s2(blob))
+                continue
+            except Exception:
+                pass
+        try:
+            s2 = _warp_item(item, bbox, max_px)
+        except S2FetchError as ex:
+            log.warning("scene %s skipped: %s", item.id, ex)
+            continue
+        scenes.append(s2)
+        if cache_client is not None:
+            try:
+                blob = _serialize_s2(s2)
+                cache_client.put_object(
+                    S2_CACHE_BUCKET, cache_obj, io.BytesIO(blob), length=len(blob),
+                    content_type="application/octet-stream")
+            except Exception as ex:
+                log.warning("S2 cache store failed: %s", ex)
+
+    if not scenes:
+        raise S2FetchError("no usable Sentinel-2 scene could be read for the ROI")
+    return scenes

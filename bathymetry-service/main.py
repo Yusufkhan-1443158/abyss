@@ -118,6 +118,71 @@ class InferRequest(BaseModel):
     source_bucket: str | None = None
     source_key: str | None = None
     max_depth: float | None = None
+    # ISO 8601 UTC acquisition time (ingested path) — enables tide correction.
+    acquisition_datetime: str | None = None
+    # ROI path: number of scenes to composite (1 = single least-cloudy scene).
+    n_scenes: int = 1
+
+
+class ValidateRequest(BaseModel):
+    raster_id: str | None = None
+    predicted: list | None = None
+    observed: list
+    max_match_m: float | None = None
+    resolution_m: float | None = None
+    observed_vertical_datum: str | None = None
+    predicted_vertical_datum: str | None = None
+
+
+def _parse_utc(value):
+    """ISO 8601 string -> aware UTC datetime, or None."""
+    from datetime import datetime, timezone
+    if not value:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+    except (ValueError, TypeError):
+        return None
+
+
+def _tide_correct(depth, bbox, acquired_iso):
+    """Apply the Open-Meteo tide correction when enabled and the acquisition
+    time parses. Returns (depth, tide_block) — depth unchanged unless the API
+    delivered a height."""
+    if os.getenv("TIDE_CORRECTION", "1") in ("0", "false", "no"):
+        return depth, {"applied": False, "applied_m": 0.0, "method": "disabled",
+                       "utc": None, "datum": "uncorrected",
+                       "reason": "disabled by TIDE_CORRECTION=0"}
+    utc_dt = _parse_utc(acquired_iso)
+    if utc_dt is None:
+        return depth, {"applied": False, "applied_m": 0.0, "method": "none",
+                       "utc": None, "datum": "uncorrected",
+                       "reason": "acquisition time unknown"}
+    from tide import apply_tide_correction
+    corr, tide_m, info = apply_tide_correction(depth, bbox, utc_dt,
+                                               max_depth_m=MAX_DEPTH_M)
+    if info.get("method") == "open-meteo/cmems":
+        return corr, {"applied": True, "applied_m": float(tide_m),
+                      "method": info["method"], "utc": info.get("utc"),
+                      "datum": "MSL",
+                      "tide_range_that_day_m": info.get("tide_range_that_day_m")}
+    return depth, {"applied": False, "applied_m": 0.0,
+                   "method": info.get("method", "unavailable"),
+                   "utc": info.get("utc"), "datum": "uncorrected",
+                   "reason": info.get("reason", "tide API unavailable")}
+
+
+def _coastline_cut_grids(bbox, depth, grids=()):
+    """NaN out vector-coastline land on `depth` (+ companion grids). Returns
+    (depth, grids, info) — unchanged outside the committed regions."""
+    from sdb_engine.coastline_mask import coastline_land_for
+    land, info = coastline_land_for(bbox, depth.shape)
+    if land is not None and land.any():
+        depth = np.where(land, np.nan, depth)
+        grids = tuple(None if g is None else np.where(land, np.nan, g)
+                      for g in grids)
+    return depth, grids, info
 
 
 def _parse_bbox(bbox):
@@ -276,7 +341,8 @@ def _infer_from_raster(reqp: InferRequest, bbox):
     try:
         result = sdb_engine.infer(bands, band_names=names,
                                   max_depth=min(max_depth, MAX_DEPTH_M),
-                                  resolution_m=res_m, src_dtype=src_dtype)
+                                  resolution_m=res_m, src_dtype=src_dtype,
+                                  bbox4326=bbox4326)
     except ValueError as ex:
         raise HTTPException(status_code=422, detail=str(ex))
     except Exception as ex:
@@ -287,6 +353,14 @@ def _infer_from_raster(reqp: InferRequest, bbox):
     if not np.isfinite(depth).any():
         raise HTTPException(status_code=422,
                             detail="No valid water pixels in the source raster.")
+
+    sigma = result.get("sigma")
+    if reqp.acquisition_datetime:
+        depth, tide = _tide_correct(depth, bbox4326, reqp.acquisition_datetime)
+    else:
+        tide = {"applied": False, "applied_m": 0.0, "method": "none",
+                "utc": None, "datum": "uncorrected",
+                "reason": "acquisition time unknown"}
 
     _ensure_bucket(client, DEPTH_BUCKET)
     extra = {
@@ -301,9 +375,66 @@ def _infer_from_raster(reqp: InferRequest, bbox):
         "iho_s44_pct": {},
         "holdout_metrics": {},
         "source": {"bucket": reqp.source_bucket, "key": reqp.source_key},
+        "tide": tide,
     }
-    return _products_payload(client, reqp.raster_id, depth, result.get("sigma"),
+    return _products_payload(client, reqp.raster_id, depth, sigma,
                              transform, crs, bbox4326, extra)
+
+
+def _sample_depth_raster(raster_id: str, max_points: int = 200_000) -> list:
+    """Read depth/{raster_id}/depth.tif from MinIO and sample its valid pixels
+    to {lat, lon, depth} triples (strided so <= max_points)."""
+    client = _minio()
+    try:
+        obj = client.get_object(DEPTH_BUCKET, f"{raster_id}/depth.tif")
+        blob = obj.read()
+        obj.close()
+        obj.release_conn()
+    except Exception as ex:
+        raise HTTPException(status_code=404,
+                            detail=f"depth product unavailable for raster "
+                                   f"{raster_id}: {ex}")
+    with MemoryFile(blob) as mem, mem.open() as src:
+        depth = src.read(1, masked=True).astype(np.float32).filled(np.nan)
+        transform = src.transform
+    valid = np.isfinite(depth) & (depth > 0)
+    n_valid = int(valid.sum())
+    if n_valid == 0:
+        raise HTTPException(status_code=422,
+                            detail="depth product has no valid pixels")
+    from rasterio.transform import xy
+    stride = max(1, int(math.ceil(math.sqrt(n_valid / float(max_points)))))
+    rows, cols = np.nonzero(valid)
+    keep = (rows % stride == 0) & (cols % stride == 0)
+    rows, cols = rows[keep], cols[keep]
+    xs, ys = xy(transform, rows, cols)
+    return [{"lat": float(y), "lon": float(x), "depth": float(depth[r, c])}
+            for r, c, x, y in zip(rows, cols, xs, ys)]
+
+
+@app.post("/bathymetry/validate")
+def validate(reqp: ValidateRequest):
+    """IHO S-44 validation of a depth product against reference soundings."""
+    from validation import validate_points, ValidationError
+
+    predicted = reqp.predicted
+    if predicted is None and reqp.raster_id:
+        predicted = _sample_depth_raster(reqp.raster_id)
+    if predicted is None:
+        raise HTTPException(status_code=400,
+                            detail="provide 'predicted' points or a 'raster_id' "
+                                   "with a stored depth product")
+    try:
+        result = validate_points(
+            predicted, reqp.observed,
+            max_match_m=reqp.max_match_m or 50.0,
+            resolution_m=reqp.resolution_m,
+            observed_vertical_datum=reqp.observed_vertical_datum,
+            predicted_vertical_datum=reqp.predicted_vertical_datum or "LAT",
+        )
+    except ValidationError as ex:
+        raise HTTPException(status_code=400, detail=str(ex))
+    return _clean(result)
 
 
 @app.post("/bathymetry/infer")
@@ -318,26 +449,93 @@ def infer(reqp: InferRequest):
         raise HTTPException(status_code=400,
                             detail="bbox required: {west,south,east,north} or [w,s,e,n]")
 
+    n_scenes = max(1, min(int(reqp.n_scenes or 1), 5))
+
     # 1. Free Sentinel-2 L2A for the ROI.
-    from s2_fetch import fetch_s2, S2FetchError
+    from s2_fetch import fetch_s2, fetch_s2_scenes, S2FetchError
     try:
-        s2 = fetch_s2(bbox, reqp.start_date, reqp.end_date, max_cloud=reqp.max_cloud)
+        if n_scenes == 1:
+            scenes = [fetch_s2(bbox, reqp.start_date, reqp.end_date,
+                               max_cloud=reqp.max_cloud)]
+        else:
+            scenes = fetch_s2_scenes(bbox, reqp.start_date, reqp.end_date,
+                                     max_cloud=reqp.max_cloud, n_scenes=n_scenes)
     except S2FetchError as ex:
         raise HTTPException(status_code=422, detail=str(ex))
     except Exception as ex:
         log.exception("S2 fetch failed")
         raise HTTPException(status_code=502, detail=f"S2 fetch failed: {ex}")
 
-    # 2. DL-Pro inference (verbatim engine).
+    # 2. DL-Pro inference (verbatim engine), once per scene.
     try:
         from dl_pro_engine import predict_dl_pro
-        result = predict_dl_pro(s2, bbox=bbox)
+        scene_runs = [(s2, predict_dl_pro(s2, bbox=bbox)) for s2 in scenes]
     except Exception as ex:
         log.exception("DL-Pro inference failed")
         raise HTTPException(status_code=500, detail=f"inference failed: {ex}")
 
-    depth = result["depth"]                       # (H,W) float32, NaN on land
+    composite_block = None
+    if n_scenes == 1:
+        s2, result = scene_runs[0]
+        depth = result["depth"]                   # (H,W) float32, NaN on land
+        sigma_src = result.get("sigma_eff")
+        if sigma_src is None:
+            sigma_src = result.get("sigma")
+        depth, tide = _tide_correct(depth, bbox, s2.get("acquired"))
+    else:
+        # 2b. Per-scene tide correction + inverse-variance composite.
+        from composite import compose
+        entries, tide_blocks = [], []
+        for s2_i, r_i in scene_runs:
+            d_i, tb = _tide_correct(r_i["depth"], bbox, s2_i.get("acquired"))
+            tide_blocks.append(tb)
+            sig = r_i.get("sigma_eff")
+            if sig is None:
+                sig = r_i.get("sigma")
+            if sig is None:
+                holdout_rmse = ((r_i.get("model_meta") or {})
+                                .get("holdout_metrics") or {}).get("rmse")
+                sig = float(holdout_rmse or 1.5)
+            glint = None
+            nir, wmask = s2_i.get("nir"), s2_i.get("water_mask")
+            if nir is not None and wmask is not None:
+                wmask = np.asarray(wmask, bool)
+                if wmask.any():
+                    glint = float(np.nanmean(
+                        np.asarray(nir, np.float64)[wmask])) / 10000.0
+            entries.append({
+                "depth": d_i, "sigma": sig,
+                "scene_id": s2_i.get("scene_id"),
+                "acquired": s2_i.get("acquired"),
+                "cloud_cover": s2_i.get("cloud_cover"),
+                "glint": glint,
+                "tide_m": tb.get("applied_m") if tb.get("applied") else None,
+            })
+        comp = compose(entries)
+        depth, sigma_src = comp["depth"], comp["sigma"]
+        composite_block = comp["agreement"]
+        kept_idx = [i for i, p in enumerate(composite_block["per_scene"])
+                    if p["kept"]]
+        s2, result = scene_runs[kept_idx[0]]
+        kept_tides = [tide_blocks[i] for i in kept_idx]
+        if all(t["applied"] for t in kept_tides):
+            tide = {"applied": True,
+                    "applied_m": round(float(np.mean(
+                        [t["applied_m"] for t in kept_tides])), 3),
+                    "method": "open-meteo/cmems (per scene)",
+                    "utc": kept_tides[0].get("utc"), "datum": "MSL"}
+        else:
+            reasons = {t.get("reason") for t in kept_tides if not t["applied"]}
+            tide = {"applied": False, "applied_m": 0.0,
+                    "method": "none", "utc": None, "datum": "uncorrected",
+                    "reason": "; ".join(sorted(r for r in reasons if r))
+                              or "tide unavailable for one or more scenes"}
+
     transform = s2["transform"]
+
+    # 3. Vector-coastline land cut (authoritative for land only).
+    depth, (sigma_src,), coast_info = _coastline_cut_grids(bbox, depth,
+                                                           (sigma_src,))
     if not np.isfinite(depth).any():
         raise HTTPException(status_code=422,
                             detail="No valid water pixels in the ROI scene.")
@@ -348,9 +546,6 @@ def infer(reqp: InferRequest):
     iho = {k: round(float(v), 1) for k, v in (result.get("iho_s44") or {}).items()}
     mm = result.get("model_meta", {})
     holdout = mm.get("holdout_metrics", {})
-    sigma_src = result.get("sigma_eff")
-    if sigma_src is None:
-        sigma_src = result.get("sigma")
 
     extra = {
         "model": MODEL_NAME,
@@ -362,6 +557,10 @@ def infer(reqp: InferRequest):
         "scene_id": s2.get("scene_id"),
         "cloud_cover": s2.get("cloud_cover"),
         "acquired": s2.get("acquired"),
+        "tide": tide,
+        "mask_coastline": coast_info,
     }
+    if composite_block is not None:
+        extra["composite"] = composite_block
     return _products_payload(client, reqp.raster_id, depth, sigma_src,
                              transform, "EPSG:4326", bbox, extra)
