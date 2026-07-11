@@ -29,7 +29,39 @@ def _summary_text(site: str, stats: dict, model: str) -> str:
     )
 
 
-def _methodology_text(model: str) -> str:
+def _methodology_text(model: str, infer_data: dict | None = None) -> str:
+    d = infer_data or {}
+    calib = d.get("calibration") or {}
+    if model == "uae-sdb-ensemble":
+        return (
+            "Satellite-Derived Bathymetry (SDB). Per-pixel depth is estimated from the "
+            "ingested scene's own multispectral bands by a cluster ensemble (K-means "
+            "optical-regime clustering with per-cluster Random Forest and MLP "
+            "regressors) over a 13-feature spectral stack: raw reflectances, Lyzenga "
+            "log-bands and depth-invariant index, Stumpf blue/green and blue/red "
+            "log-ratios, and NDWI. Land is cut with an NDWI water mask; output is "
+            "clamped to 0–25 m and colour-mapped (shallow cyan → abyssal navy). The "
+            f"model registry is v{calib.get('registry_version', 1)}, calibrated on "
+            f"{calib.get('domain', 'UAE coastal waters (8 calibration regions)')} "
+            f"(in-sample R² {calib.get('in_sample_r2', 0.978)}, RMSE "
+            f"{calib.get('in_sample_rmse_m', 0.735)} m); outside the UAE calibration "
+            "envelope the output is indicative only. Depths are referenced to the "
+            "calibration soundings' survey datum and are not tide-corrected. A "
+            "per-pixel uncertainty channel combines per-cluster calibration RMSE and "
+            "ensemble disagreement. Depth values are model estimates and must be "
+            "validated against in-situ soundings before navigational use."
+        )
+    if model == "stumpf-log-ratio":
+        return (
+            "UNCALIBRATED pseudo-depth (low confidence). The source scene carries only "
+            "RGB bands (no NIR/multispectral), so no calibrated depth model applies. "
+            "The depth surface is the Stumpf (2003) blue/green log-ratio, "
+            "percentile-stretched to a literature-anchored 0–25 m range: it preserves "
+            "RELATIVE shallow-to-deep structure but is NOT metric depth. Land is cut "
+            "with a blue-water index. Do not use for navigation, engineering or any "
+            "quantitative purpose; ingest multispectral imagery (e.g. Sentinel-2 "
+            "B02/B03/B04/B08) for calibrated output."
+        )
     return (
         "Satellite-Derived Bathymetry (SDB). Free Sentinel-2 L2A surface-reflectance "
         "imagery is pulled for the survey ROI (Microsoft Planetary Computer), and a "
@@ -40,6 +72,43 @@ def _methodology_text(model: str) -> str:
         "per-pixel uncertainty and IHO S-44 compliance. Depth values are model estimates "
         "and should be validated against in-situ soundings before navigational use."
     )
+
+
+def _metadata_rows(report_code, site, model, infer_data, stats, acquisition,
+                   src_crs):
+    rows = [
+        ["Report code", report_code],
+        ["Survey area", site],
+        ["Model", f"{model} {infer_data.get('model_version') or ''}".strip()],
+    ]
+    if infer_data.get("method"):
+        rows.append(["Method", infer_data["method"]])
+    if infer_data.get("scene_id"):
+        rows += [
+            ["Sentinel-2 scene", infer_data.get("scene_id")],
+            ["Cloud cover", f"{infer_data.get('cloud_cover', '—')} %"],
+        ]
+    rows += [
+        ["Acquired", (infer_data.get("acquired") or acquisition or "—")],
+        ["CRS", infer_data.get("crs") or src_crs or "EPSG:4326"],
+        ["Depth coverage", f"{stats.get('coverage_pct', '—')} %"],
+        ["Max modelled depth", f"{infer_data.get('max_depth_m', '—')} m"],
+    ]
+    calib = infer_data.get("calibration") or {}
+    holdout_rmse = (infer_data.get("holdout_metrics") or {}).get("rmse")
+    if holdout_rmse is not None:
+        rows.append(["Model hold-out RMSE", f"{holdout_rmse} m"])
+    elif calib.get("in_sample_rmse_m") is not None:
+        rows += [
+            ["Calibration domain", calib.get("domain", "—")],
+            ["Calibration fit (in-sample)",
+             f"R² {calib.get('in_sample_r2', '—')}, RMSE {calib.get('in_sample_rmse_m', '—')} m"],
+            ["Datum", "Calibration survey datum (not tide-corrected)"],
+        ]
+    if infer_data.get("calibrated") is False:
+        rows.append(["Confidence", infer_data.get("confidence") or
+                     "LOW — uncalibrated pseudo-depth"])
+    return rows
 
 
 def build_report(
@@ -101,23 +170,16 @@ def build_report(
         {
             "type": "kv",
             "title": "Survey Metadata",
-            "data": {"rows": [
-                ["Report code", report_code],
-                ["Survey area", site],
-                ["Model", f"{model} {infer_data.get('model_version') or ''}".strip()],
-                ["Sentinel-2 scene", infer_data.get("scene_id") or "—"],
-                ["Acquired", (infer_data.get("acquired") or acquisition or "—")],
-                ["Cloud cover", f"{infer_data.get('cloud_cover', '—')} %"],
-                ["CRS", infer_data.get("crs") or src_crs or "EPSG:4326"],
-                ["Depth coverage", f"{stats.get('coverage_pct', '—')} %"],
-                ["Max modelled depth", f"{infer_data.get('max_depth_m', '—')} m"],
-                ["Model hold-out RMSE", f"{(infer_data.get('holdout_metrics') or {}).get('rmse', '—')} m"],
-            ]},
+            "data": {"rows": _metadata_rows(report_code, site, model, infer_data,
+                                            stats, acquisition, src_crs)},
         },
         {
             "type": "prose",
             "title": "Executive Summary",
-            "data": {"text": _summary_text(site, stats, model)},
+            "data": {"text": _summary_text(site, stats, model) + (
+                " NOTE: this product is an uncalibrated relative pseudo-depth "
+                "(RGB-only source) — depth values are not metric."
+                if infer_data.get("calibrated") is False else "")},
         },
         source_section,
         {
@@ -150,7 +212,7 @@ def build_report(
         {
             "type": "prose",
             "title": "Methodology & Caveats",
-            "data": {"text": _methodology_text(model)},
+            "data": {"text": _methodology_text(model, infer_data)},
         },
     ]
 
@@ -187,6 +249,9 @@ def build_report(
                 "grid": infer_data.get("grid"),
                 "scene_id": infer_data.get("scene_id"),
                 "max_depth_m": infer_data.get("max_depth_m"),
+                "method": infer_data.get("method"),
+                "calibrated": infer_data.get("calibrated"),
+                "calibration": infer_data.get("calibration"),
             }),
             "gen": generated_at,
             "uid": created_by,

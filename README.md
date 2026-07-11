@@ -19,8 +19,11 @@ logo.
   `fastapi/app/routers/rasters.py:_get_cached_raster`.
 - **Bathymetry pipeline.** On ingest (or via `POST /api/bathymetry/run/{id}`),
   `run_bathymetry` calls the inference service, re-ingests a colour-mapped depth
-  raster as a derived layer, and builds a template report. The depth **model is a
-  stub** today (`bathymetry-service/`) — swap the real model into `infer_depth()`.
+  raster as a derived layer, and builds a template report. The depth model is the
+  **real Bathymetry_VMarch SDB engine** (`bathymetry-service/sdb_engine/`): a
+  UAE-calibrated cluster ensemble (RF + MLP) for multispectral sources, with an
+  explicitly-labelled uncalibrated Stumpf fallback for plain RGB. See
+  `bathymetry-service/README.md` for provenance and caveats.
 - **Template reports.** `bathymetry_reports` stores an ordered list of typed
   sections (cover / metadata / summary / source imagery / depth map / cross-section
   / statistics / methodology), auto-filled by `services/report_builder.py` and
@@ -104,12 +107,13 @@ accounts are admin-managed so manual password changes survive restarts.
   docker compose exec fastapi pytest
   ```
 
-## Bringing the real depth model
-The target lives in a private repo (`Wassim1313/Bathymetry_VMarch`) that the build
-account can't currently access. Grant access (make public / add collaborator /
-drop the code in `bathymetry-service/`) and replace the body of
-`infer_depth()` — the rest of the pipeline is model-agnostic. See
-`bathymetry-service/README.md`.
+## The real depth model
+The Bathymetry_VMarch SDB engine is vendored under
+`bathymetry-service/sdb_engine/` (feature engineering, pretrained UAE model
+bundles, NDWI land cut, colour ramp) and wired into `infer_depth()`. Uploaded
+rasters are inferred from their own pixels; drawn ROIs still use the free
+Sentinel-2 fetch. Model provenance, calibration domain and honesty caveats are
+in `bathymetry-service/README.md` and surfaced in every generated report.
 
 ## Known follow-ups (cosmetic / next pass)
 - master-home's inline bottom dock still lists a couple of dropped apps.

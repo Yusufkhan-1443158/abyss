@@ -10,7 +10,7 @@ run_bathymetry(source_raster_id):
   5. mark the job done (depth_raster_id + report_id)
 
 Best-effort and resilient: any failure marks the job 'failed' but never crashes
-the worker. Replacing the stub model with the real one requires no change here.
+the worker.
 """
 
 from __future__ import annotations
@@ -43,24 +43,22 @@ def run_bathymetry(self, source_raster_id: str) -> dict:
         db.execute(
             text(
                 """INSERT INTO bathymetry_jobs (id, source_raster_id, status, model)
-                   VALUES (:id, :src, 'running', 'dl-pro-v3')"""
+                   VALUES (:id, :src, 'running', 'uae-sdb-ensemble')"""
             ),
             {"id": job_id, "src": source_raster_id},
         )
         db.commit()
 
-        # ROI footprint for the source raster — the SDB model fetches Sentinel-2
-        # for this area and runs DL-Pro on it (image -> model -> depth).
+        # bbox is the georeferencing fallback for sources without a CRS.
         bbox = _source_bbox(db, src)
-        if bbox is None:
-            _fail(db, job_id, "source raster has no bbox")
-            return {"status": "failed", "stage": "bbox", "error": "no bbox"}
 
-        # 1. Inference: ROI -> free Sentinel-2 (Planetary Computer) -> DL-Pro depth.
+        # 1. Inference on the ingested raster's own pixels (UAE SDB ensemble
+        #    for multispectral sources, uncalibrated Stumpf for plain RGB).
         try:
             resp = httpx.post(
                 f"{BATHYMETRY_SERVICE_URL}/bathymetry/infer",
-                json={"raster_id": source_raster_id, "bbox": bbox},
+                json={"raster_id": source_raster_id, "bbox": bbox,
+                      "source_bucket": "raw", "source_key": src.minio_raw_path},
                 timeout=httpx.Timeout(900.0, connect=10.0),
             )
             resp.raise_for_status()
@@ -98,6 +96,9 @@ def run_bathymetry(self, source_raster_id: str) -> dict:
                 "parent_raster_id": source_raster_id,
                 "bathymetry": {
                     "model": data.get("model"),
+                    "method": data.get("method"),
+                    "calibrated": data.get("calibrated"),
+                    "confidence": data.get("confidence"),
                     "stats": data.get("stats"),
                     "max_depth_m": data.get("max_depth_m"),
                 },
@@ -130,7 +131,8 @@ def run_bathymetry(self, source_raster_id: str) -> dict:
                 "id": job_id,
                 "depth": derived_id,
                 "report": report_id,
-                "meta": _json({"report_code": report_code, "stats": data.get("stats")}),
+                "meta": _json({"report_code": report_code, "stats": data.get("stats"),
+                               "model": data.get("model"), "method": data.get("method")}),
             },
         )
         db.commit()
