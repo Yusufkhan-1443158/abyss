@@ -54,11 +54,14 @@ def run_bathymetry(self, source_raster_id: str) -> dict:
 
         # 1. Inference on the ingested raster's own pixels (UAE SDB ensemble
         #    for multispectral sources, uncalibrated Stumpf for plain RGB).
+        infer_body = {"raster_id": source_raster_id, "bbox": bbox,
+                      "source_bucket": "raw", "source_key": src.minio_raw_path}
+        if getattr(src, "acquisition_date", None):
+            infer_body["acquisition_datetime"] = src.acquisition_date.isoformat()
         try:
             resp = httpx.post(
                 f"{BATHYMETRY_SERVICE_URL}/bathymetry/infer",
-                json={"raster_id": source_raster_id, "bbox": bbox,
-                      "source_bucket": "raw", "source_key": src.minio_raw_path},
+                json=infer_body,
                 timeout=httpx.Timeout(900.0, connect=10.0),
             )
             resp.raise_for_status()
@@ -149,10 +152,12 @@ def run_bathymetry(self, source_raster_id: str) -> dict:
 
 @celery.task(name="run_bathymetry_roi", bind=True, max_retries=0)
 def run_bathymetry_roi(self, job_id, bbox, start_date="2023-01-01",
-                       end_date="2024-12-31", name="Survey area", cache_key=None):
+                       end_date="2024-12-31", name="Survey area", cache_key=None,
+                       n_scenes=1):
     """ROI-first SDB run (no uploaded source): the Studio draws an area; we fetch
     Sentinel-2 for it, run DL-Pro, ingest the depth product, and build a report.
-    The job row is pre-inserted (status 'running') by the POST /roi route."""
+    The job row is pre-inserted (status 'running') by the POST /roi route.
+    `n_scenes` > 1 composites multiple acquisition dates (inverse-variance)."""
     import io
     db = SessionLocal()
     try:
@@ -160,7 +165,8 @@ def run_bathymetry_roi(self, job_id, bbox, start_date="2023-01-01",
             resp = httpx.post(
                 f"{BATHYMETRY_SERVICE_URL}/bathymetry/infer",
                 json={"raster_id": job_id, "bbox": bbox,
-                      "start_date": start_date, "end_date": end_date},
+                      "start_date": start_date, "end_date": end_date,
+                      "n_scenes": int(n_scenes or 1)},
                 timeout=httpx.Timeout(900.0, connect=10.0),
             )
             resp.raise_for_status()

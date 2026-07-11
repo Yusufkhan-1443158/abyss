@@ -108,6 +108,17 @@ def _metadata_rows(report_code, site, model, infer_data, stats, acquisition,
     if infer_data.get("calibrated") is False:
         rows.append(["Confidence", infer_data.get("confidence") or
                      "LOW — uncalibrated pseudo-depth"])
+    tide = infer_data.get("tide") or {}
+    if tide:
+        if tide.get("applied"):
+            rows += [
+                ["Tide correction",
+                 f"{tide.get('applied_m', 0.0):+.2f} m (Open-Meteo/CMEMS)"],
+                ["Vertical datum", "MSL (tide-corrected)"],
+            ]
+        else:
+            reason = tide.get("reason") or tide.get("method") or "unavailable"
+            rows.append(["Tide correction", f"not applied — {reason}"])
     return rows
 
 
@@ -216,6 +227,47 @@ def build_report(
         },
     ]
 
+    composite = infer_data.get("composite")
+    if composite:
+        per_scene = composite.get("per_scene") or []
+        comp_rows = [
+            ["Scenes used", f"{composite.get('n_scenes_used', '—')} of "
+                            f"{composite.get('n_scenes_requested', '—')} requested"],
+            ["Scene dates", ", ".join(str(p.get("acquired") or "?")[:10]
+                                      for p in per_scene if p.get("kept")) or "—"],
+            ["Per-scene σ (median)",
+             "; ".join(f"{str(p.get('acquired') or p.get('scene_id') or '?')[:10]}: "
+                       f"{p.get('sigma_med', '—')} m"
+                       + ("" if p.get("kept") else " (dropped: glint)")
+                       for p in per_scene) or "—"],
+            ["Cross-scene agreement (median px σ)",
+             f"{composite.get('px_std_median_m', '—')} m"],
+            ["Cross-scene agreement (p95 px σ)",
+             f"{composite.get('px_std_p95_m', '—')} m"],
+        ]
+        sections.insert(-1, {"type": "kv", "title": "Multi-scene Composite",
+                             "data": {"rows": comp_rows}})
+
+    validation = infer_data.get("validation")
+    if validation:
+        iho_orders = validation.get("iho_orders") or {}
+        val_rows = [
+            ["Reference soundings matched", validation.get("n_pairs", "—")],
+            ["RMSE", f"{validation.get('rmse', '—')} m"],
+            ["MAE", f"{validation.get('mae', '—')} m"],
+            ["Bias", f"{validation.get('bias', '—')} m"],
+            ["R²", validation.get("r2", "—")],
+            ["p95 error", f"{validation.get('p95_error_m', '—')} m"],
+            ["IHO order (p95 ≤ TVU)", validation.get("order_label") or "—"],
+            ["CATZOC", validation.get("catzoc") or "—"],
+        ] + [
+            [f"TVU pass ({k})", f"{v.get('pass_pct', '—')} %"]
+            for k, v in iho_orders.items()
+        ]
+        sections.insert(-1, {"type": "kv",
+                             "title": "Reference Validation (IHO S-44)",
+                             "data": {"rows": val_rows}})
+
     db.execute(
         text(
             """
@@ -252,6 +304,9 @@ def build_report(
                 "method": infer_data.get("method"),
                 "calibrated": infer_data.get("calibrated"),
                 "calibration": infer_data.get("calibration"),
+                **({"tide": infer_data["tide"]} if infer_data.get("tide") else {}),
+                **({"composite": composite} if composite else {}),
+                **({"validation": validation} if validation else {}),
             }),
             "gen": generated_at,
             "uid": created_by,

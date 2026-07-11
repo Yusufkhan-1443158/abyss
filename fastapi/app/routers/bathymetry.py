@@ -59,9 +59,15 @@ async def run_roi(
     sd = payload.get("start_date", "2023-01-01")
     ed = payload.get("end_date", "2024-12-31")
     force = bool(payload.get("force"))
+    try:
+        n_scenes = max(1, min(int(payload.get("n_scenes") or 1), 5))
+    except (TypeError, ValueError):
+        n_scenes = 1
 
     model, version = current_model(BATHYMETRY_SERVICE_URL)
     ckey = result_key(bbox, sd, ed, model, version)
+    if n_scenes > 1:  # composite products dedup separately from single-scene
+        ckey = f"{ckey}-n{n_scenes}"
 
     # Dedup: return the stored product for an identical (area, dates, model) run.
     if not force:
@@ -94,7 +100,8 @@ async def run_roi(
     )
     db.commit()
     from ..services.bathymetry_tasks import run_bathymetry_roi
-    run_bathymetry_roi.apply_async(args=[job_id, bbox, sd, ed, name, ckey], queue="sw_bg")
+    run_bathymetry_roi.apply_async(args=[job_id, bbox, sd, ed, name, ckey, n_scenes],
+                                   queue="sw_bg")
     return {"job_id": job_id, "status": "running"}
 
 
