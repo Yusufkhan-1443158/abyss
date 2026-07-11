@@ -1,40 +1,58 @@
 # Abyss Bathymetry Service
 
-Standalone inference microservice for Abyss. Reads a source raster from MinIO,
-produces a georeferenced **depth product** (RGB colour-mapped for display +
-float32 metres for analysis), and returns summary statistics and a cross-section
-transect.
+Standalone inference microservice for Abyss. Reads a source raster from MinIO
+(or fetches Sentinel-2 for a drawn ROI), produces a georeferenced **depth
+product** (RGB colour-mapped for display + float32 metres for analysis), and
+returns summary statistics, a downsampled grid and a cross-section transect.
 
-## The model is a stub (for now)
+## The real SDB engine (`sdb_engine/`)
 
-`infer_depth(bands, max_depth)` in `main.py` currently synthesizes depth from
-image luminance (darker water → deeper). It exists so the **entire Abyss
-pipeline runs end-to-end today**: image ingest → instant display → depth layer →
-auto-filled template report.
-
-### Swapping in the real model
-
-Replace **only** the body of `infer_depth()`:
+`infer_depth()` is the production Bathymetry_VMarch engine, vendored
+self-contained under `sdb_engine/`:
 
 ```python
-def infer_depth(bands: np.ndarray, max_depth: float) -> np.ndarray:
-    # bands: (C, H, W) source pixels;  return: (H, W) float32 depth in metres, NaN = nodata
-    return my_model.predict(bands)
+from sdb_engine import infer_depth
+depth = infer_depth(bands)   # bands: (C, H, W) -> (H, W) float32 metres, NaN = land/nodata
 ```
 
-Everything else — the MinIO I/O, the georeferenced GeoTIFF writers, the colour
-ramp, the stats/transect, the proxy router, the Celery chaining, and the report
-template — is model-agnostic and stays unchanged.
+Band handling is honest about what the input supports:
 
-> The target model lives in a private repo (`Wassim1313/Bathymetry_VMarch`).
-> Grant the Abyss build access (make public, add the `huznv` GitHub account as a
-> collaborator, or drop the weights/inference code into this folder) and wire it
-> into `infer_depth()`.
+- **Multispectral (blue/green/red + NIR, Sentinel-2-like)** — the calibrated
+  path: a 13-feature spectral stack (raw reflectances, Lyzenga log-bands +
+  depth-invariant index, Stumpf B/G + B/R log-ratios, NDWI) feeds a K-means
+  cluster ensemble with per-cluster Random Forest and MLP regressors
+  (`sdb_engine/models/uae_clustered_rf.pkl` + `uae_clustered_cnn.pkl`,
+  registry v1, trained on ~443k soundings across 8 UAE regions; in-sample
+  R² 0.978 / RMSE 0.735 m). Land is cut with an NDWI water mask; depth is
+  clipped to 0–25 m; a per-pixel uncertainty channel combines per-cluster
+  calibration RMSE and ensemble disagreement. **UAE-calibrated** — outside
+  that envelope the output is indicative.
+- **Plain RGB (3 bands)** — the physically defensible fallback: Stumpf
+  blue/green log-ratio pseudo-depth, percentile-stretched. Relative structure
+  only, explicitly flagged `calibrated: false` / low confidence in the
+  response and the report. Never presented as metric depth.
+
+Band identification uses band descriptions when present (`blue`/`B02` …),
+else position: 3 bands = R,G,B; 4 = B,G,R,NIR; 5+ = coastal,B,G,R,NIR.
+Reflectance (0–1) and 8-bit inputs are rescaled to the S2 DN scale.
+
+Depths are referenced to the calibration soundings' survey datum and are not
+tide-corrected. Validate against in-situ soundings before navigational use.
+
+The ROI path (no uploaded source) still fetches free Sentinel-2 L2A from
+Microsoft Planetary Computer and runs the DL-Pro v3 turbidity-aware MLP.
 
 ## API
-- `POST /bathymetry/infer` — `{raster_id, source_bucket, source_key, max_depth?}`
+- `POST /bathymetry/infer` — `{raster_id, source_bucket?, source_key?, bbox?,
+  start_date?, end_date?, max_cloud?, max_depth?}`; `source_*` selects the
+  ingested-raster engine, `bbox` alone selects the Sentinel-2 ROI path.
 - `GET  /bathymetry/health`
 - `GET  /bathymetry/models`
+
+## Tests
+```bash
+pytest tests/test_infer_depth.py -v
+```
 
 ## Performance & tuning (large AOIs)
 

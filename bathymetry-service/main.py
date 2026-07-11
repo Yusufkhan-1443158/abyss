@@ -1,12 +1,17 @@
 """Abyss Bathymetry Service — real Satellite-Derived Bathymetry.
 
-Ports the production DL-Pro v3 model (23-feature turbidity-aware MLP, RMSE ~2.84m,
-IHO-calibrated) from the VMarch backend, verbatim (dl_pro_engine.py + turbidity.py
-+ models/dl_pro_v3/). Pipeline: ROI bbox -> fetch free Sentinel-2 L2A (Planetary
-Computer, no auth) -> DL-Pro inference -> georeferenced depth raster + RGB depth
-map + IHO accuracy stats + cross-section. Same outputs as the original app.
+Two inference paths, same output contract (georeferenced float depth GeoTIFF +
+RGB depth map + stats + cross-section + downsampled grids):
 
-POST /bathymetry/infer  {raster_id, bbox:{west,south,east,north}|[w,s,e,n],
+* Ingested raster (source_bucket/source_key): the raster's own pixels drive
+  `sdb_engine.infer_depth()` — the UAE-calibrated cluster ensemble (RF + MLP)
+  when multispectral bands (B/G/R + NIR) are present, or an explicitly
+  uncalibrated Stumpf log-ratio pseudo-depth for plain RGB.
+* ROI bbox (no source raster): fetch free Sentinel-2 L2A (Planetary Computer)
+  and run the DL-Pro v3 model (23-feature turbidity-aware MLP), unchanged.
+
+POST /bathymetry/infer  {raster_id, source_bucket?, source_key?,
+                         bbox:{west,south,east,north}|[w,s,e,n],
                          start_date?, end_date?, max_cloud?}
 GET  /bathymetry/health
 GET  /bathymetry/models
@@ -33,12 +38,6 @@ app = FastAPI(title="Abyss Bathymetry Service", version="2.0.0")
 MODEL_NAME = "dl-pro-v3"
 MAX_DEPTH_M = 25.0
 DEPTH_BUCKET = "depth"
-
-# Bathymetric colour ramp (shallow -> abyssal), matching the UI --depth-* tokens.
-_RAMP = np.array([
-    [125, 249, 255], [33, 212, 212], [31, 143, 209],
-    [29, 95, 176], [23, 58, 134], [11, 31, 86],
-], dtype=np.float64)
 
 
 def _minio() -> Minio:
@@ -85,18 +84,14 @@ def _downsample(arr, max_side=512):
 
 
 def _colormap(norm):
-    n = _RAMP.shape[0] - 1
-    pos = np.clip(norm, 0.0, 1.0) * n
-    lo = np.floor(pos).astype(int)
-    hi = np.clip(lo + 1, 0, n)
-    frac = (pos - lo)[..., None]
-    return (_RAMP[lo] * (1 - frac) + _RAMP[hi] * frac).astype(np.uint8)
+    from sdb_engine import depth_colormap
+    return depth_colormap(norm)
 
 
 def _put_geotiff(client, key, array, transform, count, dtype, nodata=None,
-                 photometric=None):
+                 photometric=None, crs="EPSG:4326"):
     profile = dict(driver="GTiff", height=array.shape[-2], width=array.shape[-1],
-                   count=count, dtype=dtype, crs="EPSG:4326", transform=transform,
+                   count=count, dtype=dtype, crs=crs, transform=transform,
                    compress="deflate", tiled=True, blockxsize=256, blockysize=256)
     if nodata is not None:
         profile["nodata"] = nodata
@@ -119,9 +114,10 @@ class InferRequest(BaseModel):
     start_date: str = "2023-01-01"
     end_date: str = "2024-12-31"
     max_cloud: int = 40
-    # legacy fields (ignored) for backward compat with the old stub contract
+    # Ingested-raster path: run the SDB engine on this MinIO object's pixels.
     source_bucket: str | None = None
     source_key: str | None = None
+    max_depth: float | None = None
 
 
 def _parse_bbox(bbox):
@@ -157,12 +153,167 @@ def models():
         }
     except Exception as ex:
         info["meta_error"] = str(ex)
+    try:
+        from sdb_engine import model_info
+        info["raster_engine"] = model_info()
+        info["models"].append(info["raster_engine"]["model"])
+    except Exception as ex:
+        info["raster_engine_error"] = str(ex)
     return info
+
+
+def _products_payload(client, raster_id, depth, sigma_src, transform, crs,
+                      bbox, extra):
+    """Write the depth GeoTIFF pair to MinIO and assemble the response payload
+    shared by both inference paths. `bbox` is [w,s,e,n] in EPSG:4326."""
+    H, W = depth.shape
+    valid = np.isfinite(depth)
+
+    depth_f = np.where(valid, depth, -9999.0).astype(np.float32)
+    raw_key = f"{raster_id}/depth.tif"
+    _put_geotiff(client, raw_key, depth_f, transform, 1, "float32",
+                 nodata=-9999.0, crs=crs)
+
+    norm = np.where(valid, np.clip(depth / MAX_DEPTH_M, 0, 1), 0.0)
+    rgb = np.transpose(_colormap(norm), (2, 0, 1))      # (3,H,W)
+    rgb[:, ~valid] = 0
+    rgb_key = f"{raster_id}/depth_rgb.tif"
+    _put_geotiff(client, rgb_key, rgb, transform, 3, "uint8", nodata=0,
+                 photometric="RGB", crs=crs)
+
+    vals = depth[valid]
+    stats = {
+        "min_m": round(float(np.min(vals)), 2),
+        "max_m": round(float(np.max(vals)), 2),
+        "mean_m": round(float(np.mean(vals)), 2),
+        "std_m": round(float(np.std(vals)), 2),
+        "coverage_pct": round(100.0 * float(valid.sum()) / float(H * W), 1),
+    }
+
+    mid = H // 2
+    row = depth[mid]
+    res_x = abs(transform.a)
+    geographic = "4326" in str(crs) or res_x < 0.1
+    step_m = res_x * 111320 if geographic else res_x
+    idx = np.linspace(0, W - 1, min(64, W)).astype(int)
+    profile = {
+        "distance_m": [round(float(i * step_m), 1) for i in idx],
+        "depth_m": [None if not np.isfinite(row[i]) else round(float(row[i]), 2) for i in idx],
+    }
+
+    depth_grid, gh, gw = _downsample(depth)
+    sigma_grid = None
+    if sigma_src is not None:
+        sigma_grid, _, _ = _downsample(np.asarray(sigma_src, dtype=np.float32))
+
+    payload = {
+        "raster_id": raster_id,
+        "depth_rgb_key": rgb_key,
+        "depth_raw_key": raw_key,
+        "depth_bucket": DEPTH_BUCKET,
+        "crs": str(crs),
+        "bbox": {"west": bbox[0], "south": bbox[1], "east": bbox[2], "north": bbox[3]},
+        "width": W, "height": H,
+        "units": "meters",
+        "max_depth_m": MAX_DEPTH_M,
+        "stats": stats,
+        "grid": {
+            "depth": depth_grid,
+            "sigma": sigma_grid,
+            "rows": gh, "cols": gw,
+            "bounds": {"west": bbox[0], "south": bbox[1], "east": bbox[2], "north": bbox[3]},
+            "max_depth_m": MAX_DEPTH_M,
+        },
+        "profile": profile,
+    }
+    payload.update(extra)
+    return _clean(payload)
+
+
+def _infer_from_raster(reqp: InferRequest, bbox):
+    """Ingested-raster path: read the source raster from MinIO and run the
+    vendored SDB engine on its own pixels."""
+    import sdb_engine
+
+    client = _minio()
+    try:
+        obj = client.get_object(reqp.source_bucket, reqp.source_key)
+        blob = obj.read()
+        obj.close()
+        obj.release_conn()
+    except Exception as ex:
+        raise HTTPException(status_code=404,
+                            detail=f"source raster unavailable: {ex}")
+
+    try:
+        with MemoryFile(blob) as mem, mem.open() as src:
+            bands = src.read(masked=True).astype(np.float32).filled(np.nan)
+            names = [d for d in (src.descriptions or ())]
+            src_dtype = src.dtypes[0]
+            transform = src.transform
+            crs = src.crs
+            src_bounds = src.bounds
+    except Exception as ex:
+        raise HTTPException(status_code=422,
+                            detail=f"source is not a readable raster: {ex}")
+
+    if crs is None or not transform or transform.is_identity:
+        if bbox is None:
+            raise HTTPException(status_code=422,
+                                detail="source raster has no georeferencing and no bbox given")
+        from rasterio.transform import from_bounds
+        transform = from_bounds(bbox[0], bbox[1], bbox[2], bbox[3],
+                                bands.shape[2], bands.shape[1])
+        crs = "EPSG:4326"
+        bbox4326 = bbox
+    else:
+        from rasterio.warp import transform_bounds
+        bbox4326 = list(transform_bounds(crs, "EPSG:4326", *src_bounds))
+
+    res_x = abs(transform.a)
+    res_m = res_x * 111320 if "4326" in str(crs) or res_x < 0.1 else res_x
+    max_depth = float(reqp.max_depth or MAX_DEPTH_M)
+    try:
+        result = sdb_engine.infer(bands, band_names=names,
+                                  max_depth=min(max_depth, MAX_DEPTH_M),
+                                  resolution_m=res_m, src_dtype=src_dtype)
+    except ValueError as ex:
+        raise HTTPException(status_code=422, detail=str(ex))
+    except Exception as ex:
+        log.exception("SDB inference failed")
+        raise HTTPException(status_code=500, detail=f"inference failed: {ex}")
+
+    depth = result["depth"]
+    if not np.isfinite(depth).any():
+        raise HTTPException(status_code=422,
+                            detail="No valid water pixels in the source raster.")
+
+    _ensure_bucket(client, DEPTH_BUCKET)
+    extra = {
+        "model": result["model"],
+        "model_version": result["model_version"],
+        "method": result["method"],
+        "calibrated": result["calibrated"],
+        "confidence": result["confidence"],
+        "calibration": result["calibration"],
+        "band_mapping": result["band_mapping"],
+        "mask": result["mask"],
+        "iho_s44_pct": {},
+        "holdout_metrics": {},
+        "source": {"bucket": reqp.source_bucket, "key": reqp.source_key},
+    }
+    return _products_payload(client, reqp.raster_id, depth, result.get("sigma"),
+                             transform, crs, bbox4326, extra)
 
 
 @app.post("/bathymetry/infer")
 def infer(reqp: InferRequest):
     bbox = _parse_bbox(reqp.bbox)
+
+    # Ingested-raster path: depth from the uploaded scene's own pixels.
+    if reqp.source_bucket and reqp.source_key:
+        return _infer_from_raster(reqp, bbox)
+
     if bbox is None:
         raise HTTPException(status_code=400,
                             detail="bbox required: {west,south,east,north} or [w,s,e,n]")
@@ -187,86 +338,30 @@ def infer(reqp: InferRequest):
 
     depth = result["depth"]                       # (H,W) float32, NaN on land
     transform = s2["transform"]
-    H, W = depth.shape
-    valid = np.isfinite(depth)
-    if valid.sum() == 0:
+    if not np.isfinite(depth).any():
         raise HTTPException(status_code=422,
                             detail="No valid water pixels in the ROI scene.")
 
     client = _minio()
     _ensure_bucket(client, DEPTH_BUCKET)
 
-    # 3a. Float depth GeoTIFF (analysis product).
-    depth_f = np.where(valid, depth, -9999.0).astype(np.float32)
-    raw_key = f"{reqp.raster_id}/depth.tif"
-    _put_geotiff(client, raw_key, depth_f, transform, 1, "float32", nodata=-9999.0)
-
-    # 3b. RGB colour-mapped depth GeoTIFF (display product; land/nodata -> 0).
-    norm = np.where(valid, np.clip(depth / MAX_DEPTH_M, 0, 1), 0.0)
-    rgb = np.transpose(_colormap(norm), (2, 0, 1))      # (3,H,W)
-    rgb[:, ~valid] = 0
-    rgb_key = f"{reqp.raster_id}/depth_rgb.tif"
-    _put_geotiff(client, rgb_key, rgb, transform, 3, "uint8", nodata=0,
-                 photometric="RGB")
-
-    # 4. Stats + IHO + cross-section.
-    vals = depth[valid]
-    stats = {
-        "min_m": round(float(np.min(vals)), 2),
-        "max_m": round(float(np.max(vals)), 2),
-        "mean_m": round(float(np.mean(vals)), 2),
-        "std_m": round(float(np.std(vals)), 2),
-        "coverage_pct": round(100.0 * float(valid.sum()) / float(H * W), 1),
-    }
     iho = {k: round(float(v), 1) for k, v in (result.get("iho_s44") or {}).items()}
     mm = result.get("model_meta", {})
     holdout = mm.get("holdout_metrics", {})
-
-    mid = H // 2
-    row = depth[mid]
-    res_x = abs(transform.a)
-    idx = np.linspace(0, W - 1, min(64, W)).astype(int)
-    profile = {
-        "distance_m": [round(float(i * res_x * 111320), 1) for i in idx],
-        "depth_m": [None if not np.isfinite(row[i]) else round(float(row[i]), 2) for i in idx],
-    }
-
-    # Downsampled grids for client-side 2D/3D/profile visualisation.
     sigma_src = result.get("sigma_eff")
     if sigma_src is None:
         sigma_src = result.get("sigma")
-    depth_grid, gh, gw = _downsample(depth)
-    sigma_grid = None
-    if sigma_src is not None:
-        sigma_grid, _, _ = _downsample(np.asarray(sigma_src, dtype=np.float32))
 
-    payload = {
+    extra = {
         "model": MODEL_NAME,
         "model_version": mm.get("version"),
-        "raster_id": reqp.raster_id,
-        "depth_rgb_key": rgb_key,
-        "depth_raw_key": raw_key,
-        "depth_bucket": DEPTH_BUCKET,
-        "crs": "EPSG:4326",
-        "bbox": {"west": bbox[0], "south": bbox[1], "east": bbox[2], "north": bbox[3]},
-        "width": W, "height": H,
-        "units": "meters",
-        "max_depth_m": MAX_DEPTH_M,
-        "stats": stats,
-        "grid": {
-            "depth": depth_grid,
-            "sigma": sigma_grid,
-            "rows": gh, "cols": gw,
-            "bounds": {"west": bbox[0], "south": bbox[1], "east": bbox[2], "north": bbox[3]},
-            "max_depth_m": MAX_DEPTH_M,
-        },
         "iho_s44_pct": iho,
         "holdout_metrics": {k: round(float(v), 3) for k, v in holdout.items()
                             if isinstance(v, (int, float))},
         "calibration": result.get("calibration"),
-        "profile": profile,
         "scene_id": s2.get("scene_id"),
         "cloud_cover": s2.get("cloud_cover"),
         "acquired": s2.get("acquired"),
     }
-    return _clean(payload)
+    return _products_payload(client, reqp.raster_id, depth, sigma_src,
+                             transform, "EPSG:4326", bbox, extra)

@@ -9,7 +9,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl libexpat1 
 WORKDIR /app
 
 # CPU-only PyTorch first (separate index → avoids the CUDA build).
-RUN pip install --no-cache-dir torch==2.2.2 --index-url https://download.pytorch.org/whl/cpu
+# >=2.7: numpy-2 compatible, matches the sdb_engine training environment.
+RUN pip install --no-cache-dir torch==2.7.0 --index-url https://download.pytorch.org/whl/cpu
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
