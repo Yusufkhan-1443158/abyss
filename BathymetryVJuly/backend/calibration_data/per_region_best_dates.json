@@ -1,0 +1,38 @@
+{
+  "khalifa_port": {
+    "date": "2024-10-15",
+    "elapsed_s": 0.2,
+    "n_test": 118,
+    "rmse_m": 1.958,
+    "mae_m": 1.123,
+    "bias_m": -0.037,
+    "r2": 0.6192,
+    "s44_1a_pct": 53.4,
+    "mean_depth": 13.29,
+    "max_depth": 21.95
+  },
+  "old_mussafah": {
+    "date": "2024-08-15",
+    "elapsed_s": 14.2,
+    "n_test": 110,
+    "rmse_m": 0.729,
+    "mae_m": 0.435,
+    "bias_m": 0.14,
+    "r2": 0.2151,
+    "s44_1a_pct": 72.7,
+    "mean_depth": 6.72,
+    "max_depth": 8.47
+  },
+  "jbel_dhanna": {
+    "date": "2024-02-15",
+    "elapsed_s": 21.7,
+    "n_test": 72,
+    "rmse_m": 0.803,
+    "mae_m": 0.648,
+    "bias_m": 0.151,
+    "r2": 0.8275,
+    "s44_1a_pct": 52.8,
+    "mean_depth": 4.27,
+    "max_depth": 7.96
+  }
+}

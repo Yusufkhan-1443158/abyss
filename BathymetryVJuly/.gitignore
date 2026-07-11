@@ -1,0 +1,175 @@
+node_modules/
+__pycache__/
+*.pyc
+.env
+frontend/build/
+*.h5
+*.nc
+*.tif
+# Bundled small sample/seed result GeoTIFFs ship with the repo so a fresh deploy
+# has analysable results out of the box (see backend/seed_results.py).
+!samples/results/*.tif
+tmp/
+/data/
+
+# venvs
+.venv/
+venv/
+backend/venv/
+
+# caches
+.cache/
+cache/
+
+# local databases
+*.db
+*.sqlite
+*.sqlite3
+
+# result/output dirs (local artifacts)
+Results/
+outputs/
+HYBRID_Results/
+Simple_Results/
+SINGLE_SCENE_Results/
+Fig_Updated_2/
+CNN_Smart/
+ppt_assets/
+SWELL_SCOUT/
+# Exclude all generated Very_HR_Results sub-folders EXCEPT the job state dir.
+# (a `Very_HR_Results/` blanket rule would block re-including children.)
+Very_HR_Results/*
+!Very_HR_Results/_jobs/
+!Very_HR_Results/_jobs/**
+# Durable results store is runtime state, not source — never commit the
+# index or the (potentially large) GeoTIFF/JSON/CSV output artefacts.
+Very_HR_Results/_jobs/_results/
+# VHR purchase orders store — runtime state (order records + SH request bodies).
+Very_HR_Results/_jobs/_orders/
+# Loose job-queue records + lock + per-job output dir are runtime state, not source.
+Very_HR_Results/_jobs/*.json
+Very_HR_Results/_jobs/.results_index.lock
+Very_HR_Results/_jobs/results/
+Very_HR_Results/khalifa_1m/
+# Generated map/figure outputs
+June_2026/
+Multi_Region_v3/
+Multi_Port_Validation/
+May_26 Results/
+May_2026_results/
+iboating/results_*/
+iboating/khalifa_v2/
+iboating/v3_runs/
+iboating/observed/
+iboating/Old/
+iboating/__pycache__/
+DL_Approach/results_*/
+DL_Approach/__pycache__/
+DL_Approach/_ablation_logs/
+*.log
+
+# downloads/models (large binaries)
+backend/ocean/downloads/
+backend/ocean/models/
+
+# binary docs
+*.pptx
+
+# editor/OS junk
+.DS_Store
+*.swp
+frontend/package (copy).json
+
+# secrets — never commit GEE service-account keys
+ee-*.json
+*-service-account.json
+gee_*.json
+*.zip
+
+# Large local artifact dirs (session 2026-06-15 cleanup) — keep out of repo
+Cshelph_14june/
+New_Results_26/
+New_Results_0613/
+14062026/
+June_results/
+paper_loop_out/
+iboating/june_harvest/
+iboating/june_harvest_v2/
+best_iboating/
+# Heavy point-cloud / raster binaries (keep small results JSON only)
+June_2026/**/photons_raw.npz
+June_2026/**/bottom_detected.npz
+*.npz
+
+# Scratch experiment trees + one-off research run/eval scripts, not imported
+# by the production app or the default-regions pipeline.
+CNN_iboating_v2/
+third_party/
+build_abu_al_abyad_fusion.py
+build_default_region_previews.py
+eval_chart_only.py
+run_iboating_subgrid.py
+run_v4_pro.py
+run_very_hr_sdb.py
+scratch_r7_apply.py
+scratch_r7_georef.py
+scratch_r7_subret.py
+/iboating/
+validation/
+# Stray debug / scratch text dumps at repo root
+dbg*.txt
+err.txt
+*.tmp
+# pytest / tooling caches
+.pytest_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+# Internal design notes, specs and session logs are working documents, not
+# imported or served by the Flask app — keep them out of the production tree.
+# (README.md and DEPLOY.md remain tracked.)
+*_LOG.md
+*ORCHESTRATOR*.md
+*_LOOP*.md
+*_SPEC.md
+*_DESIGN.md
+METHOD_SPEC_*.md
+OPTIM_T*.md
+PAPER_*.md
+Agent.md
+Final_readme.md
+Scientific.md
+METHODOLOGY_PROPOSAL.md
+# Superseded one-off research run-scripts (live feature uses seeded products)
+run_sdb_optim.sh
+run_khalifa_vhr_k*.py
+# Scratch night-loop / harvest / ablation drivers + debug dumps at root
+run_dl_r*_ablation.py
+run_paper_ladder.sh
+run_refined_10region_eval.py
+run_world_local_eval.py
+run_almassira_*.py
+run_s8*.sh
+run_s9*.sh
+run_harvest_v2_*.sh
+eval_paper_ladder.py
+iboating_*nightloop*.sh
+iboating_extract_v2.py
+iboating_gemini_extract.py
+iboating_multizoom_fuse*.py
+iboating_spatialize_compare.py
+make_harvest_v2_map.py
+harvest_multizoom_driver.sh
+night_loop_monitor.py
+launch_s8.sh
+s8_launch_safe.sh
+s9_exec.sh
+sync_june_results.sh
+dbg2.txt
+dbg_err.txt
+# Large model/binary safety nets — only the bundled inference models under
+# backend/models/ are tracked; nothing else of these types should be committed.
+*.pkl
+*.pt
+!backend/models/**/*.pt
+!backend/models/*.pt
+!backend/models/*.pkl

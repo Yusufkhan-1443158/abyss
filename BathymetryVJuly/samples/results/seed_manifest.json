@@ -1,0 +1,885 @@
+{
+  "_note": "Bundled sample results that ship with the repo so a fresh/empty deploy (Railway redeploy, new clone) shows finished, analyzable, 3D-viewable bathymetry out of the box. Seeded ONLY when the durable results store has zero 'done' results (see backend/seed_results.py). Metrics are the honest, leakage-aware numbers copied verbatim from the original local runs. The .tif files are small real depth GeoTIFFs (positive-down metres, MSL/GEBCO via in-situ calibration).",
+  "_default_note": "Entries with is_default=true are the 4 DEFAULT auto-run regions (DEFAULT_REGIONS_LOG.md). They are ALWAYS seeded on load (seed_default_regions, not gated on empty store) so they appear as frozen precomputed Results with standard date + metrics-or-reconnaissance card + Download/Analyse + a 'Very HR (Mapbox)' action. The 3 in-situ RMSE/Bias/R2 are USER-VALIDATED — display verbatim, never recompute/alter. Abu Al Abyad is RECONNAISSANCE: NO RMSE/Bias/R2, per-pixel source flag, CATZOC C/D.",
+  "results": [
+    {
+      "id": "dlfusion_marawah_certified",
+      "always_seed": true,
+      "name": "Marawah — CERTIFIED · IHO S-44 6th ed. Order 2 / CATZOC C (surface-relative) · RMSE ≈ 0.47 m · 0–3.84 m",
+      "file": "sample_marawah_depth_d1a.tif",
+      "roi_bbox": [
+        53.24,
+        24.24,
+        53.36,
+        24.34
+      ],
+      "resolution": "10m",
+      "date": 1751817780.0,
+      "units": "m, positive down, surface-relative (instantaneous sea surface — NO tide reduction)",
+      "source_note": "DL-fusion CERTIFIED SURFACE-RELATIVE product (DLF-R12 / R13b close-out). Depth = linear D1a (Lyzenga-1985 lnB2/lnB3/lnB4 + Stumpf log-ratios, robust Huber fit, deep-water R∞ composite), buffered leave-track-out vs ATL24 class-40 median. The Order-2 certification lives on THIS surface-relative product (no tide term). Its σ is the pre-existing GPU-certified E1e head (coverage 0.953, TVU95 0.9114 ≤ 1.0039 m). For the chart-datum (LAT) product see the companion 'Marawah — CHARTED-LAT RECONNAISSANCE' entry; Order 2 is NOT claimable at LAT (datum-uncertainty limited). Distinct from the earlier ad_marawah RELATIVE-morphology reconnaissance product.",
+      "metrics": {
+        "mask_source": "VHR+OSM-coast+S2",
+        "coastline_datum": "MHW (approx; not LAT)",
+        "coastline_vintage": "2026-07-08",
+        "coastline_footprint_px_removed": 1674,
+        "coastline_subtidal_delta_pct": 0.002,
+        "coastline_added_water_px": 0,
+        "method": "DL-fusion linear D1a (Lyzenga85 + Stumpf, Huber, R∞ composite) — surface-relative",
+        "depth_method": "dlfusion_d1a",
+        "cert_status": "certified",
+        "cert_label": "CERTIFIED — IHO S-44 6th ed. Order 2 / CATZOC C (surface-relative). RMSE ≈0.47 m, TVU95 0.911 ≤ 1.004 m, σ coverage 0.953, valid 0–3.84 m.",
+        "iho_order": "Order 2",
+        "catzoc": "C",
+        "rmse_m": 0.47,
+        "r2": 0.588,
+        "bias_m": -0.022,
+        "n_test": 3015,
+        "z_valid_m": 3.84,
+        "valid_depth_range_m": [0, 3.84],
+        "datum": "surface-relative (instantaneous sea surface; no tide term applied)",
+        "tvu95_m": 0.911,
+        "tvu95_allowance_m": 1.004,
+        "sigma_coverage_95": 0.953,
+        "depth_min_m": -1.18,
+        "depth_max_m": 8.89,
+        "depth_mean_m": 1.02,
+        "tvu_note": "TVU95 = 1.96 × 0.465 = 0.9114 m ≤ 1.0039 m Order-2 allowance → Order 2 PASS. σ is the GPU-certified E1e per-pixel head (coverage 0.953); this claim rests entirely on the GPU cache and is independent of the DLF-R13b CPU σ re-run.",
+        "ground_truth": "ATL24 v005 class-40 (bathymetry) median, n=11,177 within z_valid; buffered leave-track-out CV vs ATL24.",
+        "validation_status": "Certified per DLF-R12 / R13b close-out (s2-iho-expert, 2026-07-07) — display verbatim; RMSE = median of 5 leave-track-out holdouts (0.47 m).",
+        "caveats": [
+          "This is the SURFACE-RELATIVE product: depths are relative to the instantaneous sea surface (no tide reduction). This — not the LAT product — is where Order 2 is claimed and holds.",
+          "Order 2 = surface-relative ONLY. The chart-datum (LAT) companion product does NOT carry an Order-2 claim (datum-uncertainty limited); it is S-57 CATZOC C reconnaissance.",
+          "σ / TVU95 rest on the pre-existing GPU-certified E1e head (coverage 0.953, TVU95 0.911); this certification is independent of the DLF-R13b CPU-mode σ re-run.",
+          "Beyond z_valid (≳3.84 m): reconnaissance / surface-relative context only, no ATL24 bottom returns.",
+          "Reconnaissance-to-survey bridge — NOT a survey-grade replacement, not for navigation."
+        ]
+      }
+    },
+    {
+      "id": "dlfusion_marawah_lat_catzocc",
+      "always_seed": true,
+      "name": "Marawah — CHARTED-LAT RECONNAISSANCE · S-57 CATZOC C · LAT via EOT20 · 0–3.84 m",
+      "file": "sample_marawah_depth_lat.tif",
+      "extra_files": [
+        {
+          "key": "sigma_lat",
+          "label": "σ / TVU raster (LAT) — per-pixel E1e ensemble (option (i), CPU-mode). Max reproduction Δ 0.038 m vs certified GPU cache — immaterial vs CATZOC C headroom.",
+          "filename": "sample_marawah_sigma_lat.tif"
+        },
+        {
+          "key": "lat_offset",
+          "label": "LAT reduction offset field (EOT20 separated bias, median 1.131 m)",
+          "filename": "sample_marawah_lat_offset.tif"
+        },
+        {
+          "key": "drying_mask",
+          "label": "Intertidal/drying at LAT (18.8% of water px, median 0.12 m) — INDICATIVE delineation",
+          "filename": "sample_marawah_drying_mask.tif"
+        }
+      ],
+      "roi_bbox": [
+        53.24,
+        24.24,
+        53.36,
+        24.34
+      ],
+      "resolution": "10m",
+      "date": 1751817775.0,
+      "units": "m, positive down, datum LAT",
+      "source_note": "DL-fusion CHARTED-LAT RECONNAISSANCE product (DLF-R13b close-out, s2-iho-expert 2026-07-07). Depth = certified D1a surface-relative retrieval reduced to LAT chart datum via the EOT20 global tide model (separated-bias offset field, median 1.131 m). Charted at S-57 CATZOC C: TVU95_LAT median ≈1.115 m ≪ CATZOC C allowance ±2.19 m across the valid zone (>0.8 m headroom everywhere). Order 2 is NOT claimable at LAT — the σ_tide = 0.20 m literature floor (no local gauge) caps the datum budget below the Order-2 allowance even for a perfect model. σ raster = per-pixel option-(i) E1e ensemble (CPU-mode). Companion to the certified surface-relative 'Marawah — CERTIFIED' entry.",
+      "metrics": {
+        "mask_source": "VHR+OSM-coast+S2",
+        "coastline_datum": "MHW (approx; not LAT)",
+        "coastline_vintage": "2026-07-08",
+        "coastline_footprint_px_removed": 1674,
+        "coastline_subtidal_delta_pct": 0.002,
+        "coastline_added_water_px": 0,
+        "method": "DL-fusion linear D1a (Lyzenga85 + Stumpf, Huber, R∞ composite) — LAT via EOT20 (separated bias)",
+        "depth_method": "dlfusion_d1a",
+        "cert_status": "reconnaissance",
+        "reconnaissance": true,
+        "cert_label": "Satellite-derived bathymetry, reconnaissance, CATZOC C, LAT via EOT20 (no local gauge; datum unvalidated — charted depths may be up to ~0.2 m optimistic/too-deep).",
+        "iho_order": null,
+        "catzoc": "C (reconnaissance)",
+        "rmse_m": 0.47,
+        "r2": 0.588,
+        "bias_m": -0.022,
+        "n_test": 3015,
+        "z_valid_m": 3.84,
+        "valid_depth_range_m": [0, 3.84],
+        "datum": "LAT (chart datum, via EOT20 tide model — no local gauge)",
+        "tvu95_lat_median_m": 1.115,
+        "catzoc_c_allowance_m": 2.19,
+        "sigma_lat_median_m": 0.5001,
+        "depth_min_m": -1.18,
+        "depth_max_m": 8.89,
+        "depth_mean_m": 1.02,
+        "n_water_px": 1121128,
+        "frac_drying_at_lat": 0.188,
+        "tvu_note": "Shipped σ/TVU raster (sigma_lat) is the per-pixel option-(i) E1e forward-inference ensemble (median 0.5001 m, real spatial structure, preserving the certified E1e coverage 0.953). TVU95_LAT median ≈1.115 m ≤ CATZOC C ±2.19 m everywhere (>0.8 m headroom). σ was computed CPU-mode after GPU failure; max reproduction Δ 0.038 m vs the certified GPU cache — >20× smaller than the CATZOC C headroom, cannot flip a CATZOC C pass. NO Order-2 claim at LAT.",
+        "ground_truth": "ATL24 v005 class-40 (bathymetry) median, n=11,177 within z_valid; buffered leave-track-out CV vs ATL24.",
+        "validation_status": "S-57 CATZOC C reconnaissance per DLF-R13b close-out (s2-iho-expert, 2026-07-07) — display verbatim. NO Order-2-at-LAT claim.",
+        "caveats": [
+          "S-57 CATZOC C reconnaissance, NOT Order 2. Order 2 is not claimable at LAT: σ_tide = 0.20 m literature floor (no local gauge) caps the datum budget below the Order-2 allowance even for a perfect model.",
+          "Datum = LAT via the EOT20 global tide model (FES2014b unobtainable offline; pre-authorized equivalent-class substitute). No local tide gauge → absolute LAT datum is unverified; LAT offset applied as a pure separated bias (σ_sep 0.073 m).",
+          "DATUM-BIAS CAVEAT (safety-of-navigation): The EOT20 MSL→LAT separation (median 1.131 m applied) is unvalidated at this site. The nearest research-quality gauge (Mina Sulman, Bahrain, ~340 km NW) shows EOT20 under-estimating the separation by 0.214 m; IF that transfers to Marawah, charted LAT depths would be up to ~0.2 m TOO DEEP (shoals under-reported — the navigation-unsafe direction). Sign and magnitude at Marawah are UNKNOWN; no correction has been applied (a manufactured shift from one distant embayment is not defensible). This possible systematic bias sits within the CATZOC C ±2.19 m allowance and the >0.8 m TVU95 headroom, so the CATZOC C reconnaissance classification is unaffected. Mariners must apply full CATZOC C under-keel clearance and treat charted LAT depths as possibly ~0.2 m optimistic until a local tide gauge validates the datum.",
+          "σ / TVU raster (sigma_lat) computed CPU-mode after GPU failure; max reproduction Δ 0.038 m vs the certified GPU cache — immaterial vs the >0.8 m CATZOC C headroom.",
+          "18.8% of water pixels dry at LAT (intertidal / drying heights, median 0.12 m) — the drying_mask delineation is INDICATIVE, CATZOC C, not surveyed.",
+          "Beyond z_valid (≳3.84 m): reconnaissance context only, no ATL24 bottom returns.",
+          "The Order-2 certification lives on the SURFACE-RELATIVE companion product, not on this LAT chart. Reconnaissance chart — not a survey-grade replacement, not for navigation."
+        ]
+      }
+    },
+    {
+      "id": "dlfusion_bu_tinah_provisional",
+      "always_seed": true,
+      "name": "Bu Tinah — PROVISIONAL · CATZOC C provisional (sub-certification) · TVU unstated",
+      "file": "sample_bu_tinah_depth_d1a.tif",
+      "roi_bbox": [
+        53.02,
+        24.57,
+        53.12,
+        24.66
+      ],
+      "resolution": "10m",
+      "date": 1751817600.0,
+      "units": "m, positive down (surface-relative)",
+      "source_note": "DL-fusion PROVISIONAL product (DLF-R12 close-out). Depth = linear D1a (Lyzenga-1985 + Stumpf log-ratios, robust Huber, R∞ composite), buffered leave-track-out vs ATL24 class-40 median. Sub-certification: reliability evidence incomplete, TVU unstated. The bu_tinah σ raster is DIAGNOSTIC-ONLY and is NOT shipped as a TVU band. Distinct from the earlier ad_bu_tinah RELATIVE-morphology reconnaissance product.",
+      "metrics": {
+        "mask_source": "VHR+OSM-coast+S2",
+        "coastline_datum": "MHW (approx; not LAT)",
+        "coastline_vintage": "2026-07-08",
+        "coastline_footprint_px_removed": 701,
+        "coastline_subtidal_delta_pct": 0.003,
+        "coastline_added_water_px": 0,
+        "method": "DL-fusion linear D1a (Lyzenga85 + Stumpf, Huber, R∞ composite) — surface-relative",
+        "depth_method": "dlfusion_d1a",
+        "cert_status": "provisional",
+        "cert_label": "PROVISIONAL — CATZOC C provisional (sub-certification; reliability evidence incomplete), TVU unstated",
+        "catzoc": "C (provisional)",
+        "rmse_m": 0.48,
+        "r2": 0.443,
+        "bias_m": -0.014,
+        "n_test": 1751,
+        "z_valid_m": 3.7,
+        "valid_depth_range_m": [0, 3.7],
+        "datum": "surface-relative (no LAT reduction shipped)",
+        "depth_min_m": 0.0,
+        "depth_max_m": 8.0,
+        "depth_mean_m": 1.97,
+        "n_water_px": 1114807,
+        "tvu_note": "TVU UNSTATED. The bu_tinah conformal σ raster was ruled DIAGNOSTIC-ONLY (non-exchangeable under LTO) and is deliberately NOT shipped as a TVU band.",
+        "ground_truth": "ATL24 v005 class-40 (bathymetry) median; buffered leave-track-out CV.",
+        "validation_status": "Provisional per DLF-R12 close-out — RMSE = median leave-track-out holdout (≈0.48 m), sub-certification.",
+        "caveats": [
+          "PROVISIONAL: reliability evidence incomplete; not certified.",
+          "TVU unstated — no shipped uncertainty band (σ raster diagnostic-only).",
+          "Surface-relative datum (no LAT reduction shipped).",
+          "Beyond z_valid (≳3.7 m): reconnaissance only, no ATL24 bottom returns.",
+          "Reconnaissance-grade SDB — not for navigation."
+        ]
+      }
+    },
+    {
+      "id": "default_khalifa_port",
+      "is_default": true,
+      "name": "Khalifa Port — DL Pro PatchCNN SDB",
+      "file": "sample_default_khalifa_port.tif",
+      "roi_bbox": [
+        54.62861,
+        24.78151,
+        54.69139,
+        24.83849
+      ],
+      "resolution": "10m",
+      "date": 1728950400.0,
+      "units": "m, positive down, datum LAT",
+      "source_note": "DL PRIMARY: June-5 heteroscedastic PatchCNN (sdb_cnn_default 2026-06-05). Numbers below are the leakage-safe spatial_block_500m hold-out (n_test 6290), measured ON the DL product — NOT the Lyzenga fast-path seed. Band-shuffle guard PASS (+858%). Datum LAT, pos-down, cap 25 m.",
+      "vhr_action": {
+        "enabled": true,
+        "method": "mapbox_hr",
+        "zoom": 17,
+        "bbox": [
+          54.62861,
+          24.78151,
+          54.69139,
+          24.83849
+        ],
+        "site_key": "khalifa_port"
+      },
+      "metrics": {
+        "method": "DL Pro — Heteroscedastic PatchCNN",
+        "depth_method": "dl_patchcnn",
+        "rmse_m": 1.742,
+        "bias_m": -0.701,
+        "r2": 0.895,
+        "decile_slope": 0.897,
+        "mae_m": null,
+        "n_test": 6290,
+        "catzoc": "D",
+        "datum": "LAT",
+        "standard_date": "2024-10-15",
+        "area_km2": 33.0,
+        "band_shuffle_pass": true,
+        "validation_status": "DL spatial_block_500m hold-out — display verbatim (NOT Lyzenga seed)",
+        "ground_truth": "KP Basin Soundings 10m.xyz + KP_EMAL_Soundings_10x_New.xyz (multibeam, UTM40N, pos-down)",
+        "_dl_card_region": "khalifa_port",
+        "honesty_card": {
+          "headline": "DL PatchCNN, leakage-safe spatial-block: RMSE 1.74 m / R² 0.895 / decile 0.897. Under-deepens (bias -0.70 m) — printed honestly.",
+          "catzoc": "D",
+          "catzoc_note": "CATZOC D (IHO S-44 §3.3.1): RMSE 1.74 m, p95 = 1.645x1.74 = 2.86 m >> Order 2 TVU(10 m) = 1.03 m -> FAILS ALL ORDERS. Prior 'B/C' was a human judgement now overridden by the honest p95-vs-TVU gate.",
+          "error_attribution": "RMSE 1.74 m is DEEP-CHANNEL-DOMINATED (optical saturation > ~15 m). Full-range R² 0.895 (legitimate — 0–21 m gradient) beats per-bbox mean depth.",
+          "bias_note": "Bias -0.70 m (DL under-deepens vs the Lyzenga product's -0.04 m). Accepted because the DL RMSE/R² are honestly better AND leakage-safe; sign is printed, not hidden.",
+          "sigma_note": "σ95 observed coverage 0.74 vs target 0.95 — under-confident in deep water; shown, not hidden.",
+          "band_shuffle": "Band-shuffle guard: 1.74 → 16.68 m (+858%) → spectral depth skill present (PASS).",
+          "vhr_caveat": "Very HR = Mapbox RGB upsample (cosmetic); depth still the DL product. Not independently validated at 1 m."
+        }
+      }
+    },
+    {
+      "id": "default_old_mussafah",
+      "is_default": true,
+      "name": "Old Mussafah Channel — DL Pro PatchCNN SDB",
+      "file": "sample_default_old_mussafah.tif",
+      "roi_bbox": [
+        54.35191,
+        24.40911,
+        54.41449,
+        24.46609
+      ],
+      "resolution": "10m",
+      "date": 1723680000.0,
+      "units": "m, positive down, datum LAT",
+      "source_note": "DL PRIMARY: June-5 PatchCNN spatial_block_500m hold-out (n_test 5413). RMSE 0.99 m measured ON the DL product. R² is SUPPRESSED (narrow single-mode 0.31–9.75 m range — denominator artefact, forbidden per honesty contract); judge by RMSE + decile slope. Data-limited / narrow-range.",
+      "vhr_action": {
+        "enabled": true,
+        "method": "mapbox_hr",
+        "zoom": 17,
+        "bbox": [
+          54.35191,
+          24.40911,
+          54.41449,
+          24.46609
+        ],
+        "site_key": "old_mussafah"
+      },
+      "metrics": {
+        "method": "DL Pro — Heteroscedastic PatchCNN",
+        "depth_method": "dl_patchcnn",
+        "rmse_m": 0.988,
+        "bias_m": 0.428,
+        "r2": null,
+        "r2_suppressed": true,
+        "decile_slope": 0.087,
+        "mae_m": null,
+        "n_test": 5413,
+        "catzoc": "D",
+        "datum": "LAT",
+        "standard_date": "2024-08-15",
+        "area_km2": 34.0,
+        "limitation_flag": "data-limited (narrow single-mode depth range)",
+        "validation_status": "DL spatial_block_500m hold-out — RMSE only (R² suppressed)",
+        "ground_truth": "OMC_Soundings_20m.xyz (23,109 pts)",
+        "_dl_card_region": "old_mussafah",
+        "honesty_card": {
+          "headline": "DL PatchCNN, leakage-safe spatial-block: RMSE 0.99 m (R² suppressed — narrow range). Good absolute error; worse than the Lyzenga seed 0.73 m, shown honestly.",
+          "catzoc": "D",
+          "catzoc_note": "CATZOC D (IHO S-44 §3.3.1): RMSE 0.99 m, p95 = 1.62 m > Order 2 TVU(5 m) = 1.01 m -> FAILS. Plus bias +0.43 m over-deepens (unsafe direction, NOAA HSSD §5.1.3). Prior 'B' overridden.",
+          "r2_caveat": "R² SUPPRESSED for OMC — narrow single-mode depth range (0.31–9.75 m, ~all 5–10 m) collapses within-bin variance so R² is a denominator artefact (meta R² = -0.43). Judge by RMSE + decile slope, NEVER R².",
+          "bias_note": "Bias +0.43 m (over-deep) — sign printed.",
+          "vhr_caveat": "Very HR = Mapbox RGB upsample (cosmetic); depth still the DL product. Not independently validated at 1 m."
+        }
+      }
+    },
+    {
+      "id": "default_jbel_dhanna",
+      "is_default": true,
+      "name": "Jbel Dhanna — Lyzenga SDB (locally-trained 80/20) — DL BLOCKED",
+      "file": "sample_default_jbel_dhanna.tif",
+      "roi_bbox": [
+        52.57877,
+        24.16151,
+        52.64123,
+        24.21849
+      ],
+      "resolution": "10m",
+      "date": 1707955200.0,
+      "units": "m, positive down, datum LAT",
+      "source_note": "METHOD = LYZENGA (locally-trained 80/20), NOT DL. The June-5 PatchCNN was trained ONLY on Khalifa + OMC and was NOT trained/validated on Jbel Dhanna, so a DL card is BLOCKED here (DL_WEB_LOG.md §3 / AC-4). Numbers below are the Lyzenga product's held-out 20% spatial-block (>=500 m buffer): RMSE 0.80 m, NOT a DL number.",
+      "vhr_action": {
+        "enabled": true,
+        "method": "mapbox_hr",
+        "zoom": 17,
+        "bbox": [
+          52.57877,
+          24.16151,
+          52.64123,
+          24.21849
+        ],
+        "site_key": "jbel_dhanna"
+      },
+      "metrics": {
+        "method": "Lyzenga (locally-trained 80/20)",
+        "depth_method": "lyzenga",
+        "dl_blocked": true,
+        "dl_blocked_reason": "DL PatchCNN not trained/validated on Jbel Dhanna; no spatial-block DL checkpoint exists for this region (DL_WEB_LOG.md AC-4).",
+        "rmse_m": 0.8,
+        "bias_m": 0.15,
+        "r2": 0.83,
+        "mae_m": null,
+        "n_test": 72,
+        "catzoc": "D",
+        "datum": "LAT",
+        "standard_date": "2024-02-15",
+        "area_km2": 22.0,
+        "validation_status": "LYZENGA locally-trained (held-out 20% spatial-block) — display verbatim; NOT a DL product",
+        "train_provenance": "Lyzenga trained on 80% of Dhanna in-situ, 20% spatial-block hold-out (>=500 m buffer)",
+        "ground_truth": "validation/swot_dhanna/SWOT_Dhanna.shp (+ i-Boating Dhanna soundings)",
+        "model_card": {
+          "method": "Lyzenga (locally-trained 80/20)",
+          "model_version": "production Lyzenga/Stumpf fast-path + UAE blend (in-region calibrated)",
+          "engine_file": "backend/app.py::_run_s2_lyzenga_fast",
+          "dl_blocked": true,
+          "dl_blocked_reason": "DL PatchCNN not trained/validated on Jbel Dhanna (DL_WEB_LOG.md AC-4) — no DL numbers may be shown.",
+          "metrics": {
+            "split": "spatial_block_500m (Lyzenga, in-region 80/20)",
+            "rmse_m": 0.8,
+            "bias_m": 0.15,
+            "full_range_r2": 0.83
+          },
+          "datum": "LAT (positive-down)",
+          "max_depth_m": 25.0,
+          "disclaimer": "Reconnaissance-grade SDB. Not to be used for navigation.",
+          "catzoc": "D",
+          "datum_info": {
+            "stated_datum": "LAT (positive-down)",
+            "datum_transform_applied": false,
+            "datum_offset_note": "Lyzenga in-region product; no explicit ellipsoid->geoid->LAT transform applied. LAT assumed. u_datum ~ 0.20 m (1 sigma, Gulf).",
+            "vertical_crs_in_geotiff": true
+          }
+        },
+        "honesty_card": {
+          "headline": "METHOD = LYZENGA (locally-trained 80/20): 0.80 m on the 20% spatial-block hold-out. DL card BLOCKED — model not trained on Jbel.",
+          "catzoc": "D",
+          "catzoc_note": "CATZOC D (IHO S-44 §3.3.1): RMSE 0.80 m, p95 = 1.32 m > Order 2 TVU(5 m) = 1.01 m -> FAILS. Prior 'B' overridden by p95 gate.",
+          "train_caveat": "Lyzenga trained on 80% of THIS region's in-situ -> the 0.80 m is IN-REGION CALIBRATED LYZENGA skill, NOT DL and NOT transfer skill.",
+          "dl_caveat": "The June-5 DL PatchCNN was trained ONLY on Khalifa + OMC; it has NO spatial-block validation on Jbel Dhanna, so no DL RMSE/R²/bias is shown for this region.",
+          "bias_note": "Bias +0.15 m (shoal-safe sign). R^2 0.83 = strong skill (wide depth range).",
+          "vhr_caveat": "Very HR (Mapbox) is RGB upsample = spatial detail only; accuracy unchanged, not independently validated at 1 m."
+        },
+        "n_test_note": "Lyzenga 80/20 spatial-block hold-out (>=500 m buffer) on the SWOT_Dhanna in-situ set (n=360 -> 20% = 72 test soundings). Lyzenga product, NOT DL."
+      }
+    },
+    {
+      "id": "default_abu_al_abyad",
+      "is_default": true,
+      "name": "Abu Al Abyad — RECONNAISSANCE fusion (no in-situ)",
+      "file": "sample_abu_al_abyad_fusion.tif",
+      "mask_file": "sample_abu_al_abyad_fusion_source.tif",
+      "mask_classes": {
+        "0": "nodata/land",
+        "1": "optical (uncalibrated prior, deep shape)",
+        "2": "photon (ICESat-2 ATL24/SlideRule, shallow)",
+        "3": "gebco (floor)"
+      },
+      "roi_bbox": [
+        53.84876,
+        24.18651,
+        53.91124,
+        24.24349
+      ],
+      "resolution": "10m",
+      "date": 1723680000.0,
+      "units": "m, positive down, datum ellipsoid/geoid (ICESat-2 refraction-corrected n=1.34)",
+      "source_note": "RECONNAISSANCE fusion (standard date 2024-08-15): uncalibrated clustered optical prior (v13) + ICESat-2 ATL24/SlideRule photon anchors (shallow zone) + GEBCO floor below z_opt. i-Boating DROPPED (S12, datum-unreconcilable). The ATL24 affine anchor was REJECTED (corr(prior,photon)=0.097 < gate) because the v13 prior is a deep-basin-only field spatially disjoint from the shallow photons; NO fabricated anchor applied. Per-pixel source flag emitted. Downsampled committable preview.",
+      "vhr_action": {
+        "enabled": true,
+        "method": "mapbox_hr",
+        "zoom": 17,
+        "bbox": [
+          53.84876,
+          24.18651,
+          53.91124,
+          24.24349
+        ],
+        "site_key": "abu_al_abyad"
+      },
+      "metrics": {
+        "rmse_m": null,
+        "bias_m": null,
+        "r2": null,
+        "mae_m": null,
+        "n_test": null,
+        "catzoc": "C/D (reconnaissance)",
+        "datum": "ellipsoid/geoid (ICESat-2 refraction-corrected n=1.34)",
+        "standard_date": "2024-08-15",
+        "area_km2": 35.0,
+        "reconnaissance": true,
+        "validation_status": "RECONNAISSANCE — NO held-out in-situ, NO RMSE/Bias/R2 by design",
+        "z_opt_m": 14.0,
+        "calibration": {
+          "alpha": 0.0,
+          "beta": 1.0,
+          "alpha_fit": 0.964,
+          "beta_fit": 0.115,
+          "fit_corr": 0.097,
+          "anchor_applied": false,
+          "corr_gate": 0.3,
+          "n_anchor_fit": 3547
+        },
+        "sources": {
+          "optical_prior": {
+            "uncalibrated": true
+          },
+          "icesat2_sliderule": {
+            "n_in_bbox": 7351,
+            "n_anchor_fit": 3547,
+            "n_photon_px": 5969
+          },
+          "iboating": {
+            "n": 13,
+            "used": false,
+            "reason": "datum-unreconcilable (only 2 co-located within 150 m of an ICESat-2 photon) -> DROP per lesson S12"
+          },
+          "gebco": {
+            "available": false,
+            "note": "GEBCO WCS returned non-TIFF (service/network); deep gaps stay nodata"
+          }
+        },
+        "honesty_card": {
+          "headline": "RECONNAISSANCE estimate — NO in-situ for Abu Al Abyad, so NO RMSE/Bias/R^2 is reported (cells stay –).",
+          "catzoc": "C/D",
+          "catzoc_note": "C where dense ICESat-2 anchors constrain; D where GEBCO-floored or unconstrained.",
+          "anchor_decision": "ATL24/SlideRule affine fit gave alpha=0.964 beta=0.115 but corr(prior,photon)=0.097 < gate 0.30 -> REJECTED (regression-to-mean on a deep-only prior spatially disjoint from shallow photons). Photons own the shallow zone directly; prior kept uncalibrated for deep shape with inflated sigma.",
+          "iboating_decision": "DROPPED per lesson S12 — only 2 i-Boating points co-located within 150 m of an ICESat-2 photon, insufficient to reconcile datum.",
+          "comparability": "Physically-grounded estimate with stated sources/coverage — NOT comparable to the three validated regions (Khalifa 1.96 / OMC 0.73 / Dhanna 0.80 m).",
+          "source_legend": {
+            "1": "optical (uncalibrated prior)",
+            "2": "photon (ICESat-2, shallow)",
+            "3": "gebco floor"
+          },
+          "vhr_caveat": "Very HR (Mapbox) is RGB upsample = spatial detail only; accuracy unchanged, not independently validated at 1 m."
+        }
+      }
+    },
+    {
+      "id": "khalifa_vhr_1m",
+      "name": "Khalifa Port (Very-High-Resolution 1 m) — in-situ-anchored",
+      "file": "sample_khalifa_vhr_1m.tif",
+      "mask_file": "sample_khalifa_vhr_optical_valid.tif",
+      "mask_classes": {
+        "0": "deep-abstain (MBES-only, optically saturated)",
+        "1": "valid (<=z_opt, optically recoverable)",
+        "2": "collar (z_opt..z_opt+collar transition)",
+        "255": "land / nodata"
+      },
+      "roi_bbox": [
+        54.636,
+        24.785,
+        54.69,
+        24.84
+      ],
+      "resolution": "vhr",
+      "date": 1782155180.918,
+      "units": "m, positive down, datum LAT (Khalifa Port multibeam in-situ datum)",
+      "source_note": "Downsampled committable preview (~9 m/px, 604x678) of the full 1 m Mapbox-VHR product Very_HR_Results/khalifa_vhr_k1/khalifa_vhr_depth_1m.tif (5436x6102, 23 MB, gitignored). The depth field is IN-SITU-ANCHORED: shallow optically-valid band (<=10.5 m) is in-situ-anchored IDW, deep dredged basin (>12 m) is the full ~41,653-pt KP multibeam EDT-IDW MAP. This is NOT a satellite-derived-skill product.",
+      "metrics": {
+        "rmse_m": null,
+        "r2": null,
+        "bias_m": null,
+        "mae_m": null,
+        "n_test": null,
+        "coverage_pct": null,
+        "catzoc": "C-D (deep basin, in-situ charted maintained depth)",
+        "mean_depth_m": 14.9,
+        "max_depth_m": 20.91,
+        "p50_depth_m": 18.33,
+        "datum": "LAT (Khalifa Port multibeam)",
+        "product": "khalifa_vhr",
+        "product_type": "in-situ-anchored, NOT satellite-derived skill",
+        "shallow_rmse_m": 10.567,
+        "n_insitu": 41653,
+        "n_insitu_anchors": 41653,
+        "honesty_card": {
+          "line_1_shallow_SDB_skill": "shallow optically-valid (<=10.5 m, Kd490~=0.22/m, Secchi~=7 m) leakage-safe spatial-block RMSE = 10.567 m (best=s2only, n=2989, n>=40) — and this is NOT real skill (slope -0.19, R^2 << 0, mean-collapse). The honest statement: NO recoverable shallow SDB skill on the withheld split; shallow field is in-situ-anchored IDW.",
+          "line_2_deep_abstain": "deep (> 12 m): OPTICALLY SATURATED — in-situ-anchored charted maintained depth, CATZOC C-D, NOT an SDB retrieval (n_insitu=41,653); full-fit deep RMSE NOT quoted as skill",
+          "headline": "IN-SITU-ANCHORED 1 m bathymetry on the Mapbox VHR grid — NOT a satellite-derived-skill product.",
+          "z_opt_m": 10.5,
+          "z_opt_collar_m": 12.0,
+          "kd490": 0.22,
+          "secchi_m": 7.0,
+          "source": "Khalifa VHR loop K1/K2 (KHALIFA_PANEL_LOG.md), k2_results.json honesty_card"
+        },
+        "optical_valid": {
+          "n_valid_le_zopt": 12557339,
+          "n_collar": 79583,
+          "n_deep_abstain": 16818205
+        }
+      }
+    },
+    {
+      "id": "sample_dhanna_fused",
+      "name": "Jbel Dhanna (sample) — fused ATL24+iBoating+S2",
+      "file": "sample_dhanna_fused.tif",
+      "roi_bbox": [
+        52.56006994095835,
+        24.203148343189795,
+        52.62993005904165,
+        24.266851656810204
+      ],
+      "resolution": "10m",
+      "date": 1780583747.2986035,
+      "units": "m, positive down, datum MSL (GEBCO vertical datum via in-situ calibration)",
+      "source_note": "Bundled demo seed derived from local result 2d8682efd0c8 (ATL24 n=318, iBoating tiles=15, S2 GEE median). Depth range ~0–16.55 m — well suited to the 3D seabed view.",
+      "metrics": {
+        "rmse_m": 4.601,
+        "r2": 0.5267,
+        "bias_m": -1.173,
+        "mae_m": 3.262,
+        "n_test": 415,
+        "mean_depth_m": 8.82,
+        "max_depth_m": 16.55,
+        "water_pixels": 124973,
+        "n_atl24_calibration_pts": 318,
+        "n_iboating_calibration_pts": 40,
+        "n_scenes_s2": 1,
+        "datum": "MSL (GEBCO vertical datum via in-situ calibration)"
+      }
+    },
+    {
+      "id": "sample_khalifa_fused",
+      "name": "Khalifa Port (sample) — fused ATL24+iBoating+S2",
+      "file": "sample_khalifa_fused.tif",
+      "roi_bbox": [
+        54.620634197886694,
+        24.81335099196802,
+        54.6793658021133,
+        24.86664900803198
+      ],
+      "resolution": "10m",
+      "date": 1780583066.9775212,
+      "units": "m, positive down, datum MSL (GEBCO vertical datum via in-situ calibration)",
+      "source_note": "Bundled demo seed derived from local result 8fdf252da56e (ATL24 n=2000, iBoating tiles=7, S2 GEE median). Depth range ~0–13.55 m.",
+      "metrics": {
+        "rmse_m": 3.524,
+        "r2": 0.3338,
+        "bias_m": 0.523,
+        "mae_m": 1.742,
+        "n_test": 2026,
+        "mean_depth_m": 3.33,
+        "max_depth_m": 13.55,
+        "water_pixels": 89346,
+        "n_atl24_calibration_pts": 2000,
+        "n_iboating_calibration_pts": 13,
+        "n_scenes_s2": 1,
+        "datum": "MSL (GEBCO vertical datum via in-situ calibration)"
+      }
+    },
+    {
+      "id": "ad_eastern_mangroves",
+      "name": "Eastern Mangroves — RELATIVE morphology SDB (ATL24 reconnaissance)",
+      "file": "sample_ad_eastern_mangroves.tif",
+      "roi_bbox": [
+        54.4,
+        24.4,
+        54.49,
+        24.47
+      ],
+      "resolution": "10m",
+      "date": 1782860000.0,
+      "units": "relative Stumpf morphology index (0–1) — NOT metres. The shipped raster is bottom morphology only; no validated absolute depth.",
+      "source_note": "Abu Dhabi shallow VHR campaign (UAE/Morocco multisite closeout). Sentinel-2 L2A → Lyzenga + Stumpf log-ratios, robust-linear (Huber) calibration to ICESat-2 ATL24 photons under spatial-block cross-validation (≥8 blocks, ≥500 m buffer, 3-seed pooled OOF). GRADE = RELATIVE: shipped raster is the dimensionless Stumpf morphology index (0–1), NOT absolute depth. Downsampled committable preview (~700 px) of the gitignored full-res product Very_HR_Results/abudhabi_shallow/eastern_mangroves/eastern_mangroves_sdb_depth.tif. PARTIAL depth-rank skill (strongest site) — uniform muddy mangrove-channel bottom.",
+      "metrics": {
+        "mask_source": "VHR+OSM-coast+S2",
+        "coastline_datum": "MHW (approx; not LAT)",
+        "coastline_vintage": "2026-07-08",
+        "coastline_footprint_px_removed": 22053,
+        "coastline_subtidal_delta_pct": 0.463,
+        "coastline_added_water_px": 0,
+        "rmse_m": 1.468,
+        "bias_m": -0.053,
+        "r2": 0.395,
+        "decile_slope": 0.477,
+        "shuffle_degrade_pct": 111.0,
+        "n_test": 749,
+        "mae_m": null,
+        "catzoc": "D (reconnaissance)",
+        "datum": "ICESat-2 ATL03 ellipsoid (refraction-corrected n=1.34)",
+        "grade": "RELATIVE",
+        "product_type": "relative Stumpf morphology index (0–1), NOT satellite-derived absolute depth",
+        "depth_rank_skill": true,
+        "optically_accessible_band_m": [
+          0.5,
+          8.0
+        ],
+        "gt_source": "ICESat-2 ATL03 bathy photons (SlideRule, refraction-corrected)",
+        "reconnaissance": true,
+        "validation_status": "RELATIVE (PARTIAL depth-rank skill) — photon-referenced, NO in-situ multibeam",
+        "honesty_card": {
+          "headline": "RELATIVE reconnaissance product. ATL24-calibrated robust-linear fit achieves RMSE 1.468 m, R² 0.395, decile slope 0.477 (shuffle +111.0%, n=749) — but the shipped raster is a relative Stumpf morphology index (0–1), NOT validated absolute depth.",
+          "grade": "RELATIVE",
+          "depth_rank": "PARTIAL — positive R² and decile slope, real but sub-survey depth rank",
+          "ceiling": "Bottom-type (seagrass/sand mosaic) albedo variance caps the pooled decile slope below the CALIBRATED gate (≥0.70). Per-class within-uniform-bottom slopes reached 0.72–0.74 at eastern_mangroves but were a small-N artifact under an 8-seed robust gate.",
+          "comparability": "NOT comparable to validated regions (Old Mussafah 0.92 m, Khalifa multibeam). RECONNAISSANCE / RELATIVE grade — morphology only.",
+          "campaign_verdict": "8-round UAE+Morocco optical+wave SDB campaign CONVERGED: no survey-grade (CALIBRATED) skill anywhere; honest ceiling is RECONNAISSANCE. Further improvement needs NEW DATA (commercial VHR multispectral, in-situ multibeam, ICESat-2 densification, airborne lidar).",
+          "vhr_caveat": "Guided ×2 upsample (10 m → ~5 m) is spatial detail only; carries NO independent depth skill."
+        }
+      }
+    },
+    {
+      "id": "ad_lulu_lagoon",
+      "name": "Lulu Lagoon — RELATIVE morphology SDB (ATL24 reconnaissance)",
+      "file": "sample_ad_lulu_lagoon.tif",
+      "roi_bbox": [
+        54.3,
+        24.49,
+        54.39,
+        24.56
+      ],
+      "resolution": "10m",
+      "date": 1782860001.0,
+      "units": "relative Stumpf morphology index (0–1) — NOT metres. The shipped raster is bottom morphology only; no validated absolute depth.",
+      "source_note": "Abu Dhabi shallow VHR campaign (UAE/Morocco multisite closeout). Sentinel-2 L2A → Lyzenga + Stumpf log-ratios, robust-linear (Huber) calibration to ICESat-2 ATL24 photons under spatial-block cross-validation (≥8 blocks, ≥500 m buffer, 3-seed pooled OOF). GRADE = RELATIVE: shipped raster is the dimensionless Stumpf morphology index (0–1), NOT absolute depth. Downsampled committable preview (~700 px) of the gitignored full-res product Very_HR_Results/abudhabi_shallow/lulu_lagoon/lulu_lagoon_sdb_depth.tif. PARTIAL depth-rank skill (best RMSE).",
+      "metrics": {
+        "mask_source": "VHR+OSM-coast+S2",
+        "coastline_datum": "MHW (approx; not LAT)",
+        "coastline_vintage": "2026-07-08",
+        "coastline_footprint_px_removed": 10210,
+        "coastline_subtidal_delta_pct": 0.318,
+        "coastline_added_water_px": 0,
+        "rmse_m": 1.216,
+        "bias_m": -0.155,
+        "r2": 0.3262,
+        "decile_slope": 0.551,
+        "shuffle_degrade_pct": 157.1,
+        "n_test": 430,
+        "mae_m": null,
+        "catzoc": "D (reconnaissance)",
+        "datum": "ICESat-2 ATL03 ellipsoid (refraction-corrected n=1.34)",
+        "grade": "RELATIVE",
+        "product_type": "relative Stumpf morphology index (0–1), NOT satellite-derived absolute depth",
+        "depth_rank_skill": true,
+        "optically_accessible_band_m": [
+          0.5,
+          8.0
+        ],
+        "gt_source": "ICESat-2 ATL03 bathy photons (SlideRule, refraction-corrected)",
+        "reconnaissance": true,
+        "validation_status": "RELATIVE (PARTIAL depth-rank skill) — photon-referenced, NO in-situ multibeam",
+        "honesty_card": {
+          "headline": "RELATIVE reconnaissance product. ATL24-calibrated robust-linear fit achieves RMSE 1.216 m, R² 0.3262, decile slope 0.551 (shuffle +157.1%, n=430) — but the shipped raster is a relative Stumpf morphology index (0–1), NOT validated absolute depth.",
+          "grade": "RELATIVE",
+          "depth_rank": "PARTIAL — positive R² and decile slope, real but sub-survey depth rank",
+          "ceiling": "Bottom-type (seagrass/sand mosaic) albedo variance caps the pooled decile slope below the CALIBRATED gate (≥0.70). Per-class within-uniform-bottom slopes reached 0.72–0.74 at eastern_mangroves but were a small-N artifact under an 8-seed robust gate.",
+          "comparability": "NOT comparable to validated regions (Old Mussafah 0.92 m, Khalifa multibeam). RECONNAISSANCE / RELATIVE grade — morphology only.",
+          "campaign_verdict": "8-round UAE+Morocco optical+wave SDB campaign CONVERGED: no survey-grade (CALIBRATED) skill anywhere; honest ceiling is RECONNAISSANCE. Further improvement needs NEW DATA (commercial VHR multispectral, in-situ multibeam, ICESat-2 densification, airborne lidar).",
+          "vhr_caveat": "Guided ×2 upsample (10 m → ~5 m) is spatial detail only; carries NO independent depth skill."
+        }
+      }
+    },
+    {
+      "id": "ad_bu_tinah",
+      "name": "Bu Tinah — RELATIVE morphology SDB (ATL24 reconnaissance)",
+      "file": "sample_ad_bu_tinah.tif",
+      "roi_bbox": [
+        53.02,
+        24.57,
+        53.12,
+        24.66
+      ],
+      "resolution": "10m",
+      "date": 1782860002.0,
+      "units": "relative Stumpf morphology index (0–1) — NOT metres. The shipped raster is bottom morphology only; no validated absolute depth.",
+      "source_note": "Abu Dhabi shallow VHR campaign (UAE/Morocco multisite closeout). Sentinel-2 L2A → Lyzenga + Stumpf log-ratios, robust-linear (Huber) calibration to ICESat-2 ATL24 photons under spatial-block cross-validation (≥8 blocks, ≥500 m buffer, 3-seed pooled OOF). GRADE = RELATIVE: shipped raster is the dimensionless Stumpf morphology index (0–1), NOT absolute depth. Downsampled committable preview (~700 px) of the gitignored full-res product Very_HR_Results/abudhabi_shallow/bu_tinah/bu_tinah_sdb_depth.tif. PARTIAL depth-rank skill.",
+      "metrics": {
+        "mask_source": "VHR+OSM-coast+S2",
+        "coastline_datum": "MHW (approx; not LAT)",
+        "coastline_vintage": "2026-07-08",
+        "coastline_footprint_px_removed": 492,
+        "coastline_subtidal_delta_pct": 0.002,
+        "coastline_added_water_px": 0,
+        "rmse_m": 1.607,
+        "bias_m": -0.471,
+        "r2": 0.2826,
+        "decile_slope": 0.4,
+        "shuffle_degrade_pct": 206.4,
+        "n_test": 329,
+        "mae_m": null,
+        "catzoc": "D (reconnaissance)",
+        "datum": "ICESat-2 ATL03 ellipsoid (refraction-corrected n=1.34)",
+        "grade": "RELATIVE",
+        "product_type": "relative Stumpf morphology index (0–1), NOT satellite-derived absolute depth",
+        "depth_rank_skill": true,
+        "optically_accessible_band_m": [
+          0.5,
+          8.0
+        ],
+        "gt_source": "ICESat-2 ATL03 bathy photons (SlideRule, refraction-corrected)",
+        "reconnaissance": true,
+        "validation_status": "RELATIVE (PARTIAL depth-rank skill) — photon-referenced, NO in-situ multibeam",
+        "honesty_card": {
+          "headline": "RELATIVE reconnaissance product. ATL24-calibrated robust-linear fit achieves RMSE 1.607 m, R² 0.2826, decile slope 0.4 (shuffle +206.4%, n=329) — but the shipped raster is a relative Stumpf morphology index (0–1), NOT validated absolute depth.",
+          "grade": "RELATIVE",
+          "depth_rank": "PARTIAL — positive R² and decile slope, real but sub-survey depth rank",
+          "ceiling": "Bottom-type (seagrass/sand mosaic) albedo variance caps the pooled decile slope below the CALIBRATED gate (≥0.70). Per-class within-uniform-bottom slopes reached 0.72–0.74 at eastern_mangroves but were a small-N artifact under an 8-seed robust gate.",
+          "comparability": "NOT comparable to validated regions (Old Mussafah 0.92 m, Khalifa multibeam). RECONNAISSANCE / RELATIVE grade — morphology only.",
+          "campaign_verdict": "8-round UAE+Morocco optical+wave SDB campaign CONVERGED: no survey-grade (CALIBRATED) skill anywhere; honest ceiling is RECONNAISSANCE. Further improvement needs NEW DATA (commercial VHR multispectral, in-situ multibeam, ICESat-2 densification, airborne lidar).",
+          "vhr_caveat": "Guided ×2 upsample (10 m → ~5 m) is spatial detail only; carries NO independent depth skill."
+        }
+      }
+    },
+    {
+      "id": "ad_marawah",
+      "name": "Marawah — RELATIVE morphology SDB (ATL24 reconnaissance)",
+      "file": "sample_ad_marawah.tif",
+      "roi_bbox": [
+        53.24,
+        24.24,
+        53.36,
+        24.34
+      ],
+      "resolution": "10m",
+      "date": 1782860003.0,
+      "units": "relative Stumpf morphology index (0–1) — NOT metres. The shipped raster is bottom morphology only; no validated absolute depth.",
+      "source_note": "Abu Dhabi shallow VHR campaign (UAE/Morocco multisite closeout). Sentinel-2 L2A → Lyzenga + Stumpf log-ratios, robust-linear (Huber) calibration to ICESat-2 ATL24 photons under spatial-block cross-validation (≥8 blocks, ≥500 m buffer, 3-seed pooled OOF). GRADE = RELATIVE: shipped raster is the dimensionless Stumpf morphology index (0–1), NOT absolute depth. Downsampled committable preview (~700 px) of the gitignored full-res product Very_HR_Results/abudhabi_shallow/marawah/marawah_sdb_depth.tif. NO validated depth rank (strong spectral signal but regression-to-mean; seagrass/sand bottom-type variance).",
+      "metrics": {
+        "mask_source": "VHR+OSM-coast+S2",
+        "coastline_datum": "MHW (approx; not LAT)",
+        "coastline_vintage": "2026-07-08",
+        "coastline_footprint_px_removed": 1165,
+        "coastline_subtidal_delta_pct": 0.006,
+        "coastline_added_water_px": 0,
+        "rmse_m": 1.84,
+        "bias_m": -0.566,
+        "r2": -0.104,
+        "decile_slope": 0.046,
+        "shuffle_degrade_pct": 135.2,
+        "n_test": 445,
+        "mae_m": null,
+        "catzoc": "D (reconnaissance)",
+        "datum": "ICESat-2 ATL03 ellipsoid (refraction-corrected n=1.34)",
+        "grade": "RELATIVE",
+        "product_type": "relative Stumpf morphology index (0–1), NOT satellite-derived absolute depth",
+        "depth_rank_skill": false,
+        "optically_accessible_band_m": [
+          0.5,
+          8.0
+        ],
+        "gt_source": "ICESat-2 ATL03 bathy photons (SlideRule, refraction-corrected)",
+        "reconnaissance": true,
+        "validation_status": "RELATIVE (NO validated depth rank) — morphology index only, photon-referenced, NO in-situ",
+        "honesty_card": {
+          "headline": "RELATIVE reconnaissance product. ATL24-calibrated robust-linear fit achieves RMSE 1.84 m, R² -0.104, decile slope 0.046 (shuffle +135.2%, n=445) — but the shipped raster is a relative Stumpf morphology index (0–1), NOT validated absolute depth.",
+          "grade": "RELATIVE",
+          "depth_rank": "NONE — no validated depth rank (R²<0); bottom-type albedo variance / no spectral depth signal",
+          "ceiling": "Bottom-type (seagrass/sand mosaic) albedo variance caps the pooled decile slope below the CALIBRATED gate (≥0.70). Per-class within-uniform-bottom slopes reached 0.72–0.74 at eastern_mangroves but were a small-N artifact under an 8-seed robust gate.",
+          "comparability": "NOT comparable to validated regions (Old Mussafah 0.92 m, Khalifa multibeam). RECONNAISSANCE / RELATIVE grade — morphology only.",
+          "campaign_verdict": "8-round UAE+Morocco optical+wave SDB campaign CONVERGED: no survey-grade (CALIBRATED) skill anywhere; honest ceiling is RECONNAISSANCE. Further improvement needs NEW DATA (commercial VHR multispectral, in-situ multibeam, ICESat-2 densification, airborne lidar).",
+          "vhr_caveat": "Guided ×2 upsample (10 m → ~5 m) is spatial detail only; carries NO independent depth skill."
+        }
+      }
+    },
+    {
+      "id": "ad_ras_ghanada",
+      "name": "Ras Ghanada — RELATIVE morphology SDB (ATL24 reconnaissance)",
+      "file": "sample_ad_ras_ghanada.tif",
+      "roi_bbox": [
+        54.66,
+        24.82,
+        54.74,
+        24.9
+      ],
+      "resolution": "10m",
+      "date": 1782860004.0,
+      "units": "relative Stumpf morphology index (0–1) — NOT metres. The shipped raster is bottom morphology only; no validated absolute depth.",
+      "source_note": "Abu Dhabi shallow VHR campaign (UAE/Morocco multisite closeout). Sentinel-2 L2A → Lyzenga + Stumpf log-ratios, robust-linear (Huber) calibration to ICESat-2 ATL24 photons under spatial-block cross-validation (≥8 blocks, ≥500 m buffer, 3-seed pooled OOF). GRADE = RELATIVE: shipped raster is the dimensionless Stumpf morphology index (0–1), NOT absolute depth. Downsampled committable preview (~700 px) of the gitignored full-res product Very_HR_Results/abudhabi_shallow/ras_ghanada/ras_ghanada_sdb_depth.tif. NO skill (shuffle +1% = no spectral depth signal over heterogeneous reef bottom).",
+      "metrics": {
+        "mask_source": "VHR+OSM-coast+S2",
+        "coastline_datum": "MHW (approx; not LAT)",
+        "coastline_vintage": "2026-07-08",
+        "coastline_footprint_px_removed": 4179,
+        "coastline_subtidal_delta_pct": 0.09,
+        "coastline_added_water_px": 0,
+        "rmse_m": 2.033,
+        "bias_m": -0.439,
+        "r2": -0.1089,
+        "decile_slope": -0.006,
+        "shuffle_degrade_pct": 1.0,
+        "n_test": 347,
+        "mae_m": null,
+        "catzoc": "D (reconnaissance)",
+        "datum": "ICESat-2 ATL03 ellipsoid (refraction-corrected n=1.34)",
+        "grade": "RELATIVE",
+        "product_type": "relative Stumpf morphology index (0–1), NOT satellite-derived absolute depth",
+        "depth_rank_skill": false,
+        "optically_accessible_band_m": [
+          0.5,
+          8.0
+        ],
+        "gt_source": "ICESat-2 ATL03 bathy photons (SlideRule, refraction-corrected)",
+        "reconnaissance": true,
+        "validation_status": "RELATIVE (NO validated depth rank) — morphology index only, photon-referenced, NO in-situ",
+        "honesty_card": {
+          "headline": "RELATIVE reconnaissance product. ATL24-calibrated robust-linear fit achieves RMSE 2.033 m, R² -0.1089, decile slope -0.006 (shuffle +1.0%, n=347) — but the shipped raster is a relative Stumpf morphology index (0–1), NOT validated absolute depth.",
+          "grade": "RELATIVE",
+          "depth_rank": "NONE — no validated depth rank (R²<0); bottom-type albedo variance / no spectral depth signal",
+          "ceiling": "Bottom-type (seagrass/sand mosaic) albedo variance caps the pooled decile slope below the CALIBRATED gate (≥0.70). Per-class within-uniform-bottom slopes reached 0.72–0.74 at eastern_mangroves but were a small-N artifact under an 8-seed robust gate.",
+          "comparability": "NOT comparable to validated regions (Old Mussafah 0.92 m, Khalifa multibeam). RECONNAISSANCE / RELATIVE grade — morphology only.",
+          "campaign_verdict": "8-round UAE+Morocco optical+wave SDB campaign CONVERGED: no survey-grade (CALIBRATED) skill anywhere; honest ceiling is RECONNAISSANCE. Further improvement needs NEW DATA (commercial VHR multispectral, in-situ multibeam, ICESat-2 densification, airborne lidar).",
+          "vhr_caveat": "Guided ×2 upsample (10 m → ~5 m) is spatial detail only; carries NO independent depth skill."
+        }
+      }
+    },
+    {
+      "id": "ad_yas_lagoon",
+      "name": "Yas Lagoon -- RELATIVE morphology SDB (ATL24 reconnaissance)",
+      "file": "sample_ad_yas_lagoon.tif",
+      "roi_bbox": [
+        54.56,
+        24.46,
+        54.65,
+        24.53
+      ],
+      "resolution": "10m",
+      "date": 1782860005.0,
+      "units": "relative Stumpf morphology index (0-1) -- NOT metres. The shipped raster is bottom morphology only; no validated absolute depth.",
+      "source_note": "Abu Dhabi shallow VHR campaign -- new-site delivery run (Yas/Al Raha sheltered lagoon). Sentinel-2 L2A (2024-2025 median) -> Lyzenga + Stumpf log-ratios, robust-linear (Huber) calibration to ICESat-2 ATL24 photons under spatial-block cross-validation (>=8 blocks, >=500 m buffer, 3-seed pooled OOF, n_test=575). GRADE = RELATIVE: shipped raster is the dimensionless Stumpf morphology index (0-1), NOT absolute depth. Downsampled committable preview (~700 px) of the gitignored full-res product Very_HR_Results/abudhabi_shallow/yas_lagoon/yas_lagoon_sdb_depth.tif. NO validated depth rank (strong spectral signal, shuffle +95%, but pooled R2<0 / slope 0.42; Yas/Al Raha sheltered lagoon, seagrass/sand bottom-type variance caps depth rank).",
+      "metrics": {
+        "mask_source": "VHR+OSM-coast+S2",
+        "coastline_datum": "MHW (approx; not LAT)",
+        "coastline_vintage": "2026-07-08",
+        "coastline_footprint_px_removed": 14031,
+        "coastline_subtidal_delta_pct": 0.193,
+        "coastline_added_water_px": 0,
+        "rmse_m": 2.189,
+        "bias_m": -0.624,
+        "r2": -0.0828,
+        "decile_slope": 0.418,
+        "shuffle_degrade_pct": 94.7,
+        "n_test": 575,
+        "mae_m": null,
+        "catzoc": "D (reconnaissance)",
+        "datum": "ICESat-2 ATL03 ellipsoid (refraction-corrected n=1.34)",
+        "grade": "RELATIVE",
+        "product_type": "relative Stumpf morphology index (0-1), NOT satellite-derived absolute depth",
+        "depth_rank_skill": false,
+        "optically_accessible_band_m": [
+          0.5,
+          8.0
+        ],
+        "gt_source": "ICESat-2 ATL03 bathy photons (SlideRule, refraction-corrected)",
+        "reconnaissance": true,
+        "validation_status": "RELATIVE (NO validated depth rank) -- morphology index only, photon-referenced, NO in-situ",
+        "honesty_card": {
+          "headline": "RELATIVE reconnaissance product. ATL24-calibrated robust-linear fit achieves RMSE 2.189 m, R2 -0.0828, decile slope 0.418 (shuffle +94.7%, n=575) -- but the shipped raster is a relative Stumpf morphology index (0-1), NOT validated absolute depth.",
+          "grade": "RELATIVE",
+          "depth_rank": "NONE -- no validated depth rank (pooled R2<0, slope 0.42); strong spectral signal (shuffle +95%) but bottom-type albedo variance caps the depth rank below the CALIBRATED gate (slope>=0.70).",
+          "per_band": "0-2m RMSE 1.25 m / 2-4m 1.23 m / 4-6m 2.03 m / 6-8m 3.34 m (under-deepens -2.56 m in the deepest band).",
+          "comparability": "NOT comparable to validated regions (Old Mussafah 0.92 m, Khalifa multibeam). RECONNAISSANCE / RELATIVE grade -- morphology only. Same tier as marawah / ras_ghanada.",
+          "campaign_verdict": "8-round UAE+Morocco optical+wave SDB campaign CONVERGED: no survey-grade (CALIBRATED) skill anywhere; honest ceiling is RECONNAISSANCE. Further improvement needs NEW DATA (commercial VHR multispectral, in-situ multibeam, ICESat-2 densification, airborne lidar).",
+          "vhr_caveat": "Guided x2 upsample (10 m -> ~5 m) is spatial detail only; carries NO independent depth skill."
+        }
+      }
+    }
+  ]
+}

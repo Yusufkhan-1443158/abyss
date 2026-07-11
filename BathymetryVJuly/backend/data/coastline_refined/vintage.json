@@ -1,0 +1,23 @@
+{
+  "coast_refine_version": "mask1m-v1",
+  "generated_utc": "2026-07-10T10:07:15.623705+00:00",
+  "sites": {
+    "khalifa_port": {
+      "degenerate": false,
+      "claim_withheld": false,
+      "degeneracy_info": {
+        "n_engineered_total": 499,
+        "n_engineered_accepted": 2
+      },
+      "possible_coastline_gap": true,
+      "n_transects": 17400,
+      "n_accepted": 461,
+      "cross_ref_independent": true,
+      "n_crisp_engineered": 0,
+      "n_instantaneous_sloping": 461,
+      "n_inherited_prior": 16939,
+      "median_offset_m": 0.0,
+      "accept_frac": 0.026494252873563218
+    }
+  }
+}

@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ocean Monitor - Strait of Hormuz</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+:root{--bg:#0a0f1a;--bg2:#111827;--bg3:#1e293b;--border:#1e293b;--text:#e2e8f0;--dim:#64748b;--cyan:#06b6d4;--amber:#f59e0b;--rose:#f43f5e;--emerald:#10b981;--purple:#a78bfa;--blue:#3b82f6;--font:'JetBrains Mono','Fira Code',monospace;--sans:'Inter','Segoe UI',sans-serif}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:var(--font);overflow:hidden;height:100vh}
+.layout{display:grid;grid-template-columns:340px 1fr;grid-template-rows:56px 1fr 32px;height:100vh}
+.header{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;padding:0 20px;background:var(--bg2);border-bottom:1px solid var(--border)}
+.header h1{font-size:15px;font-weight:800;background:linear-gradient(135deg,#06b6d4,#a78bfa);-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:0.02em}
+.header .back{padding:6px 14px;border-radius:6px;border:1px solid var(--border);background:var(--bg3);color:var(--dim);font-size:10px;font-family:var(--font);cursor:pointer;text-decoration:none;font-weight:600}
+.header .back:hover{color:var(--cyan);border-color:rgba(6,182,212,0.3)}
+.sidebar{background:var(--bg2);border-right:1px solid var(--border);overflow-y:auto;padding:16px}
+.sidebar h3{font-size:11px;font-weight:700;color:var(--cyan);margin-bottom:10px;letter-spacing:0.06em}
+.sidebar h4{font-size:10px;font-weight:700;color:var(--dim);margin:12px 0 6px;letter-spacing:0.04em}
+.map-wrap{position:relative}
+#map{width:100%;height:100%}
+.status{grid-column:1/-1;display:flex;align-items:center;padding:0 16px;background:var(--bg2);border-top:1px solid var(--border);font-size:10px;color:var(--dim);gap:16px}
+.status .dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:4px}
+.btn{padding:10px;font-size:10px;font-family:var(--font);font-weight:700;border-radius:8px;border:none;cursor:pointer;width:100%;margin-bottom:6px;transition:all 0.2s}
+.btn:disabled{opacity:0.4;cursor:not-allowed}
+.btn-primary{background:linear-gradient(135deg,#06b6d4,#0284c7);color:#fff;box-shadow:0 4px 12px rgba(6,182,212,0.25)}
+.btn-amber{background:linear-gradient(135deg,#f59e0b,#d97706);color:#000;box-shadow:0 4px 12px rgba(245,158,11,0.2)}
+.btn-rose{background:linear-gradient(135deg,#f43f5e,#e11d48);color:#fff;box-shadow:0 4px 12px rgba(244,63,94,0.2)}
+.btn-purple{background:linear-gradient(135deg,#8b5cf6,#7c3aed);color:#fff;box-shadow:0 4px 12px rgba(139,92,246,0.2)}
+.btn-emerald{background:linear-gradient(135deg,#10b981,#059669);color:#fff;box-shadow:0 4px 12px rgba(16,185,129,0.2)}
+.btn-outline{background:var(--bg);border:1px solid var(--border);color:var(--dim)}
+.btn-outline:hover{border-color:var(--cyan);color:var(--cyan)}
+.section{padding:14px;border-radius:8px;border:1px solid var(--border);margin-bottom:12px;background:rgba(255,255,255,0.01)}
+.section.active{border-color:rgba(6,182,212,0.3);background:rgba(6,182,212,0.03)}
+.row{display:flex;gap:6px;margin-bottom:6px}
+.row input,.row select{flex:1;padding:7px;font-size:10px;font-family:var(--font);background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);outline:none}
+.row input:focus,.row select:focus{border-color:var(--cyan)}
+.stat{display:flex;justify-content:space-between;padding:4px 0;font-size:10px;border-bottom:1px solid rgba(255,255,255,0.04)}
+.stat .label{color:var(--dim)}.stat .val{color:var(--text);font-weight:600}
+.legend{position:absolute;bottom:12px;right:12px;background:rgba(10,15,26,0.92);border:1px solid var(--border);border-radius:8px;padding:10px 14px;z-index:1000;font-size:9px}
+.legend .item{display:flex;align-items:center;gap:6px;margin-bottom:3px}
+.legend .swatch{width:12px;height:12px;border-radius:3px;flex-shrink:0}
+.loader{display:inline-block;width:12px;height:12px;border:2px solid var(--border);border-top-color:var(--cyan);border-radius:50%;animation:spin 0.8s linear infinite;margin-right:6px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.toast{position:fixed;top:70px;right:20px;padding:10px 18px;border-radius:8px;font-size:11px;font-family:var(--font);z-index:9999;animation:slideIn 0.3s ease}
+.toast.ok{background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.3);color:#10b981}
+.toast.err{background:rgba(244,63,94,0.15);border:1px solid rgba(244,63,94,0.3);color:#f43f5e}
+@keyframes slideIn{from{opacity:0;transform:translateX(40px)}to{opacity:1;transform:translateX(0)}}
+.layer-toggle{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px}
+.layer-toggle button{padding:5px 10px;font-size:9px;font-family:var(--font);font-weight:600;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--dim);cursor:pointer}
+.layer-toggle button.on{border-color:rgba(6,182,212,0.4);background:rgba(6,182,212,0.1);color:var(--cyan)}
+</style>
+</head>
+<body>
+<div class="layout">
+  <!-- HEADER -->
+  <div class="header">
+    <div style="display:flex;align-items:center;gap:16px">
+      <h1>OCEAN MONITOR</h1>
+      <span style="font-size:10px;color:var(--dim)">Strait of Hormuz &mdash; Mine Detection &bull; Vessel Tracking &bull; SST Anomaly</span>
+    </div>
+    <a href="/" class="back">&larr; BATHYMETRY</a>
+  </div>
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <h3>DETECTION LAYERS</h3>
+
+    <!-- Layer toggles -->
+    <div class="layer-toggle" id="layerToggles">
+      <button id="tog-currents" class="on" onclick="toggleLayer('currents')">Currents</button>
+      <button id="tog-sst" onclick="toggleLayer('sst')">SST</button>
+      <button id="tog-anomaly" onclick="toggleLayer('anomaly')">Anomaly</button>
+      <button id="tog-sar" onclick="toggleLayer('sar')">SAR Vessels</button>
+      <button id="tog-optical" onclick="toggleLayer('optical')">Optical</button>
+      <button id="tog-land" class="on" onclick="toggleLayer('land')">Land Mask</button>
+    </div>
+
+    <!-- CURRENTS -->
+    <div class="section" id="sec-currents">
+      <h4>OCEAN CURRENTS (HYCOM)</h4>
+      <div class="row">
+        <input type="date" id="currDate" />
+        <select id="currDepth">
+          <option value="0">Surface</option>
+          <option value="10">10m</option>
+          <option value="30">30m</option>
+          <option value="50">50m</option>
+          <option value="100">100m</option>
+        </select>
+      </div>
+      <button class="btn btn-primary" onclick="loadCurrents()">Load Currents</button>
+      <div id="currStats"></div>
+    </div>
+
+    <!-- SST -->
+    <div class="section" id="sec-sst">
+      <h4>SEA SURFACE TEMPERATURE</h4>
+      <div class="row">
+        <input type="date" id="sstDate" />
+      </div>
+      <button class="btn btn-amber" onclick="loadSST()">Load SST</button>
+      <div id="sstStats"></div>
+    </div>
+
+    <!-- SST ANOMALY / MINE DETECTION -->
+    <div class="section" id="sec-anomaly">
+      <h4>THERMAL ANOMALY (Mine Detection)</h4>
+      <p style="font-size:9px;color:var(--dim);margin-bottom:8px;line-height:1.5">
+        Persistent SST anomalies indicate underwater objects: mines, submarine wakes, submerged infrastructure. Uses Z-score + Robust PCA.
+      </p>
+      <div class="row">
+        <input type="date" id="anomDate" />
+      </div>
+      <button class="btn btn-rose" onclick="loadAnomaly()">Detect Thermal Anomalies</button>
+      <div id="anomStats"></div>
+    </div>
+
+    <!-- 30-DAY DETECTION -->
+    <div class="section" id="sec-detect">
+      <h4>30-DAY PERSISTENT DETECTION</h4>
+      <p style="font-size:9px;color:var(--dim);margin-bottom:8px;line-height:1.5">
+        Finds stationary anomalies over 30 days. Fixed objects (mines) persist; transient features (eddies) average out.
+      </p>
+      <div class="row">
+        <select id="detectDays">
+          <option value="7">7 days</option>
+          <option value="14">14 days</option>
+          <option value="30" selected>30 days</option>
+          <option value="60">60 days</option>
+        </select>
+      </div>
+      <button class="btn btn-purple" onclick="loadDetection()">Run Anomaly Detection</button>
+      <div id="detectStats"></div>
+    </div>
+
+    <!-- SAR VESSEL DETECTION -->
+    <div class="section" id="sec-sar">
+      <h4>SAR VESSEL DETECTION (Sentinel-1)</h4>
+      <p style="font-size:9px;color:var(--dim);margin-bottom:8px;line-height:1.5">
+        GPU-accelerated multi-scale CFAR on SAR backscatter. Detects metallic objects (ships, buoys, mines) at 10m resolution.
+      </p>
+      <div class="row">
+        <input type="date" id="sarStart" />
+        <input type="date" id="sarEnd" />
+      </div>
+      <div class="row">
+        <input type="number" id="sarLat" step="0.01" placeholder="Lat (24.81)" />
+        <input type="number" id="sarLon" step="0.01" placeholder="Lon (54.60)" />
+      </div>
+      <div class="row">
+        <select id="sarRoi">
+          <option value="15">15 km ROI</option>
+          <option value="25" selected>25 km ROI</option>
+          <option value="50">50 km ROI</option>
+        </select>
+      </div>
+      <button class="btn btn-emerald" onclick="loadSAR()">Detect SAR Targets</button>
+      <div id="sarStats"></div>
+    </div>
+
+    <!-- OPTICAL DETECTION -->
+    <div class="section" id="sec-optical">
+      <h4>OPTICAL DETECTION (Sentinel-2)</h4>
+      <p style="font-size:9px;color:var(--dim);margin-bottom:8px;line-height:1.5">
+        Bright object detection (NIR CFAR) + wave coherence analysis (Radon transform). Disrupted wave patterns indicate submerged objects or submarine wakes.
+      </p>
+      <div class="row">
+        <input type="date" id="optStart" />
+        <input type="date" id="optEnd" />
+      </div>
+      <div class="row">
+        <input type="number" id="optLat" step="0.01" placeholder="Lat (24.81)" />
+        <input type="number" id="optLon" step="0.01" placeholder="Lon (54.60)" />
+      </div>
+      <button class="btn btn-primary" onclick="loadOptical()">Detect Optical + Wave Anomaly</button>
+      <div id="optStats"></div>
+    </div>
+
+  </div>
+
+  <!-- MAP -->
+  <div class="map-wrap">
+    <div id="map"></div>
+    <div class="legend" id="legend">
+      <div class="item"><div class="swatch" style="background:#06b6d4"></div> Current vectors</div>
+      <div class="item"><div class="swatch" style="background:#f59e0b"></div> SST warm</div>
+      <div class="item"><div class="swatch" style="background:#3b82f6"></div> SST cool</div>
+      <div class="item"><div class="swatch" style="background:#f43f5e"></div> Thermal anomaly</div>
+      <div class="item"><div class="swatch" style="background:#10b981"></div> SAR target</div>
+      <div class="item"><div class="swatch" style="background:#a78bfa"></div> Optical target</div>
+      <div class="item"><div class="swatch" style="background:#fbbf24"></div> Wave disruption</div>
+    </div>
+  </div>
+
+  <!-- STATUS BAR -->
+  <div class="status">
+    <span><span class="dot" id="apiDot" style="background:#f59e0b"></span> API</span>
+    <span id="statusMsg">Ready</span>
+    <span style="margin-left:auto" id="coordDisp">--</span>
+  </div>
+</div>
+
+<script>
+const API = window.location.origin;
+const today = new Date().toISOString().slice(0, 10);
+const d30 = new Date(Date.now() - 30*864e5).toISOString().slice(0, 10);
+
+// Set default dates
+document.getElementById('currDate').value = today;
+document.getElementById('sstDate').value = today;
+document.getElementById('anomDate').value = today;
+document.getElementById('sarStart').value = d30;
+document.getElementById('sarEnd').value = today;
+document.getElementById('optStart').value = d30;
+document.getElementById('optEnd').value = today;
+document.getElementById('sarLat').value = '24.81';
+document.getElementById('sarLon').value = '54.60';
+document.getElementById('optLat').value = '24.81';
+document.getElementById('optLon').value = '54.60';
+
+// ── MAP ──────────────────────────────────────────────
+const map = L.map('map', { zoomControl: false }).setView([25.8, 56.0], 7);
+
+L.tileLayer('https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+  maxZoom: 18,
+  attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
+}).addTo(map);
+
+L.control.zoom({ position: 'topright' }).addTo(map);
+
+// SeaMarks overlay
+const seamarks = L.tileLayer('https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png', {
+  maxZoom: 18, opacity: 0.7
+}).addTo(map);
+
+map.on('mousemove', e => {
+  document.getElementById('coordDisp').textContent =
+    `${e.latlng.lat.toFixed(4)}N, ${e.latlng.lng.toFixed(4)}E`;
+});
+
+// ── LAYER GROUPS ─────────────────────────────────────
+const layers = {
+  currents: L.layerGroup().addTo(map),
+  sst: L.layerGroup(),
+  anomaly: L.layerGroup(),
+  sar: L.layerGroup(),
+  optical: L.layerGroup(),
+  land: L.layerGroup().addTo(map),
+  detect: L.layerGroup(),
+};
+const layerOn = { currents: true, sst: false, anomaly: false, sar: false, optical: false, land: true, detect: false };
+
+function toggleLayer(id) {
+  layerOn[id] = !layerOn[id];
+  const btn = document.getElementById('tog-' + id);
+  if (layerOn[id]) {
+    map.addLayer(layers[id]);
+    btn.classList.add('on');
+  } else {
+    map.removeLayer(layers[id]);
+    btn.classList.remove('on');
+  }
+}
+
+// ── TOAST ────────────────────────────────────────────
+function toast(msg, ok = true) {
+  const t = document.createElement('div');
+  t.className = 'toast ' + (ok ? 'ok' : 'err');
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 4000);
+}
+
+function setStatus(msg) {
+  document.getElementById('statusMsg').textContent = msg;
+}
+
+function setApiDot(ok) {
+  document.getElementById('apiDot').style.background = ok ? '#10b981' : '#f43f5e';
+}
+
+// ── HELPERS ──────────────────────────────────────────
+function sstColor(temp) {
+  // 20-35C range
+  const t = Math.max(0, Math.min(1, (temp - 20) / 15));
+  if (t < 0.25) return '#3b82f6';
+  if (t < 0.5) return '#06b6d4';
+  if (t < 0.75) return '#f59e0b';
+  return '#ef4444';
+}
+
+function anomColor(val) {
+  const a = Math.min(1, Math.abs(val) / 3);
+  return `rgba(244,63,94,${(0.2 + a * 0.8).toFixed(2)})`;
+}
+
+function arrowIcon(angle, speed) {
+  const size = Math.max(10, Math.min(28, speed * 40));
+  const opacity = Math.max(0.3, Math.min(1, speed * 3));
+  return L.divIcon({
+    className: '',
+    html: `<div style="transform:rotate(${angle}deg);font-size:${size}px;opacity:${opacity};color:#06b6d4;text-shadow:0 0 4px rgba(6,182,212,0.5)">&#x2191;</div>`,
+    iconSize: [size, size],
+    iconAnchor: [size/2, size/2],
+  });
+}
+
+// ── LOAD CURRENTS ────────────────────────────────────
+async function loadCurrents() {
+  const date = document.getElementById('currDate').value;
+  const depth = document.getElementById('currDepth').value;
+  setStatus('Loading currents...');
+  try {
+    const r = await fetch(`${API}/api/currents?date=${date}&depth=${depth}`);
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    layers.currents.clearLayers();
+
+    const pts = d.data || d.points || [];
+    let maxSpd = 0;
+    pts.forEach(p => {
+      const u = p.u || 0, v = p.v || 0;
+      const speed = Math.sqrt(u*u + v*v);
+      const angle = (Math.atan2(u, v) * 180 / Math.PI + 360) % 360;
+      if (speed > maxSpd) maxSpd = speed;
+      if (speed > 0.02) {
+        L.marker([p.lat, p.lon], { icon: arrowIcon(angle, speed) })
+          .bindPopup(`<b>Current</b><br>Speed: ${speed.toFixed(3)} m/s<br>U: ${u.toFixed(3)}, V: ${v.toFixed(3)}<br>Depth: ${depth}m`)
+          .addTo(layers.currents);
+      }
+    });
+    if (!layerOn.currents) toggleLayer('currents');
+
+    document.getElementById('currStats').innerHTML =
+      `<div class="stat"><span class="label">Points</span><span class="val">${pts.length}</span></div>` +
+      `<div class="stat"><span class="label">Max speed</span><span class="val">${maxSpd.toFixed(3)} m/s</span></div>`;
+    setApiDot(true);
+    setStatus(`Currents loaded: ${pts.length} vectors`);
+    toast(`Currents: ${pts.length} vectors at ${depth}m`);
+  } catch (e) {
+    setApiDot(false);
+    setStatus('Currents failed: ' + e.message);
+    toast(e.message, false);
+  }
+}
+
+// ── LOAD SST ─────────────────────────────────────────
+async function loadSST() {
+  const date = document.getElementById('sstDate').value;
+  setStatus('Loading SST...');
+  try {
+    const r = await fetch(`${API}/api/sst?date=${date}`);
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    layers.sst.clearLayers();
+
+    const pts = d.data || d.points || [];
+    let minT = 99, maxT = -99;
+    pts.forEach(p => {
+      const t = p.sst || p.temperature || p.value;
+      if (t < minT) minT = t;
+      if (t > maxT) maxT = t;
+      L.circleMarker([p.lat, p.lon], {
+        radius: 4, fillColor: sstColor(t), color: 'none', fillOpacity: 0.7
+      }).bindPopup(`<b>SST</b><br>${t.toFixed(2)} C`).addTo(layers.sst);
+    });
+    if (!layerOn.sst) toggleLayer('sst');
+
+    document.getElementById('sstStats').innerHTML =
+      `<div class="stat"><span class="label">Points</span><span class="val">${pts.length}</span></div>` +
+      `<div class="stat"><span class="label">Range</span><span class="val">${minT.toFixed(1)} - ${maxT.toFixed(1)} C</span></div>`;
+    setApiDot(true);
+    setStatus(`SST loaded: ${pts.length} pts`);
+    toast(`SST: ${minT.toFixed(1)}-${maxT.toFixed(1)} C`);
+  } catch (e) {
+    setApiDot(false); setStatus('SST failed: ' + e.message); toast(e.message, false);
+  }
+}
+
+// ── LOAD SST ANOMALY ─────────────────────────────────
+async function loadAnomaly() {
+  const date = document.getElementById('anomDate').value;
+  setStatus('Detecting thermal anomalies...');
+  try {
+    const r = await fetch(`${API}/api/sst_anomaly?date=${date}`);
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    layers.anomaly.clearLayers();
+
+    const pts = d.data || d.points || [];
+    let nAnom = 0;
+    pts.forEach(p => {
+      const z = p.z_score || p.anomaly || p.value || 0;
+      const absZ = Math.abs(z);
+      if (absZ > 1.5) {
+        nAnom++;
+        L.circleMarker([p.lat, p.lon], {
+          radius: absZ > 3 ? 7 : absZ > 2 ? 5 : 3,
+          fillColor: anomColor(z), color: absZ > 3 ? '#f43f5e' : 'none',
+          weight: absZ > 3 ? 2 : 0, fillOpacity: 0.8
+        }).bindPopup(
+          `<b>Thermal Anomaly</b><br>Z-score: ${z.toFixed(2)}<br>` +
+          (p.sst ? `SST: ${p.sst.toFixed(2)} C<br>` : '') +
+          `<span style="color:${absZ > 3 ? '#f43f5e' : '#f59e0b'}">${absZ > 3 ? 'HIGH' : absZ > 2 ? 'MEDIUM' : 'LOW'} confidence</span>`
+        ).addTo(layers.anomaly);
+      }
+    });
+    if (!layerOn.anomaly) toggleLayer('anomaly');
+
+    document.getElementById('anomStats').innerHTML =
+      `<div class="stat"><span class="label">Total pixels</span><span class="val">${pts.length}</span></div>` +
+      `<div class="stat"><span class="label">Anomalies (|z|>1.5)</span><span class="val" style="color:#f43f5e">${nAnom}</span></div>`;
+    setApiDot(true);
+    setStatus(`Anomaly detection: ${nAnom} thermal anomalies`);
+    toast(`Thermal anomalies: ${nAnom} detected`);
+  } catch (e) {
+    setApiDot(false); setStatus('Anomaly failed: ' + e.message); toast(e.message, false);
+  }
+}
+
+// ── 30-DAY PERSISTENT DETECTION ──────────────────────
+async function loadDetection() {
+  const days = document.getElementById('detectDays').value;
+  setStatus(`Running ${days}-day persistent detection...`);
+  try {
+    const r = await fetch(`${API}/api/detect?days=${days}`);
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    layers.detect.clearLayers();
+
+    // Anomalies from detection
+    const anomalies = d.anomalies || d.detections || [];
+    anomalies.forEach(a => {
+      const score = a.persistence_score || a.score || 0;
+      const radius = Math.max(5, Math.min(12, score * 15));
+      L.circleMarker([a.lat, a.lon], {
+        radius, fillColor: '#f43f5e', color: '#fff', weight: 1.5, fillOpacity: 0.8
+      }).bindPopup(
+        `<b>Persistent Anomaly</b><br>` +
+        `Persistence: ${(score * 100).toFixed(0)}%<br>` +
+        (a.mean_zscore ? `Mean Z: ${a.mean_zscore.toFixed(2)}<br>` : '') +
+        (a.type ? `Type: ${a.type}<br>` : '') +
+        `<span style="color:#f43f5e;font-weight:bold">${score > 0.5 ? 'POSSIBLE MINE/OBJECT' : 'Low persistence'}</span>`
+      ).addTo(layers.detect);
+    });
+
+    // Heatmap points
+    const heatPts = d.heatmap || d.persistence_map || [];
+    heatPts.forEach(p => {
+      const v = p.value || p.score || 0;
+      if (v > 0.3) {
+        L.circleMarker([p.lat, p.lon], {
+          radius: 3, fillColor: `rgba(244,63,94,${Math.min(1, v)})`,
+          color: 'none', fillOpacity: v
+        }).addTo(layers.detect);
+      }
+    });
+
+    if (!layerOn.detect) {
+      layerOn.detect = true;
+      map.addLayer(layers.detect);
+    }
+
+    document.getElementById('detectStats').innerHTML =
+      `<div class="stat"><span class="label">Period</span><span class="val">${days} days</span></div>` +
+      `<div class="stat"><span class="label">Detections</span><span class="val" style="color:#f43f5e">${anomalies.length}</span></div>` +
+      (d.stats ? `<div class="stat"><span class="label">Coverage</span><span class="val">${d.stats.n_timesteps || '?'} timesteps</span></div>` : '');
+    setApiDot(true);
+    setStatus(`Detection: ${anomalies.length} persistent anomalies`);
+    toast(`${anomalies.length} persistent targets over ${days}d`);
+  } catch (e) {
+    setApiDot(false); setStatus('Detection failed: ' + e.message); toast(e.message, false);
+  }
+}
+
+// ── SAR VESSEL DETECTION ─────────────────────────────
+async function loadSAR() {
+  const start = document.getElementById('sarStart').value;
+  const end = document.getElementById('sarEnd').value;
+  const lat = document.getElementById('sarLat').value || '24.81';
+  const lon = document.getElementById('sarLon').value || '54.60';
+  const roi = document.getElementById('sarRoi').value;
+  setStatus('Running SAR vessel detection (GPU CFAR)...');
+  try {
+    const r = await fetch(`${API}/api/sentinel?start_date=${start}&end_date=${end}&lat=${lat}&lon=${lon}&roi_km=${roi}`);
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    layers.sar.clearLayers();
+
+    const targets = d.targets || d.vessels || d.detections || [];
+    targets.forEach(t => {
+      const icon = L.divIcon({
+        className: '',
+        html: `<div style="background:rgba(16,185,129,0.9);width:10px;height:10px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 8px rgba(16,185,129,0.6)"></div>`,
+        iconSize: [14, 14], iconAnchor: [7, 7]
+      });
+      const m = L.marker([t.lat, t.lon], { icon }).addTo(layers.sar);
+
+      let popup = `<b>SAR Target</b><br>`;
+      if (t.sigma0_db != null) popup += `Sigma0: ${t.sigma0_db.toFixed(1)} dB<br>`;
+      if (t.length_m != null) popup += `Length: ~${t.length_m.toFixed(0)}m<br>`;
+      if (t.cfar_score != null) popup += `CFAR: ${t.cfar_score.toFixed(1)}<br>`;
+      if (t.thumbnail) popup += `<img src="data:image/png;base64,${t.thumbnail}" style="width:120px;margin-top:4px;border-radius:4px">`;
+      m.bindPopup(popup);
+    });
+    if (!layerOn.sar) toggleLayer('sar');
+
+    document.getElementById('sarStats').innerHTML =
+      `<div class="stat"><span class="label">Targets</span><span class="val" style="color:#10b981">${targets.length}</span></div>` +
+      (d.stats ? `<div class="stat"><span class="label">SAR scenes</span><span class="val">${d.stats.n_scenes || '?'}</span></div>` : '') +
+      (d.stats ? `<div class="stat"><span class="label">Device</span><span class="val">${d.stats.device || 'CPU'}</span></div>` : '');
+    setApiDot(true);
+    setStatus(`SAR: ${targets.length} targets detected`);
+    toast(`SAR: ${targets.length} vessel targets`);
+  } catch (e) {
+    setApiDot(false); setStatus('SAR failed: ' + e.message); toast(e.message, false);
+  }
+}
+
+// ── OPTICAL DETECTION ────────────────────────────────
+async function loadOptical() {
+  const start = document.getElementById('optStart').value;
+  const end = document.getElementById('optEnd').value;
+  const lat = document.getElementById('optLat').value || '24.81';
+  const lon = document.getElementById('optLon').value || '54.60';
+  setStatus('Running optical + wave anomaly detection...');
+  try {
+    const r = await fetch(`${API}/api/optical?start_date=${start}&end_date=${end}&lat=${lat}&lon=${lon}&roi_km=25`);
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    layers.optical.clearLayers();
+
+    // Optical vessel targets
+    const vessels = d.vessels || d.targets || [];
+    vessels.forEach(v => {
+      L.circleMarker([v.lat, v.lon], {
+        radius: 6, fillColor: '#a78bfa', color: '#fff', weight: 1.5, fillOpacity: 0.9
+      }).bindPopup(
+        `<b>Optical Target</b><br>` +
+        (v.nir_db != null ? `NIR: ${v.nir_db.toFixed(1)} dB<br>` : '') +
+        (v.cfar_score != null ? `CFAR: ${v.cfar_score.toFixed(1)}<br>` : '') +
+        (v.length_m != null ? `Size: ~${v.length_m.toFixed(0)}m<br>` : '') +
+        (v.thumbnail ? `<img src="data:image/png;base64,${v.thumbnail}" style="width:120px;margin-top:4px;border-radius:4px">` : '')
+      ).addTo(layers.optical);
+    });
+
+    // Wave coherence anomalies
+    const waves = d.wave_anomalies || [];
+    waves.forEach(w => {
+      const r = Math.max(6, Math.min(14, (1 - (w.coherence || 0.5)) * 20));
+      L.circleMarker([w.lat, w.lon], {
+        radius: r, fillColor: '#fbbf24', color: '#f59e0b', weight: 2, fillOpacity: 0.7
+      }).bindPopup(
+        `<b>Wave Disruption</b><br>` +
+        `Coherence: ${(w.coherence || 0).toFixed(2)}<br>` +
+        (w.dominant_wavelength ? `Wavelength: ${w.dominant_wavelength.toFixed(0)}m<br>` : '') +
+        `<span style="color:#fbbf24;font-weight:bold">Possible submerged object</span>`
+      ).addTo(layers.optical);
+    });
+
+    if (!layerOn.optical) toggleLayer('optical');
+
+    document.getElementById('optStats').innerHTML =
+      `<div class="stat"><span class="label">Vessel targets</span><span class="val" style="color:#a78bfa">${vessels.length}</span></div>` +
+      `<div class="stat"><span class="label">Wave anomalies</span><span class="val" style="color:#fbbf24">${waves.length}</span></div>` +
+      (d.stats ? `<div class="stat"><span class="label">S2 scenes</span><span class="val">${d.stats.n_scenes || '?'}</span></div>` : '');
+    setApiDot(true);
+    setStatus(`Optical: ${vessels.length} vessels, ${waves.length} wave anomalies`);
+    toast(`Optical: ${vessels.length} vessels + ${waves.length} wave disruptions`);
+  } catch (e) {
+    setApiDot(false); setStatus('Optical failed: ' + e.message); toast(e.message, false);
+  }
+}
+
+// ── LAND MASK ────────────────────────────────────────
+async function loadLandMask() {
+  try {
+    const r = await fetch(`${API}/api/landmask`);
+    const d = await r.json();
+    if (d.error) return;
+    const polys = d.polygons || d.features || [];
+    polys.forEach(poly => {
+      const coords = poly.coordinates || poly;
+      if (Array.isArray(coords) && coords.length > 2) {
+        L.polygon(coords.map(c => Array.isArray(c) ? [c[1] || c.lat, c[0] || c.lon] : [c.lat, c.lon]), {
+          fillColor: '#1e293b', color: '#334155', weight: 1, fillOpacity: 0.85
+        }).addTo(layers.land);
+      }
+    });
+    setApiDot(true);
+  } catch (e) {
+    console.warn('Land mask:', e);
+  }
+}
+
+// ── HORMUZ BOX ───────────────────────────────────────
+async function loadBbox() {
+  try {
+    const r = await fetch(`${API}/api/bbox`);
+    const d = await r.json();
+    L.rectangle([[d.lat_min, d.lon_min], [d.lat_max, d.lon_max]], {
+      color: '#06b6d4', weight: 1.5, fillOpacity: 0, dashArray: '6 4'
+    }).addTo(map).bindPopup('Hormuz monitoring zone');
+  } catch (e) {}
+}
+
+// ── HEALTH CHECK ─────────────────────────────────────
+async function checkHealth() {
+  try {
+    const r = await fetch(`${API}/api/health`);
+    const d = await r.json();
+    setApiDot(true);
+    setStatus(`API v${d.v} | GPU: ${d.gpu ? d.gpu_name || 'Yes' : 'CPU'} | CNN: ${d.cnn_unet ? 'Yes' : 'No'}`);
+  } catch (e) {
+    setApiDot(false);
+    setStatus('API offline');
+  }
+}
+
+// ── INIT ─────────────────────────────────────────────
+checkHealth();
+loadBbox();
+loadLandMask();
+// Auto-load currents on start
+setTimeout(loadCurrents, 500);
+</script>
+</body>
+</html>

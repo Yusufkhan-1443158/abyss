@@ -1,0 +1,347 @@
+{
+  "created": "2026-06-05T13:55:35.373598Z",
+  "architecture": {
+    "type": "PatchCNN (Iter-1)",
+    "in_channels": 12,
+    "patch_px": 9,
+    "patch_radius": 4,
+    "channel_order": [
+      "B2",
+      "B3",
+      "B4",
+      "B8",
+      "B2_dg",
+      "B3_dg",
+      "ln_B2",
+      "ln_B3",
+      "ln_B4",
+      "stumpf_BG",
+      "stumpf_GR",
+      "NDTI"
+    ],
+    "conv_channels": [
+      32,
+      64,
+      64
+    ],
+    "fc_width": 64,
+    "dropout": 0.2,
+    "max_depth_m": 25.0,
+    "depth_activation": "sigmoid * max_depth",
+    "logvar_clamp": [
+      -6.0,
+      6.0
+    ]
+  },
+  "training": {
+    "sites": [
+      "khalifa",
+      "omc"
+    ],
+    "n_sites": 2,
+    "n_train_pooled": 25305,
+    "epochs_run": 80,
+    "buffer_m": 500.0,
+    "n_blocks": 8,
+    "val_frac": 0.2,
+    "lr": 0.0003,
+    "batch_size": 256,
+    "weight_decay": 0.0001,
+    "loss": "HeteroNLL (inverse-freq depth bin weights)",
+    "sigma_calibration": "per-site test-fold variance-inflation (sigma_k_test); khalifa k=2.418 (cov 0.950), omc k=1.091 (cov 0.950) on spatial_block_500m held-out test; interim global k=1.740 fallback for transfer/unknown regions",
+    "sigma_k": 1.066838,
+    "sigma_target_coverage": 0.95,
+    "val_fold_sigma_coverage": 0.9499,
+    "training_time_s": 1099.4,
+    "sigma_k_interim": 1.739673,
+    "sigma_k_interim_note": "Interim analytic Gaussian variance-inflation (k_interim = 1.96/Phi^-1((1+c)/2) from the worst validated val coverage). RETAINED as the FALLBACK for transfer/unknown ROIs that have NO per-site test-fold k_test (anything not in sigma_k_test, incl. jbel_dhanna and user ROIs).",
+    "sigma_k_test": {
+      "khalifa": 2.417565,
+      "omc": 1.091392
+    },
+    "sigma_k_test_coverage": {
+      "khalifa": 0.9501,
+      "omc": 0.9501
+    },
+    "sigma_k_test_raw_coverage": {
+      "khalifa": 0.7162,
+      "omc": 0.9392
+    },
+    "sigma_k_test_note": "ITEM 3 closure: PER-SITE test-fold variance-inflation factors from a re-EVALUATE pass (load checkpoint sdb_cnn_default.pt, reproduce the SAME spatial_block split used in training [seed=42, n_blocks=8, buffer_m=500, val_frac=0.2 -> no leakage], run inference on each site's HELD-OUT TEST fold, binary-search k so observed 95% coverage of mu+/-1.96*k*sigma = 0.95). khalifa: raw 0.716 -> k=2.4176 -> 0.9501. omc: raw 0.939 -> k=1.0914 -> 0.9501 (replaces the global interim k=1.7397 which over-inflated omc to 0.982/0.999). jbel_dhanna EXCLUDED: model was NOT trained on jbel (training sites = khalifa+omc); its test RMSE is 10.0 m / bias +9.45 m -> the MEAN prediction is wrong, no sigma factor can honestly achieve coverage; jbel is treated as a transfer/unknown region and uses the interim global k."
+  },
+  "normalisation": {
+    "mean": [
+      0.06635484099388123,
+      0.06864437460899353,
+      0.034652672708034515,
+      0.02738729678094387,
+      0.017179744318127632,
+      0.018735507503151894,
+      -4.864469051361084,
+      -4.74795389175415,
+      -4.737364292144775,
+      0.9961033463478088,
+      1.2408783435821533,
+      0.37087133526802063
+    ],
+    "std": [
+      0.020258478820323944,
+      0.026172379031777382,
+      0.032343678176403046,
+      0.037914156913757324,
+      0.021017614752054214,
+      0.025251340121030807,
+      2.227058172225952,
+      2.1181304454803467,
+      1.1112180948257446,
+      0.030221877619624138,
+      0.08201031386852264,
+      0.1096642017364502
+    ],
+    "channel_names": [
+      "B2",
+      "B3",
+      "B4",
+      "B8",
+      "B2_dg",
+      "B3_dg",
+      "ln_B2",
+      "ln_B3",
+      "ln_B4",
+      "stumpf_BG",
+      "stumpf_GR",
+      "NDTI"
+    ],
+    "per_site": {
+      "khalifa": {
+        "mean": [
+          0.065706767141819,
+          0.06258832663297653,
+          0.030391719192266464,
+          0.024205302819609642,
+          0.013071630150079727,
+          0.014529152773320675,
+          -5.257390022277832,
+          -5.0672736167907715,
+          -4.78770637512207,
+          1.0138630867004395,
+          1.2458596229553223,
+          0.3739297688007355
+        ],
+        "std": [
+          0.01406207587569952,
+          0.01722859777510166,
+          0.022340884432196617,
+          0.024125399067997932,
+          0.01384197548031807,
+          0.017141321673989296,
+          2.4684464931488037,
+          2.329857349395752,
+          0.9772759079933167,
+          0.012519869953393936,
+          0.07416339218616486,
+          0.1000971645116806
+        ]
+      },
+      "omc": {
+        "mean": [
+          0.06780799478292465,
+          0.08222013711929321,
+          0.04420454427599907,
+          0.03452089801430702,
+          0.02638896182179451,
+          0.02816498652100563,
+          -3.983665704727173,
+          -4.032139301300049,
+          -4.624541759490967,
+          0.9562773704528809,
+          1.2297145128250122,
+          0.3640128970146179
+        ],
+        "std": [
+          0.029733682051301003,
+          0.03589792177081108,
+          0.04626455530524254,
+          0.05728534609079361,
+          0.029662253335118294,
+          0.035773955285549164,
+          1.1388492584228516,
+          1.2784554958343506,
+          1.357752799987793,
+          0.017785152420401573,
+          0.09639795124530792,
+          0.1282845437526703
+        ]
+      }
+    }
+  },
+  "honest_test_metrics": {
+    "split": "spatial_block_500m",
+    "pooled": {
+      "n_test": 11703,
+      "rmse_m": 1.443,
+      "bias_m": -0.1785,
+      "r2": 0.9455,
+      "decile_slope": 0.8802,
+      "per_bin": {
+        "0-5m": {
+          "n": 318,
+          "rmse_m": 3.5987,
+          "bias_m": 3.1087,
+          "r2": -5.3343,
+          "decile_slope": -0.0483
+        },
+        "5-10m": {
+          "n": 6445,
+          "rmse_m": 0.9105,
+          "bias_m": 0.2708,
+          "r2": -1.8267,
+          "decile_slope": 0.3964
+        },
+        "10-15m": {
+          "n": 10,
+          "rmse_m": 5.6239,
+          "bias_m": -5.2159,
+          "r2": -11.9319,
+          "decile_slope": NaN
+        },
+        "15-20m": {
+          "n": 4454,
+          "rmse_m": 1.7066,
+          "bias_m": -0.8756,
+          "r2": -12.6376,
+          "decile_slope": 0.6008
+        },
+        "20-25m": {
+          "n": 476,
+          "rmse_m": 1.8442,
+          "bias_m": -1.8284,
+          "r2": -111.1932,
+          "decile_slope": 0.0917
+        }
+      }
+    },
+    "per_site": {
+      "khalifa": {
+        "n_test": 6290,
+        "n_train_sub": 17499,
+        "n_val": 7548,
+        "rmse_m": 1.7421,
+        "bias_m": -0.7006,
+        "r2": 0.8954,
+        "decile_slope": 0.897,
+        "sigma_95_cov": 0.7401,
+        "depth_range_m": [
+          0.019999999552965164,
+          20.979999542236328
+        ],
+        "per_bin": {
+          "0-5m": {
+            "n": 140,
+            "rmse_m": 3.7625,
+            "bias_m": 2.9814,
+            "r2": -4.0442,
+            "decile_slope": -0.179
+          },
+          "5-10m": {
+            "n": 1210,
+            "rmse_m": 1.3486,
+            "bias_m": -0.0014,
+            "r2": -6.4483,
+            "decile_slope": 0.924
+          },
+          "10-15m": {
+            "n": 10,
+            "rmse_m": 5.6239,
+            "bias_m": -5.2159,
+            "r2": -11.9319,
+            "decile_slope": NaN
+          },
+          "15-20m": {
+            "n": 4454,
+            "rmse_m": 1.7066,
+            "bias_m": -0.8756,
+            "r2": -12.6376,
+            "decile_slope": 0.6008
+          },
+          "20-25m": {
+            "n": 476,
+            "rmse_m": 1.8442,
+            "bias_m": -1.8284,
+            "r2": -111.1932,
+            "decile_slope": 0.0917
+          }
+        },
+        "sigma_95_cov_calibrated": 0.9501,
+        "sigma_k_test": 2.417565,
+        "sigma_95_cov_raw": 0.7162
+      },
+      "omc": {
+        "n_test": 5413,
+        "n_train_sub": 7806,
+        "n_val": 2318,
+        "rmse_m": 0.9875,
+        "bias_m": 0.4283,
+        "r2": -0.4265,
+        "decile_slope": 0.0873,
+        "sigma_95_cov": 0.9473,
+        "depth_range_m": [
+          0.3100000023841858,
+          9.75
+        ],
+        "per_bin": {
+          "0-5m": {
+            "n": 178,
+            "rmse_m": 3.4643,
+            "bias_m": 3.2088,
+            "r2": -7.3119,
+            "decile_slope": 0.1246
+          },
+          "5-10m": {
+            "n": 5235,
+            "rmse_m": 0.7748,
+            "bias_m": 0.3337,
+            "r2": -1.3674,
+            "decile_slope": -0.0061
+          },
+          "10-15m": {
+            "n": 0,
+            "rmse_m": null,
+            "r2": null,
+            "decile_slope": null
+          },
+          "15-20m": {
+            "n": 0,
+            "rmse_m": null,
+            "r2": null,
+            "decile_slope": null
+          },
+          "20-25m": {
+            "n": 0,
+            "rmse_m": null,
+            "r2": null,
+            "decile_slope": null
+          }
+        },
+        "sigma_95_cov_calibrated": 0.9501,
+        "sigma_k_test": 1.091392,
+        "sigma_95_cov_raw": 0.9392
+      }
+    },
+    "band_shuffle": {
+      "site": "khalifa",
+      "rmse_original_m": 1.7421,
+      "rmse_shuffled_m": 16.6829,
+      "delta_pct": 857.63,
+      "leakage_suspect": false,
+      "verdict": "spectral depth skill present"
+    }
+  },
+  "datum": "LAT (Lowest Astronomical Tide), positive-down",
+  "units": "metres",
+  "depth_range_m": [
+    0.0,
+    25.0
+  ],
+  "scope": "Calibrated on UAE Gulf in-situ survey data (Khalifa Port + Old Mussafah). Reconnaissance-grade. Clear-water generalization unverified \u2014 ATL24 unavailable. Not to be used for navigation."
+}

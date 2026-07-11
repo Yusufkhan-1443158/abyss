@@ -1,0 +1,12 @@
+node_modules
+frontend/node_modules
+__pycache__
+*.pyc
+.env
+.git
+*.h5
+*.nc
+*.tif
+# but DO bundle the small (~1 MB) prerendered sample products the
+# Results store / Khalifa-VHR button hydrate from
+!samples/results/*.tif

@@ -1,0 +1,122 @@
+{
+ "generated_at": "2026-06-11 16:32",
+ "gate_rmse_012": 0.95,
+ "subsample_max": 5000,
+ "sites": [
+  {
+   "key": "old_mussafah",
+   "name": "Old Mussafah",
+   "region": "Abu Dhabi (inner lagoon)",
+   "center": [
+    24.44,
+    54.38
+   ],
+   "status": "PASS",
+   "status_note": "PASS \u2014 0.92 m RMSE (0-12 m pooled OOF, 1,908 cells, 6 datum-screened ATL24 dates, full site extent incl. NW deep channel, 7/7 gates, 508 m spatial blocks). Shallow-weighted: 0-2 m RMSE 0.72 m (79% of cells); 4-12 m bands 1.6-2.8 m RMSE with deep underestimation \u2014 sub-1 m holds pooled and 0-2 m, not per-band below 4 m. 14-date expansion (R12) degraded training (1.28 m, 3 seeds) and was not adopted.",
+   "n_cells": 1908,
+   "n_folds": 8,
+   "n_dates": 6,
+   "gt_source": "ICESat-2 ATL24 v006 (6 dates 2018-2024)",
+   "headline_metric": "012",
+   "headline_rmse": 0.9237,
+   "rmse_012": 0.9237,
+   "rmse_full": 0.9657,
+   "r2_full": 0.7534,
+   "n_gates_pass": 7,
+   "gates_source": "run_json_criteria",
+   "r4_benchmark_rmse": null
+  },
+  {
+   "key": "khalifa",
+   "name": "Khalifa Port (Multibeam)",
+   "region": "Abu Dhabi (deep basin)",
+   "center": [
+    24.81,
+    54.65
+   ],
+   "status": "NOT_VIABLE",
+   "status_note": "87% of cells are 14-22 m; 0-12 m fringe biased +1..+4 m",
+   "n_cells": 34016,
+   "n_folds": null,
+   "n_dates": null,
+   "gt_source": "Survey-grade multibeam (KP basin, ~0.1-0.3 m sigma)",
+   "headline_metric": "full",
+   "headline_rmse": 1.6131,
+   "rmse_012": 3.337,
+   "rmse_full": 1.6131,
+   "r2_full": 0.84,
+   "n_gates_pass": 3,
+   "gates_source": "SUB1M_LOG_gate_table",
+   "r4_benchmark_rmse": null
+  },
+  {
+   "key": "saadiyat",
+   "name": "Saadiyat",
+   "region": "Abu Dhabi (island shelf)",
+   "center": [
+    24.6,
+    54.45
+   ],
+   "status": "ABSTAIN",
+   "status_note": "2.256 m 0-12 m; only 308 cells, regression-to-mean",
+   "n_cells": 81,
+   "n_folds": 8,
+   "n_dates": 3,
+   "gt_source": "ICESat-2 ATL24 v006 (bad date 20210415 dropped)",
+   "headline_metric": "012",
+   "headline_rmse": 2.2559,
+   "rmse_012": 2.2559,
+   "rmse_full": 2.2559,
+   "r2_full": 0.1164,
+   "n_gates_pass": 3,
+   "gates_source": "run_json_criteria",
+   "r4_benchmark_rmse": null
+  },
+  {
+   "key": "jbel_dhanna",
+   "name": "Jbel Dhanna",
+   "region": "Al Dhafra (shallow flat)",
+   "center": [
+    24.22,
+    52.59
+   ],
+   "status": "ABSTAIN",
+   "status_note": "75% cells 0-2 m; +2.87 m bias; 294 cells unstable CV",
+   "n_cells": 290,
+   "n_folds": 11,
+   "n_dates": 2,
+   "gt_source": "ICESat-2 ATL24 v006 (2 dates)",
+   "headline_metric": "012",
+   "headline_rmse": 2.8859,
+   "rmse_012": 2.8859,
+   "rmse_full": 2.8859,
+   "r2_full": -1.8295,
+   "n_gates_pass": 3,
+   "gates_source": "run_json_criteria",
+   "r4_benchmark_rmse": null
+  },
+  {
+   "key": "florida_keys",
+   "name": "Florida Keys (benchmark)",
+   "region": "USA (clear-water control)",
+   "center": [
+    24.55,
+    -81.6
+   ],
+   "status": "BENCHMARK",
+   "status_note": "Clear-water control: R4 fold-mean 0.906 m; R5 pooled 1.040 m",
+   "n_cells": 4203,
+   "n_folds": 12,
+   "n_dates": 4,
+   "gt_source": "ICESat-2 ATL24 (tide-corrected); R4 closed benchmark",
+   "headline_metric": "012",
+   "headline_rmse": 1.0405,
+   "rmse_012": 1.0405,
+   "rmse_full": 1.1011,
+   "r2_full": 0.9044,
+   "n_gates_pass": 5,
+   "gates_source": "run_json_criteria",
+   "r4_benchmark_rmse": 0.906
+  }
+ ]
+}

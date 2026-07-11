@@ -1,0 +1,48 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500;600;700&display=swap');
+:root {
+  --bg-base: #f8fafc;
+  --bg-primary: #ffffff;
+  --bg-secondary: #f1f5f9;
+  --bg-tertiary: #e2e8f0;
+  --bg-card: #ffffff;
+  --border-dim: rgba(15,23,42,0.08);
+  --border-subtle: rgba(15,23,42,0.05);
+  --accent-primary: #0284c7;
+  --accent-cyan: #0891b2;
+  --accent-teal: #0d9488;
+  --accent-blue: #2563eb;
+  --accent-emerald: #059669;
+  --accent-amber: #d97706;
+  --accent-rose: #e11d48;
+  --accent-violet: #7c3aed;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-dim: #94a3b8;
+  --font-display: 'Plus Jakarta Sans', -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  --radius: 12px;
+  --radius-sm: 8px;
+  --radius-lg: 16px;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+  --shadow-lg: 0 8px 30px rgba(0,0,0,0.12);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:var(--font-display);background:var(--bg-base);color:var(--text-primary);overflow:hidden;height:100vh;-webkit-font-smoothing:antialiased}
+#root{height:100vh}
+::-webkit-scrollbar{width:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:rgba(15,23,42,0.15);border-radius:3px}
+.leaflet-container{background:#e8f4f8!important}
+.leaflet-control-zoom a{background:#fff!important;color:#334155!important;border-color:rgba(15,23,42,0.1)!important;box-shadow:var(--shadow-sm)!important}
+.leaflet-draw-toolbar a{background-color:#fff!important;border-color:rgba(15,23,42,0.1)!important}
+.leaflet-popup-content-wrapper{background:#fff!important;color:#0f172a!important;border-radius:12px!important;border:1px solid rgba(15,23,42,0.08)!important;box-shadow:var(--shadow-lg)!important}
+.leaflet-popup-tip{background:#fff!important}
+input[type="range"]{-webkit-appearance:none;height:4px;border-radius:2px;outline:none;cursor:pointer;background:#e2e8f0}
+input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--accent-primary);border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.2);cursor:pointer}
+input[type="date"]{color-scheme:light}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes slideInRight{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
+@keyframes vhrIndeterminate{0%{left:-35%}100%{left:100%}}
