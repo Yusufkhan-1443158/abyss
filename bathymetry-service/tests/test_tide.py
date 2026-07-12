@@ -83,7 +83,7 @@ def test_infer_payload_keys_and_tide_block(monkeypatch, fake_minio):
 
     client = TestClient(main.app)
     r = client.post("/bathymetry/infer",
-                    json={"raster_id": "tide-test", "bbox": BBOX})
+                    json={"raster_id": "tide-test", "bbox": BBOX, "engine": "dl-pro-v3"})
     assert r.status_code == 200, r.text
     payload = r.json()
 
@@ -114,7 +114,7 @@ def test_infer_tide_kill_switch(monkeypatch, fake_minio):
 
     client = TestClient(main.app)
     r = client.post("/bathymetry/infer",
-                    json={"raster_id": "tide-off", "bbox": BBOX})
+                    json={"raster_id": "tide-off", "bbox": BBOX, "engine": "dl-pro-v3"})
     assert r.status_code == 200, r.text
     payload = r.json()
     assert payload["tide"]["applied"] is False

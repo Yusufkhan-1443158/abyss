@@ -84,7 +84,8 @@ def test_infer_n_scenes_1_has_no_composite_key(monkeypatch, fake_minio):
 
     client = TestClient(main.app)
     r = client.post("/bathymetry/infer",
-                    json={"raster_id": "single", "bbox": BBOX, "n_scenes": 1})
+                    json={"raster_id": "single", "bbox": BBOX, "n_scenes": 1,
+                          "engine": "dl-pro-v3"})
     assert r.status_code == 200, r.text
     payload = r.json()
     assert "composite" not in payload
@@ -117,7 +118,8 @@ def test_infer_n_scenes_3_composites(monkeypatch, fake_minio):
 
     client = TestClient(main.app)
     r = client.post("/bathymetry/infer",
-                    json={"raster_id": "multi", "bbox": BBOX, "n_scenes": 3})
+                    json={"raster_id": "multi", "bbox": BBOX, "n_scenes": 3,
+                          "engine": "dl-pro-v3"})
     assert r.status_code == 200, r.text
     payload = r.json()
     comp = payload["composite"]

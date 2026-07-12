@@ -142,8 +142,6 @@ def infer(bands: np.ndarray, band_names: Optional[List[str]] = None,
 
 def _infer_multispectral(named, max_depth, dn_scale, resolution_m,
                          bbox4326=None) -> Dict:
-    from . import uae_rf, uae_cnn
-
     water, ndwi = ndwi_water_mask(named["green"], named["nir"])
     water, coast_info = _coastline_cut(water, bbox4326)
     s2 = {
@@ -151,6 +149,43 @@ def _infer_multispectral(named, max_depth, dn_scale, resolution_m,
         "coastal": named.get("coastal", named["blue"]), "nir": named["nir"],
         "ndwi": ndwi, "water_mask": water,
     }
+    mask = {
+        "kind": "ndwi",
+        "water_pct": round(100.0 * float(water.mean()), 1),
+        "otsu_threshold_diagnostic": ndwi_otsu_threshold(ndwi),
+    }
+    if coast_info is not None:
+        mask["coastline"] = coast_info
+    return _run_ensemble(s2, water, max_depth, dn_scale, mask)
+
+
+def infer_s2_scene(s2: Dict, max_depth: float = MAX_DEPTH_M,
+                   bbox4326=None) -> Dict:
+    """ROI path: run the calibrated UAE ensemble directly on a fetched
+    Sentinel-2 scene dict (DN-scale bands + SCL/NDWI water mask from
+    s2_fetch). Same return contract as infer()."""
+    water = np.asarray(s2["water_mask"], bool)
+    water, coast_info = _coastline_cut(water, bbox4326)
+    eps = 1e-6
+    ndwi = np.asarray(
+        s2.get("ndwi", (s2["green"] - s2["nir"]) / (s2["green"] + s2["nir"] + eps)),
+        dtype=np.float32)
+    scene = {
+        "blue": s2["blue"], "green": s2["green"], "red": s2["red"],
+        "coastal": s2.get("coastal", s2["blue"]), "nir": s2["nir"],
+        "ndwi": ndwi, "water_mask": water,
+    }
+    mask = {
+        "kind": "scl+ndwi",
+        "water_pct": round(100.0 * float(water.mean()), 1),
+    }
+    if coast_info is not None:
+        mask["coastline"] = coast_info
+    return _run_ensemble(scene, water, max_depth, 1.0, mask)
+
+
+def _run_ensemble(s2, water, max_depth, dn_scale, mask) -> Dict:
+    from . import uae_rf, uae_cnn
 
     rf = uae_rf.load_model()
     if rf is None:
@@ -183,26 +218,22 @@ def _infer_multispectral(named, max_depth, dn_scale, resolution_m,
     sigma = np.where(np.isfinite(depth), sigma, np.nan).astype(np.float32)
 
     valid = np.isfinite(depth)
-    mask = {
-        "kind": "ndwi",
-        "water_pct": round(100.0 * float(water.mean()), 1),
-        "otsu_threshold_diagnostic": ndwi_otsu_threshold(ndwi),
-    }
-    if coast_info is not None:
-        mask["coastline"] = coast_info
     return {
         "depth": depth.astype(np.float32),
         "sigma": sigma,
         "water_mask": water,
         "method": ("UAE cluster ensemble (" + "+".join(members) +
-                   "), 13 spectral features, NDWI land cut"),
+                   "), 13 spectral features, " +
+                   ("SCL+NDWI" if mask.get("kind") == "scl+ndwi" else "NDWI") +
+                   " land cut"),
         "model": MODEL_NAME,
         "model_version": f"registry-v{MODEL_REGISTRY_VERSION}",
         "calibrated": True,
         "confidence": "calibrated (UAE domain); indicative elsewhere",
         "calibration": dict(CALIBRATION),
         "max_depth_m": float(max_depth),
-        "band_mapping": sorted(named.keys()),
+        "band_mapping": sorted(k for k in ("coastal", "blue", "green", "red", "nir")
+                               if k in s2),
         "dn_scale_applied": dn_scale,
         "mask": mask,
         "n_valid": int(valid.sum()),

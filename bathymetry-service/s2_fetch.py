@@ -56,7 +56,9 @@ def _cache_key(bbox, start_date, end_date, max_cloud, max_px, scene_id=None):
            f"|{start_date}|{end_date}|{max_cloud}|{max_px}")
     if scene_id:
         raw += f"|{scene_id}"
-    return "s2_" + hashlib.sha1(raw.encode()).hexdigest()[:24] + ".npz"
+    # "s2h_": harmonized-DN convention (baseline >= 04.00 offset removed) —
+    # distinct prefix so pre-harmonization cache entries are never reused.
+    return "s2h_" + hashlib.sha1(raw.encode()).hexdigest()[:24] + ".npz"
 
 
 def _serialize_s2(s2) -> bytes:
@@ -165,6 +167,19 @@ def _warp_item(item, bbox, max_px):
                 bands[key] = fut.result().astype(np.float32)
             except Exception as ex:
                 raise S2FetchError(f"band {key} read failed for scene {item.id}: {ex}")
+
+    # Processing baseline >= 04.00 (processed after 2022-01-25) carries a
+    # +1000 BOA offset that Planetary Computer does NOT remove. Subtract it
+    # so the DN match the harmonized convention (GEE S2_SR_HARMONIZED) the
+    # depth models were trained on. SCL is categorical — never offset.
+    try:
+        baseline = float(item.properties.get("s2:processing_baseline") or 0)
+    except (TypeError, ValueError):
+        baseline = 0.0
+    if baseline >= 4.0:
+        for key in bands:
+            if key != "scl":
+                bands[key] = np.maximum(bands[key] - 1000.0, 0.0)
 
     green = bands["green"]
     nir = bands["nir"]

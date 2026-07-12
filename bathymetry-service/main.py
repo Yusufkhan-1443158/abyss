@@ -33,10 +33,13 @@ from pydantic import BaseModel
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("bathymetry")
 
-app = FastAPI(title="Abyss Bathymetry Service", version="2.0.0")
+app = FastAPI(title="Abyss Bathymetry Service", version="2.1.0")
 
-MODEL_NAME = "dl-pro-v3"
+DEFAULT_ENGINE = "uae-sdb-ensemble"   # registry-v1 clustered ensemble (VMarch)
+FALLBACK_ENGINE = "dl-pro-v3"
+ENGINES = (DEFAULT_ENGINE, FALLBACK_ENGINE)
 MAX_DEPTH_M = 25.0
+MAX_SCENES = 7
 DEPTH_BUCKET = "depth"
 
 
@@ -122,6 +125,16 @@ class InferRequest(BaseModel):
     acquisition_datetime: str | None = None
     # ROI path: number of scenes to composite (1 = single least-cloudy scene).
     n_scenes: int = 1
+    # ROI path: depth engine — DEFAULT_ENGINE unless explicitly overridden.
+    engine: str | None = None
+
+
+class CalibrateRequest(BaseModel):
+    raster_id: str
+    observed: list                     # [{lat, lon, depth}, ...]
+    out_raster_id: str | None = None
+    holdout_frac: float = 0.2
+    max_shift_px: int = 5
 
 
 class ValidateRequest(BaseModel):
@@ -201,29 +214,36 @@ def _parse_bbox(bbox):
 
 @app.get("/bathymetry/health")
 def health():
-    return {"status": "ok", "model": MODEL_NAME}
+    return {"status": "ok", "model": DEFAULT_ENGINE, "engines": list(ENGINES)}
 
 
 @app.get("/bathymetry/models")
 def models():
-    info = {"models": [MODEL_NAME], "default": MODEL_NAME, "units": "meters",
-            "max_depth_m": MAX_DEPTH_M}
+    info = {"models": list(ENGINES), "default": DEFAULT_ENGINE,
+            "units": "meters", "max_depth_m": MAX_DEPTH_M}
+    try:
+        from sdb_engine import model_info
+        eng = model_info()
+        info["raster_engine"] = eng
+        info["meta"] = {
+            "name": DEFAULT_ENGINE,
+            "version": f"registry-v{eng.get('registry_version', 1)}",
+            "in_sample_rmse": (eng.get("calibration") or {}).get("in_sample_rmse_m"),
+        }
+    except Exception as ex:
+        info["raster_engine_error"] = str(ex)
     try:
         from dl_pro_engine import load_bundle
         b = load_bundle()
-        info["meta"] = {
+        info["dl_pro"] = {
             "name": b["meta"].get("name"),
             "version": b["meta"].get("version"),
             "holdout_rmse": b["meta"]["holdout_metrics_calibrated"]["rmse"],
         }
+        info.setdefault("meta", {"name": FALLBACK_ENGINE,
+                                 "version": b["meta"].get("version")})
     except Exception as ex:
-        info["meta_error"] = str(ex)
-    try:
-        from sdb_engine import model_info
-        info["raster_engine"] = model_info()
-        info["models"].append(info["raster_engine"]["model"])
-    except Exception as ex:
-        info["raster_engine_error"] = str(ex)
+        info["dl_pro_error"] = str(ex)
     return info
 
 
@@ -412,6 +432,111 @@ def _sample_depth_raster(raster_id: str, max_points: int = 200_000) -> list:
             for r, c, x, y in zip(rows, cols, xs, ys)]
 
 
+def _run_roi_engine(s2, bbox, engine):
+    """Run one fetched S2 scene through the selected depth engine, normalised
+    to a shared contract. The UAE ensemble (registry-v1) is the default; if it
+    cannot run, the scene falls back to DL-Pro with provenance recorded."""
+    if engine == FALLBACK_ENGINE:
+        from dl_pro_engine import predict_dl_pro
+        r = predict_dl_pro(s2, bbox=bbox)
+        mm = r.get("model_meta", {})
+        sigma = r.get("sigma_eff")
+        if sigma is None:
+            sigma = r.get("sigma")
+        return {
+            "depth": r["depth"], "sigma": sigma,
+            "model": FALLBACK_ENGINE, "model_version": mm.get("version"),
+            "method": "DL-Pro v3 — 23-feature turbidity-aware MLP",
+            "calibration": r.get("calibration"),
+            "iho_s44": r.get("iho_s44") or {},
+            "holdout_metrics": mm.get("holdout_metrics", {}),
+            "engine": FALLBACK_ENGINE, "engine_fallback": None,
+        }
+    import sdb_engine
+    try:
+        r = sdb_engine.infer_s2_scene(s2, max_depth=MAX_DEPTH_M, bbox4326=bbox)
+        if not np.isfinite(r["depth"]).any():
+            raise RuntimeError("ensemble produced no valid water pixels")
+    except Exception as ex:
+        log.warning("UAE ensemble unavailable (%s) — falling back to DL-Pro", ex)
+        out = _run_roi_engine(s2, bbox, FALLBACK_ENGINE)
+        out["engine_fallback"] = f"{DEFAULT_ENGINE} unavailable: {ex}"
+        return out
+    return {
+        "depth": r["depth"], "sigma": r.get("sigma"),
+        "model": r["model"], "model_version": r["model_version"],
+        "method": r["method"], "calibration": r.get("calibration"),
+        "iho_s44": {}, "holdout_metrics": {}, "mask": r.get("mask"),
+        "engine": DEFAULT_ENGINE, "engine_fallback": None,
+    }
+
+
+@app.post("/bathymetry/calibrate")
+def calibrate(reqp: CalibrateRequest):
+    """Fit a robust local calibration of a stored depth product to user
+    soundings (80/20 honest holdout) and emit the calibrated grid as a NEW
+    depth product — the original is never overwritten."""
+    import uuid as _uuid
+    from calibration import calibrate_local, CalibrationError
+
+    client = _minio()
+    try:
+        obj = client.get_object(DEPTH_BUCKET, f"{reqp.raster_id}/depth.tif")
+        blob = obj.read()
+        obj.close()
+        obj.release_conn()
+    except Exception as ex:
+        raise HTTPException(status_code=404,
+                            detail=f"depth product unavailable for raster "
+                                   f"{reqp.raster_id}: {ex}")
+    with MemoryFile(blob) as mem, mem.open() as src:
+        depth = src.read(1, masked=True).astype(np.float32).filled(np.nan)
+        transform = src.transform
+        crs = src.crs or "EPSG:4326"
+        bounds = src.bounds
+    if "4326" in str(crs):
+        bbox4326 = [bounds.left, bounds.bottom, bounds.right, bounds.top]
+    else:
+        from rasterio.warp import transform_bounds
+        bbox4326 = list(transform_bounds(crs, "EPSG:4326", *bounds))
+
+    lats, lons, obs = [], [], []
+    for p in reqp.observed or []:
+        try:
+            lats.append(float(p["lat"]))
+            lons.append(float(p["lon"]))
+            obs.append(float(p["depth"]))
+        except (KeyError, TypeError, ValueError):
+            continue
+    if not obs:
+        raise HTTPException(status_code=400,
+                            detail="observed must be [{lat, lon, depth}, ...]")
+    xs, ys = lons, lats
+    if "4326" not in str(crs):
+        from rasterio.warp import transform as _rio_transform
+        xs, ys = _rio_transform("EPSG:4326", crs, lons, lats)
+    from rasterio.transform import rowcol
+    rows, cols = rowcol(transform, xs, ys)
+
+    try:
+        depth_cal, info = calibrate_local(
+            depth, np.asarray(rows), np.asarray(cols), np.asarray(obs),
+            holdout_frac=reqp.holdout_frac, max_shift_px=reqp.max_shift_px,
+            max_depth=MAX_DEPTH_M)
+    except CalibrationError as ex:
+        raise HTTPException(status_code=400, detail=str(ex))
+
+    out_id = reqp.out_raster_id or f"{reqp.raster_id}-cal-{_uuid.uuid4().hex[:8]}"
+    _ensure_bucket(client, DEPTH_BUCKET)
+    extra = {
+        "method": "local calibration (shift + Huber linear + IDW residual field)",
+        "calibration_local": info,
+        "derived_from_raster_id": reqp.raster_id,
+    }
+    return _products_payload(client, out_id, depth_cal, None, transform, crs,
+                             bbox4326, extra)
+
+
 @app.post("/bathymetry/validate")
 def validate(reqp: ValidateRequest):
     """IHO S-44 validation of a depth product against reference soundings."""
@@ -449,7 +574,12 @@ def infer(reqp: InferRequest):
         raise HTTPException(status_code=400,
                             detail="bbox required: {west,south,east,north} or [w,s,e,n]")
 
-    n_scenes = max(1, min(int(reqp.n_scenes or 1), 5))
+    n_scenes = max(1, min(int(reqp.n_scenes or 1), MAX_SCENES))
+    engine = (reqp.engine or DEFAULT_ENGINE).strip().lower()
+    if engine not in ENGINES:
+        raise HTTPException(status_code=400,
+                            detail=f"unknown engine '{engine}' "
+                                   f"(choose from {list(ENGINES)})")
 
     # 1. Free Sentinel-2 L2A for the ROI.
     from s2_fetch import fetch_s2, fetch_s2_scenes, S2FetchError
@@ -466,21 +596,19 @@ def infer(reqp: InferRequest):
         log.exception("S2 fetch failed")
         raise HTTPException(status_code=502, detail=f"S2 fetch failed: {ex}")
 
-    # 2. DL-Pro inference (verbatim engine), once per scene.
+    # 2. Depth inference, once per scene (UAE ensemble default; DL-Pro on
+    #    request or as automatic fallback).
     try:
-        from dl_pro_engine import predict_dl_pro
-        scene_runs = [(s2, predict_dl_pro(s2, bbox=bbox)) for s2 in scenes]
+        scene_runs = [(s2, _run_roi_engine(s2, bbox, engine)) for s2 in scenes]
     except Exception as ex:
-        log.exception("DL-Pro inference failed")
+        log.exception("depth inference failed")
         raise HTTPException(status_code=500, detail=f"inference failed: {ex}")
 
     composite_block = None
     if n_scenes == 1:
         s2, result = scene_runs[0]
         depth = result["depth"]                   # (H,W) float32, NaN on land
-        sigma_src = result.get("sigma_eff")
-        if sigma_src is None:
-            sigma_src = result.get("sigma")
+        sigma_src = result.get("sigma")
         depth, tide = _tide_correct(depth, bbox, s2.get("acquired"))
     else:
         # 2b. Per-scene tide correction + inverse-variance composite.
@@ -489,20 +617,26 @@ def infer(reqp: InferRequest):
         for s2_i, r_i in scene_runs:
             d_i, tb = _tide_correct(r_i["depth"], bbox, s2_i.get("acquired"))
             tide_blocks.append(tb)
-            sig = r_i.get("sigma_eff")
+            sig = r_i.get("sigma")
             if sig is None:
-                sig = r_i.get("sigma")
-            if sig is None:
-                holdout_rmse = ((r_i.get("model_meta") or {})
-                                .get("holdout_metrics") or {}).get("rmse")
+                holdout_rmse = (r_i.get("holdout_metrics") or {}).get("rmse")
                 sig = float(holdout_rmse or 1.5)
+            # Glint proxy (production _scene_physical_qc): median NIR
+            # reflectance over the DEEP-quartile water pixels — water is
+            # NIR-black at depth, so a high value flags glint/haze. An
+            # all-water mean is bottom-contaminated over shallow banks.
             glint = None
             nir, wmask = s2_i.get("nir"), s2_i.get("water_mask")
             if nir is not None and wmask is not None:
                 wmask = np.asarray(wmask, bool)
-                if wmask.any():
-                    glint = float(np.nanmean(
-                        np.asarray(nir, np.float64)[wmask])) / 10000.0
+                nir_r = np.asarray(nir, np.float64) / 10000.0
+                d_arr = np.asarray(r_i["depth"], np.float32)
+                wet = wmask & np.isfinite(d_arr) & np.isfinite(nir_r)
+                if wet.any():
+                    q75 = float(np.nanpercentile(d_arr[wet], 75))
+                    deep = wet & (d_arr >= q75)
+                    sel = deep if deep.any() else wet
+                    glint = float(np.nanmedian(nir_r[sel]))
             entries.append({
                 "depth": d_i, "sigma": sig,
                 "scene_id": s2_i.get("scene_id"),
@@ -544,12 +678,14 @@ def infer(reqp: InferRequest):
     _ensure_bucket(client, DEPTH_BUCKET)
 
     iho = {k: round(float(v), 1) for k, v in (result.get("iho_s44") or {}).items()}
-    mm = result.get("model_meta", {})
-    holdout = mm.get("holdout_metrics", {})
+    holdout = result.get("holdout_metrics", {})
 
     extra = {
-        "model": MODEL_NAME,
-        "model_version": mm.get("version"),
+        "model": result["model"],
+        "model_version": result.get("model_version"),
+        "method": result.get("method"),
+        "engine": result.get("engine"),
+        "engine_requested": engine,
         "iho_s44_pct": iho,
         "holdout_metrics": {k: round(float(v), 3) for k, v in holdout.items()
                             if isinstance(v, (int, float))},
@@ -560,6 +696,8 @@ def infer(reqp: InferRequest):
         "tide": tide,
         "mask_coastline": coast_info,
     }
+    if result.get("engine_fallback"):
+        extra["engine_fallback"] = result["engine_fallback"]
     if composite_block is not None:
         extra["composite"] = composite_block
     return _products_payload(client, reqp.raster_id, depth, sigma_src,

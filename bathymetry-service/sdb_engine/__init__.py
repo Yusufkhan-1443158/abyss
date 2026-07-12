@@ -7,6 +7,7 @@ depth colour ramp and the `infer_depth()` entry point.
 from .inference import (  # noqa: F401
     infer,
     infer_depth,
+    infer_s2_scene,
     model_info,
     MAX_DEPTH_M,
 )
