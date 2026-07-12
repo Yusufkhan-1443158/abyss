@@ -60,12 +60,16 @@ async def run_roi(
     ed = payload.get("end_date", "2024-12-31")
     force = bool(payload.get("force"))
     try:
-        n_scenes = max(1, min(int(payload.get("n_scenes") or 1), 5))
+        n_scenes = max(1, min(int(payload.get("n_scenes") or 1), 7))
     except (TypeError, ValueError):
         n_scenes = 1
+    engine = (payload.get("engine") or "").strip().lower() or None
+    if engine not in (None, "uae-sdb-ensemble", "dl-pro-v3"):
+        raise HTTPException(status_code=400,
+                            detail="engine must be 'uae-sdb-ensemble' or 'dl-pro-v3'")
 
     model, version = current_model(BATHYMETRY_SERVICE_URL)
-    ckey = result_key(bbox, sd, ed, model, version)
+    ckey = result_key(bbox, sd, ed, engine or model, version)
     if n_scenes > 1:  # composite products dedup separately from single-scene
         ckey = f"{ckey}-n{n_scenes}"
 
@@ -100,7 +104,8 @@ async def run_roi(
     )
     db.commit()
     from ..services.bathymetry_tasks import run_bathymetry_roi
-    run_bathymetry_roi.apply_async(args=[job_id, bbox, sd, ed, name, ckey, n_scenes],
+    run_bathymetry_roi.apply_async(args=[job_id, bbox, sd, ed, name, ckey,
+                                         n_scenes, engine],
                                    queue="sw_bg")
     return {"job_id": job_id, "status": "running"}
 
@@ -128,6 +133,150 @@ async def job_status(
         "cached": bool(meta.get("cached")),
         "depth_raster_id": str(row["depth_raster_id"]) if row["depth_raster_id"] else None,
     }
+
+
+def _load_report(db: Session, ref: str):
+    row = db.execute(
+        text("SELECT id, report_code, site_name, statistics FROM bathymetry_reports "
+             "WHERE report_code = :r OR CAST(id AS text) = :r LIMIT 1"),
+        {"r": ref},
+    ).mappings().first()
+    if not row:
+        raise HTTPException(status_code=404, detail="report not found")
+    return row
+
+
+@router.post("/validate")
+async def validate_soundings(
+    payload: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """IHO S-44 validation of a produced depth layer against user-uploaded
+    reference soundings. Pass report_code to resolve the stored depth product
+    and persist the result into that report's statistics + sections."""
+    report_code = payload.pop("report_code", None)
+    if report_code and not payload.get("raster_id") and not payload.get("predicted"):
+        row = _load_report(db, report_code)
+        rid = (row["statistics"] or {}).get("infer_raster_id")
+        if not rid:
+            raise HTTPException(
+                status_code=400,
+                detail="this survey predates stored depth products — re-run it "
+                       "or retry (the page will fall back to grid samples)")
+        payload["raster_id"] = rid
+
+    async with httpx.AsyncClient(timeout=httpx.Timeout(300.0, connect=10.0)) as client:
+        try:
+            resp = await client.post(f"{BATHYMETRY_SERVICE_URL}/bathymetry/validate",
+                                     json=payload)
+        except httpx.ConnectError:
+            raise HTTPException(status_code=503, detail="Bathymetry service unavailable")
+    if resp.status_code != 200:
+        try:
+            detail = resp.json().get("detail", resp.text)
+        except Exception:
+            detail = resp.text
+        raise HTTPException(status_code=resp.status_code, detail=detail)
+    result = resp.json()
+
+    if report_code:
+        from ..services.report_builder import attach_validation
+        try:
+            attach_validation(db, report_code, result)
+            result["saved_to_report"] = report_code
+        except Exception:
+            result["saved_to_report"] = None
+    return result
+
+
+@router.post("/calibrate")
+async def calibrate_to_points(
+    payload: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Fit a robust local calibration of a survey's depth layer to uploaded
+    soundings (80/20 holdout) and ingest the calibrated grid as a NEW derived
+    layer + report. The original layer and report are untouched."""
+    import io
+    from ..services import minio_storage, report_builder
+    from ..services.tasks import process_raster_upload
+    from ..models import RasterCatalog
+
+    report_code = payload.get("report_code")
+    observed = payload.get("observed") or []
+    if not report_code or not observed:
+        raise HTTPException(status_code=400,
+                            detail="report_code and observed points required")
+    row = _load_report(db, report_code)
+    stats = row["statistics"] or {}
+    rid = stats.get("infer_raster_id")
+    if not rid:
+        raise HTTPException(status_code=400,
+                            detail="this survey predates calibration support — "
+                                   "re-run it first")
+
+    async with httpx.AsyncClient(timeout=httpx.Timeout(600.0, connect=10.0)) as client:
+        try:
+            resp = await client.post(
+                f"{BATHYMETRY_SERVICE_URL}/bathymetry/calibrate",
+                json={"raster_id": rid, "observed": observed})
+        except httpx.ConnectError:
+            raise HTTPException(status_code=503, detail="Bathymetry service unavailable")
+    if resp.status_code != 200:
+        try:
+            detail = resp.json().get("detail", resp.text)
+        except Exception:
+            detail = resp.text
+        raise HTTPException(status_code=resp.status_code, detail=detail)
+    data = resp.json()
+
+    # carry model provenance from the source survey
+    data.setdefault("model", stats.get("model") or "dl-pro-v3")
+    data.setdefault("model_version", stats.get("model_version"))
+    data.setdefault("engine", stats.get("engine"))
+    site = (row["site_name"] or "Survey area")
+
+    derived_id = str(_uuid.uuid4())
+    raw_key = f"{derived_id}/depth_rgb.tif"
+    try:
+        blob = minio_storage.download_file(data.get("depth_bucket", "depth"),
+                                           data["depth_rgb_key"])
+        minio_storage.upload_file("raw", raw_key, io.BytesIO(blob),
+                                  content_type="image/tiff", length=len(blob))
+    except Exception as e:
+        raise HTTPException(status_code=502,
+                            detail=f"calibrated product transfer failed: {e}")
+
+    cal = data.get("calibration_local") or {}
+    derived = RasterCatalog(
+        id=derived_id, name=f"Bathymetry — {site} (calibrated)",
+        description=f"Depth product for {site}, locally calibrated to "
+                    f"{cal.get('n_points', '?')} user soundings",
+        original_filename=f"depth_{rid}_calibrated.tif", original_format="GTiff",
+        minio_raw_path=raw_key, processing_status="pending",
+        uploaded_by=current_user.id,
+        metadata_={"source_kind": "bathymetry", "parent_raster_id": None,
+                   "bathymetry": {"model": data.get("model"),
+                                  "stats": data.get("stats"),
+                                  "max_depth_m": data.get("max_depth_m"),
+                                  "calibration": "local_points",
+                                  "calibration_local": cal,
+                                  "derived_from_report": row["report_code"]}},
+    )
+    db.add(derived)
+    db.commit()
+    process_raster_upload.delay(derived_id)
+
+    report_id, new_code = report_builder.build_report(
+        db, None, derived_id, data,
+        created_by=str(current_user.id),
+        site_name=f"{site} · calibrated")
+    return {"status": "done", "report_code": new_code, "report_id": report_id,
+            "depth_raster_id": derived_id,
+            "calibration": cal,
+            "source_report_code": row["report_code"]}
 
 
 @router.api_route("/{path:path}", methods=["GET", "POST", "PUT", "DELETE"])

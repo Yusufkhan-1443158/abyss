@@ -153,20 +153,24 @@ def run_bathymetry(self, source_raster_id: str) -> dict:
 @celery.task(name="run_bathymetry_roi", bind=True, max_retries=0)
 def run_bathymetry_roi(self, job_id, bbox, start_date="2023-01-01",
                        end_date="2024-12-31", name="Survey area", cache_key=None,
-                       n_scenes=1):
+                       n_scenes=1, engine=None):
     """ROI-first SDB run (no uploaded source): the Studio draws an area; we fetch
-    Sentinel-2 for it, run DL-Pro, ingest the depth product, and build a report.
+    Sentinel-2 for it, run the depth engine (UAE SDB ensemble by default,
+    DL-Pro on request), ingest the depth product, and build a report.
     The job row is pre-inserted (status 'running') by the POST /roi route.
     `n_scenes` > 1 composites multiple acquisition dates (inverse-variance)."""
     import io
     db = SessionLocal()
     try:
+        body = {"raster_id": job_id, "bbox": bbox,
+                "start_date": start_date, "end_date": end_date,
+                "n_scenes": int(n_scenes or 1)}
+        if engine:
+            body["engine"] = engine
         try:
             resp = httpx.post(
                 f"{BATHYMETRY_SERVICE_URL}/bathymetry/infer",
-                json={"raster_id": job_id, "bbox": bbox,
-                      "start_date": start_date, "end_date": end_date,
-                      "n_scenes": int(n_scenes or 1)},
+                json=body,
                 timeout=httpx.Timeout(900.0, connect=10.0),
             )
             resp.raise_for_status()

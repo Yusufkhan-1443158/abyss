@@ -83,6 +83,8 @@ def _metadata_rows(report_code, site, model, infer_data, stats, acquisition,
     ]
     if infer_data.get("method"):
         rows.append(["Method", infer_data["method"]])
+    if infer_data.get("engine_fallback"):
+        rows.append(["Engine fallback", infer_data["engine_fallback"]])
     if infer_data.get("scene_id"):
         rows += [
             ["Sentinel-2 scene", infer_data.get("scene_id")],
@@ -120,6 +122,62 @@ def _metadata_rows(report_code, site, model, infer_data, stats, acquisition,
             reason = tide.get("reason") or tide.get("method") or "unavailable"
             rows.append(["Tide correction", f"not applied — {reason}"])
     return rows
+
+
+VALIDATION_SECTION_TITLE = "Reference Validation (IHO S-44)"
+
+
+def _validation_section(validation: dict) -> dict:
+    iho_orders = validation.get("iho_orders") or {}
+    val_rows = [
+        ["Reference soundings matched", validation.get("n_pairs", "—")],
+        ["RMSE", f"{validation.get('rmse', '—')} m"],
+        ["MAE", f"{validation.get('mae', '—')} m"],
+        ["Bias", f"{validation.get('bias', '—')} m"],
+        ["R²", validation.get("r2", "—")],
+        ["p95 error", f"{validation.get('p95_error_m', '—')} m"],
+        ["IHO order (p95 ≤ TVU)", validation.get("order_label") or "—"],
+        ["CATZOC", validation.get("catzoc") or "—"],
+    ] + [
+        [f"TVU pass ({k})", f"{v.get('pass_pct', '—')} %"]
+        for k, v in iho_orders.items()
+    ]
+    if validation.get("detection_capability_note"):
+        val_rows.append(["Detection capability",
+                         validation["detection_capability_note"]])
+    if validation.get("tpu_caveat"):
+        val_rows.append(["TPU caveat", validation["tpu_caveat"]])
+    return {"type": "kv", "title": VALIDATION_SECTION_TITLE,
+            "data": {"rows": val_rows}}
+
+
+def attach_validation(db: Session, ref: str, validation: dict) -> None:
+    """Persist a post-hoc soundings validation into an existing report:
+    statistics.validation + the S-44 section (replaced if already present).
+    The full pair list is dropped from the stored copy to keep the row slim."""
+    row = db.execute(
+        text("SELECT id, sections, statistics FROM bathymetry_reports "
+             "WHERE report_code = :r OR CAST(id AS text) = :r LIMIT 1"),
+        {"r": ref},
+    ).mappings().first()
+    if not row:
+        raise ValueError("report not found")
+    slim = {k: v for k, v in validation.items()
+            if k not in ("pairs", "pair_stats")}
+    section = _validation_section(slim)
+    sections = list(row["sections"] or [])
+    sections = [s for s in sections
+                if (s or {}).get("title") != VALIDATION_SECTION_TITLE]
+    sections.insert(max(0, len(sections) - 1), section)
+    stats = dict(row["statistics"] or {})
+    stats["validation"] = slim
+    db.execute(
+        text("UPDATE bathymetry_reports "
+             "SET sections = CAST(:sec AS jsonb), statistics = CAST(:st AS jsonb) "
+             "WHERE id = :id"),
+        {"sec": json.dumps(sections), "st": json.dumps(stats), "id": str(row["id"])},
+    )
+    db.commit()
 
 
 def build_report(
@@ -250,23 +308,36 @@ def build_report(
 
     validation = infer_data.get("validation")
     if validation:
-        iho_orders = validation.get("iho_orders") or {}
-        val_rows = [
-            ["Reference soundings matched", validation.get("n_pairs", "—")],
-            ["RMSE", f"{validation.get('rmse', '—')} m"],
-            ["MAE", f"{validation.get('mae', '—')} m"],
-            ["Bias", f"{validation.get('bias', '—')} m"],
-            ["R²", validation.get("r2", "—")],
-            ["p95 error", f"{validation.get('p95_error_m', '—')} m"],
-            ["IHO order (p95 ≤ TVU)", validation.get("order_label") or "—"],
-            ["CATZOC", validation.get("catzoc") or "—"],
-        ] + [
-            [f"TVU pass ({k})", f"{v.get('pass_pct', '—')} %"]
-            for k, v in iho_orders.items()
+        sections.insert(-1, _validation_section(validation))
+
+    calibration_local = infer_data.get("calibration_local")
+    if calibration_local:
+        hold = calibration_local.get("holdout") or {}
+        before, after = hold.get("before") or {}, hold.get("after") or {}
+        shift = calibration_local.get("shift_px") or {}
+        lin = calibration_local.get("linear") or {}
+        cal_rows = [
+            ["Provenance", calibration_local.get("provenance", "local_points")],
+            ["Soundings used", f"{calibration_local.get('n_points', '—')} "
+                               f"({calibration_local.get('n_train', '—')} fit / "
+                               f"{calibration_local.get('n_holdout', '—')} holdout)"],
+            ["Steps", ", ".join(calibration_local.get("steps") or []) or "—"],
+            ["Co-registration shift", f"dr {shift.get('dr', 0)} px, "
+                                      f"dc {shift.get('dc', 0)} px"],
+            ["Robust linear fit", f"depth' = {lin.get('a', '—')} × depth + "
+                                  f"{lin.get('b', '—')} m"],
+            ["Holdout RMSE (before → after)",
+             f"{before.get('rmse_m', '—')} m → {after.get('rmse_m', '—')} m"],
+            ["Holdout MAE (before → after)",
+             f"{before.get('mae_m', '—')} m → {after.get('mae_m', '—')} m"],
+            ["Holdout bias (before → after)",
+             f"{before.get('bias_m', '—')} m → {after.get('bias_m', '—')} m"],
         ]
+        if calibration_local.get("note"):
+            cal_rows.append(["Note", calibration_local["note"]])
         sections.insert(-1, {"type": "kv",
-                             "title": "Reference Validation (IHO S-44)",
-                             "data": {"rows": val_rows}})
+                             "title": "Local Calibration (user soundings)",
+                             "data": {"rows": cal_rows}})
 
     db.execute(
         text(
@@ -301,12 +372,20 @@ def build_report(
                 "grid": infer_data.get("grid"),
                 "scene_id": infer_data.get("scene_id"),
                 "max_depth_m": infer_data.get("max_depth_m"),
+                "model": model,
+                "model_version": infer_data.get("model_version"),
+                "engine": infer_data.get("engine"),
                 "method": infer_data.get("method"),
                 "calibrated": infer_data.get("calibrated"),
                 "calibration": infer_data.get("calibration"),
+                # infer-time raster id → locates depth/{id}/depth.tif for
+                # post-hoc validation / local calibration.
+                "infer_raster_id": infer_data.get("raster_id"),
+                "depth_raw_key": infer_data.get("depth_raw_key"),
                 **({"tide": infer_data["tide"]} if infer_data.get("tide") else {}),
                 **({"composite": composite} if composite else {}),
                 **({"validation": validation} if validation else {}),
+                **({"calibration_local": calibration_local} if calibration_local else {}),
             }),
             "gen": generated_at,
             "uid": created_by,
