@@ -226,6 +226,19 @@
 
 <div class="metrics" id="metrics"><h3>Metrics</h3><div class="b" id="metricsB"></div></div>
 
+<!-- reference soundings: IHO S-44 validation + local calibration -->
+<div class="metrics" id="sndPanel" style="top:auto;bottom:22px;max-height:60vh;overflow:auto"><h3>Reference soundings</h3><div class="b">
+  <input type="file" id="sndFile" accept=".xyz,.csv,.txt" style="display:none">
+  <button class="miniGhost" id="sndPick" style="width:100%">⤒ Upload .xyz / .csv / .txt</button>
+  <div class="cg" style="margin-top:9px"><span class="lab">Column order</span>
+    <div class="seg" id="sndOrder"><button data-o="lonlat" class="active">lon,lat,depth</button><button data-o="latlon">lat,lon,depth</button></div></div>
+  <div id="sndInfo" style="font-size:11px;color:var(--text-dim);margin-top:8px">No file loaded.</div>
+  <div class="crow" style="margin-top:10px"><button class="btn" id="valBtn" disabled>✓ Validate (S-44)</button></div>
+  <div class="crow" style="margin-top:6px"><button class="btn ghost" id="calBtn" disabled style="flex:1">⚙ Calibrate depth to my points</button></div>
+  <div id="valOut"></div>
+  <div id="calOut"></div>
+</div></div>
+
 <!-- bottom-center frame -->
 <div class="frame" id="console">
   <div class="ph active" id="ph1">
@@ -237,12 +250,14 @@
   <div class="ph" id="ph2">
     <div class="ch"><button class="ibtn" id="back2" style="width:26px;height:26px" title="Back to survey area" aria-label="Back to survey area">←</button><span class="ctitle">② Method &amp; parameters</span><span class="stepdots"><span class="dot on"></span><span class="dot on"></span></span></div>
     <div class="cb">
-      <div class="methods"><div class="mcard active" data-m="dl-pro-v3"><div><div class="nm">DL-Pro v3</div><div class="ds">Turbidity-aware MLP · RMSE 2.84 m</div></div><span class="tag">production</span></div>
-        <div class="mcard soon"><div><div class="nm">Empirical SDB</div><div class="ds">Stumpf / Lyzenga</div></div><span class="tag">soon</span></div></div>
+      <div class="methods" id="engines"><div class="mcard active" data-m="uae-sdb-ensemble"><div><div class="nm">UAE SDB Ensemble</div><div class="ds">Clustered RF+MLP · 13 spectral features · registry v1</div></div><span class="tag">production</span></div>
+        <div class="mcard" data-m="dl-pro-v3"><div><div class="nm">DL-Pro v3</div><div class="ds">Turbidity-aware MLP · RMSE 2.84 m</div></div><span class="tag">fallback</span></div></div>
       <div class="cgrid" style="margin-top:12px"><div><label>Start</label><input type="date" id="sd" value="2023-01-01"></div><div><label>End</label><input type="date" id="ed" value="2024-12-31"></div></div>
       <div style="margin-top:10px"><label>Max cloud · <span id="ccv">20</span>%</label><input type="range" id="cc" min="5" max="80" value="20" style="width:100%"></div>
+      <div style="margin-top:10px"><label>Scenes · multi-temporal composite</label><div class="seg" id="nsc"><button data-n="1" class="active">1</button><button data-n="3">3</button><button data-n="5">5</button><button data-n="7">7</button></div>
+        <div style="font-size:10px;color:var(--text-dim);margin-top:5px" id="nscNote">Single least-cloudy scene.</div></div>
       <div class="crow"><button class="btn" id="genBtn">⚡ Generate Bathymetry</button></div>
-      <div id="prog" style="display:none"><div style="font-size:11px;color:var(--text-dim);margin-top:9px" id="progTxt">Fetching Sentinel-2 &amp; running DL-Pro…</div><div class="barwrap"><i></i></div></div>
+      <div id="prog" style="display:none"><div style="font-size:11px;color:var(--text-dim);margin-top:9px" id="progTxt">Fetching Sentinel-2 &amp; running the depth engine…</div><div class="barwrap"><i></i></div></div>
     </div>
   </div>
 </div>
@@ -295,6 +310,7 @@ map.on('style.load',function(){ if(state.grid){ renderOverlay(); if(state.contou
 
 var TRCOLORS=['#00f5ff','#ffd166','#ff6b6b','#a78bfa','#4ade80'];
 var state={bbox:null,grid:null,gridRaw:null,sigma:null,bounds:null,maxDepth:25,cmap:'bathy',tool:'pan',view:'map',
+  engine:'uae-sdb-ensemble',nScenes:1,snd:{pts:[],order:'lonlat',name:''},
   slice:[0,25],contourInt:2,contoursOn:false,labels:true,opacity:.85,normalize:true,zexag:1,tex:'imagery',pins:[],lastProfile:null,code:null,stats:null,
   // 01/02/04 map modes
   mapMode:'flat', blend:0.7, reliefExag:3, sunAz:315,
@@ -326,25 +342,32 @@ map.on('draw.create',function(e){var c=e.features[0].geometry.coordinates[0];var
 function showStep(n){document.getElementById('ph1').classList.toggle('active',n===1);document.getElementById('ph2').classList.toggle('active',n===2);}
 document.getElementById('toStep2').onclick=function(){showStep(2);};document.getElementById('back2').onclick=function(){showStep(1);};
 document.getElementById('cc').oninput=function(){document.getElementById('ccv').textContent=this.value;};
+document.querySelectorAll('#engines .mcard').forEach(function(c){c.onclick=function(){
+  document.querySelectorAll('#engines .mcard').forEach(x=>x.classList.remove('active'));c.classList.add('active');state.engine=c.dataset.m;};});
+document.querySelectorAll('#nsc button').forEach(function(b){b.onclick=function(){
+  document.querySelectorAll('#nsc button').forEach(x=>x.classList.remove('active'));b.classList.add('active');state.nScenes=+b.dataset.n;
+  document.getElementById('nscNote').textContent=state.nScenes===1?'Single least-cloudy scene.':state.nScenes+' distinct-date scenes, inverse-variance composite (glint-gated).';};});
 
 // ───── generate ─────
 document.getElementById('genBtn').onclick=async function(){ if(!state.bbox)return; this.disabled=true; document.getElementById('prog').style.display='block';
   try{ var r=await fetch('/api/bathymetry/roi',{method:'POST',headers:Object.assign({'Content-Type':'application/json'},authHeaders()),credentials:'include',
-      body:JSON.stringify({bbox:{west:state.bbox[0],south:state.bbox[1],east:state.bbox[2],north:state.bbox[3]},name:state.areaName,start_date:sd.value,end_date:ed.value})});
+      body:JSON.stringify({bbox:{west:state.bbox[0],south:state.bbox[1],east:state.bbox[2],north:state.bbox[3]},name:state.areaName,start_date:sd.value,end_date:ed.value,
+        n_scenes:state.nScenes,engine:state.engine})});
     var j=await r.json(); if(!j.job_id)throw new Error(j.detail||'failed'); var code=await poll(j.job_id); await loadReport(code);
     document.getElementById('console').style.display='none';
   }catch(e){document.getElementById('progTxt').textContent='Error: '+e.message;} finally{this.disabled=false;} };
-function poll(id){return new Promise(function(res,rej){var n=0;var t=setInterval(async function(){n++;
+function poll(id){return new Promise(function(res,rej){var n=0;var lim=state.nScenes>1?300:120;var t=setInterval(async function(){n++;
   try{var r=await fetch('/api/bathymetry/jobs/'+id,{headers:authHeaders(),credentials:'include'});var j=await r.json();
-    document.getElementById('progTxt').textContent='Running DL-Pro… ('+(n*3)+'s)';
+    document.getElementById('progTxt').textContent='Running '+(state.engine==='dl-pro-v3'?'DL-Pro v3':'UAE SDB ensemble')+(state.nScenes>1?' × '+state.nScenes+' scenes':'')+'… ('+(n*3)+'s)';
     if(j.status==='done'){clearInterval(t);res(j.report_code);}else if(j.status==='failed'){clearInterval(t);rej(new Error(j.error||'failed'));}}catch(e){}
-  if(n>80){clearInterval(t);rej(new Error('timeout'));}},3000);});}
+  if(n>lim){clearInterval(t);rej(new Error('timeout'));}},3000);});}
 
 async function loadReport(code){var r=await fetch('/api/reports/'+code,{headers:authHeaders(),credentials:'include'});var rep=await r.json();
   var st=rep.statistics||{},g=st.grid||{}; state.gridRaw=g.depth||null; state.grid=state.gridRaw; state.sigma=g.sigma||null; state.maxDepth=g.max_depth_m||25; state.code=code; state.stats=st;
   state.bounds=g.bounds||{west:state.bbox[0],south:state.bbox[1],east:state.bbox[2],north:state.bbox[3]}; state.slice=[0,state.maxDepth]; state._norm=null; state.lastProfile=null; state.transects=[]; state.pins=(state.pins||[]).filter(m=>{m.remove();return false;});
   document.getElementById('legMax').textContent=state.maxDepth; document.getElementById('legRamp').style.background=rampCss(state.cmap);
   document.getElementById('tools').classList.add('show'); document.getElementById('metrics').classList.add('show'); document.getElementById('legend').classList.add('show');
+  document.getElementById('sndPanel').classList.add('show'); sndRefresh();
   document.getElementById('emptySweep').style.display='none'; document.getElementById('histEmpty').style.display='none';
   document.getElementById('newSurveyBtn').style.display='inline-flex';
   fetchBasemap();  // for 3D drape
@@ -519,9 +542,22 @@ function renderHist(){if(!state.grid)return;var cv=document.getElementById('chis
   document.getElementById('histStats').innerHTML='<div class="statcards">'+[['mean_m','Mean'],['max_m','Max'],['min_m','Min'],['std_m','Std'],['coverage_pct','Coverage %']].map(c=>'<div class="c"><div class="v">'+(state.stats[c[0]]!=null?state.stats[c[0]]:'—')+'</div><div class="l">'+c[1]+'</div></div>').join('')+'</div>';}
 
 function renderMetrics(){var st=state.stats,iho=st.iho_s44_pct||{},hold=st.holdout_metrics||{};var h='';
+  if(st.model)h+='<div class="mrow"><span class="k">Engine</span><span class="v" style="font-size:10px">'+st.model+(st.model_version?' '+st.model_version:'')+'</span></div>';
   [['mean_m','Mean depth','m'],['max_m','Max depth','m'],['coverage_pct','Coverage','%'],['std_m','Std dev','m']].forEach(c=>h+='<div class="mrow"><span class="k">'+c[1]+'</span><span class="v">'+(st[c[0]]!=null?st[c[0]]+' '+c[2]:'—')+'</span></div>');
   h+='<div style="height:8px"></div>';['Special','Order_1a','Order_2','Order_2b'].forEach(function(k){var v=iho[k];if(v==null)return;h+='<div class="iho"><span class="nm">'+k.replace('_',' ')+'</span><span class="tr"><span class="fl" style="width:'+v+'%"></span></span><span class="p">'+v+'%</span></div>';});
-  h+='<div class="mrow" style="margin-top:8px"><span class="k">Hold-out RMSE</span><span class="v">'+(hold.rmse!=null?hold.rmse+' m':'—')+'</span></div><div style="margin-top:8px"><a href="report-view.html?id='+state.code+'" style="color:var(--accent);font-size:12px;text-decoration:none">📄 Full report →</a></div>';
+  h+='<div class="mrow" style="margin-top:8px"><span class="k">Hold-out RMSE</span><span class="v">'+(hold.rmse!=null?hold.rmse+' m':'—')+'</span></div>';
+  var comp=st.composite;
+  if(comp){ var per=comp.per_scene||[],dropped=per.filter(p=>!p.kept).length;
+    h+='<div style="height:8px;border-bottom:1px solid var(--border);margin-bottom:8px"></div>';
+    h+='<div class="mrow"><span class="k">Composite</span><span class="v">'+(comp.n_scenes_used||'—')+' of '+(comp.n_scenes_requested||'—')+' scenes</span></div>';
+    if(dropped)h+='<div class="mrow"><span class="k">Glint-dropped</span><span class="v" style="color:var(--danger,#ff6b6b)">'+dropped+'</span></div>';
+    per.forEach(function(p){var d=String(p.acquired||p.scene_id||'?').slice(0,10);
+      h+='<div class="mrow" style="font-size:11px'+(p.kept?'':';opacity:.45')+'"><span class="k">'+d+(p.kept?'':' ✕')+'</span><span class="v">σ '+(p.sigma_med!=null?p.sigma_med:'—')+(p.glint!=null?' · g '+p.glint:'')+'</span></div>';});
+    h+='<div class="mrow"><span class="k">Agreement (med σₚₓ)</span><span class="v">'+(comp.px_std_median_m!=null?comp.px_std_median_m+' m':'—')+'</span></div>';
+    h+='<div class="mrow"><span class="k">Agreement (p95 σₚₓ)</span><span class="v">'+(comp.px_std_p95_m!=null?comp.px_std_p95_m+' m':'—')+'</span></div>'; }
+  var val=st.validation;
+  if(val)h+='<div class="mrow" style="margin-top:4px"><span class="k">Validated</span><span class="v">'+(val.rmse!=null?'RMSE '+val.rmse+' m':'')+(val.catzoc?' · CATZOC '+val.catzoc:'')+'</span></div>';
+  h+='<div style="margin-top:8px"><a href="report-view.html?id='+state.code+'" style="color:var(--accent);font-size:12px;text-decoration:none">📄 Full report →</a></div>';
   document.getElementById('metricsB').innerHTML=h;}
 
 // ───── CONTEXT-AWARE controls (bottom-center) ─────
@@ -728,10 +764,79 @@ document.querySelectorAll('#cmpMode button').forEach(b=>b.onclick=function(){doc
   h.addEventListener('mousedown',function(e){drag=true;e.preventDefault();}); window.addEventListener('mouseup',()=>drag=false);
   window.addEventListener('mousemove',function(e){if(!drag)return;var r=st.getBoundingClientRect();state.cmp.swipe=Math.max(0,Math.min(1,(e.clientX-r.left)/r.width));renderCompare();});})();
 
+// ───── reference soundings: S-44 validation + local calibration ─────
+function parseSoundings(text,order){var pts=[],skipped=0;
+  text.split(/\r?\n/).forEach(function(line){line=line.trim();if(!line||line[0]==='#')return;
+    var f=line.split(/[,;\t ]+/).map(parseFloat);if(f.length<3||f.slice(0,3).some(v=>!isFinite(v))){skipped++;return;}
+    var lon=order==='latlon'?f[1]:f[0],lat=order==='latlon'?f[0]:f[1],d=Math.abs(f[2]);
+    if(Math.abs(lat)>90||Math.abs(lon)>180||!(d>0)){skipped++;return;}
+    pts.push({lat:lat,lon:lon,depth:d});});
+  if(pts.length>50000){var step=Math.ceil(pts.length/50000);pts=pts.filter((_,i)=>i%step===0);}
+  return {pts:pts,skipped:skipped};}
+function sndRefresh(){var s=state.snd,info=document.getElementById('sndInfo');
+  document.getElementById('valBtn').disabled=!(s.pts.length&&state.grid);
+  document.getElementById('calBtn').disabled=!(s.pts.length>=10&&state.grid&&state.stats&&state.stats.infer_raster_id);
+  if(!s.pts.length){info.textContent='No file loaded. Lines: '+(s.order==='latlon'?'lat, lon, depth':'lon, lat, depth')+' (m, positive down).';return;}
+  var inBox=0,b=state.bounds;if(b)s.pts.forEach(function(p){if(p.lon>=b.west&&p.lon<=b.east&&p.lat>=b.south&&p.lat<=b.north)inBox++;});
+  info.innerHTML='<b style="color:var(--accent)">'+s.pts.length+'</b> points from '+s.name+(b?' · <b>'+inBox+'</b> inside survey area':'')+
+    (state.stats&&!state.stats.infer_raster_id?'<br><span style="color:var(--danger,#ff6b6b)">Calibration needs a re-run of this survey (no stored depth product).</span>':'');}
+document.getElementById('sndPick').onclick=function(){document.getElementById('sndFile').click();};
+document.getElementById('sndFile').onchange=function(){var f=this.files[0];if(!f)return;var rd=new FileReader();
+  rd.onload=function(){var p=parseSoundings(String(rd.result),state.snd.order);state.snd.pts=p.pts;state.snd.name=f.name;
+    document.getElementById('valOut').innerHTML='';document.getElementById('calOut').innerHTML='';sndRefresh();};
+  rd.readAsText(f);this.value='';};
+document.querySelectorAll('#sndOrder button').forEach(function(b){b.onclick=function(){
+  document.querySelectorAll('#sndOrder button').forEach(x=>x.classList.remove('active'));b.classList.add('active');state.snd.order=b.dataset.o;
+  state.snd.pts=[];state.snd.name='';document.getElementById('valOut').innerHTML='';document.getElementById('calOut').innerHTML='';sndRefresh();};});
+function gridPredPoints(){var g=state.gridRaw,b=state.bounds;if(!g||!b)return null;var R=g.length,C=g[0].length,pts=[];
+  var stride=Math.max(1,Math.ceil(Math.sqrt(R*C/60000)));
+  for(var i=0;i<R;i+=stride)for(var j=0;j<C;j+=stride){var v=g[i][j];if(v==null||!(v>0))continue;var ll=gridLL(j,i,R,C);pts.push({lon:ll[0],lat:ll[1],depth:v});}
+  return pts;}
+document.getElementById('valBtn').onclick=async function(){var out=document.getElementById('valOut');this.disabled=true;
+  out.innerHTML='<div style="font-size:11px;color:var(--text-dim);margin-top:10px">Matching '+state.snd.pts.length+' soundings…</div>';
+  try{ var body={observed:state.snd.pts,report_code:state.code};
+    var cm=cellMeters(state.gridRaw.length,state.gridRaw[0].length); body.resolution_m=Math.round(Math.min(cm[0],cm[1]));
+    if(state.stats&&state.stats.infer_raster_id)body.raster_id=state.stats.infer_raster_id; else body.predicted=gridPredPoints();
+    var r=await fetch('/api/bathymetry/validate',{method:'POST',headers:Object.assign({'Content-Type':'application/json'},authHeaders()),credentials:'include',body:JSON.stringify(body)});
+    var j=await r.json(); if(!r.ok)throw new Error(j.detail||('API '+r.status));
+    state.stats.validation=j; renderValidation(j); renderMetrics();
+  }catch(e){out.innerHTML='<div style="font-size:11px;color:var(--danger,#ff6b6b);margin-top:10px">'+e.message+'</div>';}
+  finally{sndRefresh();}};
+function renderValidation(v){var h='<div style="height:8px;border-bottom:1px solid var(--border);margin:10px 0 8px"></div>';
+  h+='<div class="mrow"><span class="k">Matched pairs</span><span class="v">'+v.n_pairs+'</span></div>';
+  [['rmse','RMSE',' m'],['mae','MAE',' m'],['medae','MedAE',' m'],['bias','Bias',' m'],['r2','R²',''],['pearson_r','Pearson r',''],['p95_error_m','p95 error',' m']]
+    .forEach(function(c){var x=v[c[0]];h+='<div class="mrow"><span class="k">'+c[1]+'</span><span class="v">'+(x!=null?x+c[2]:'—')+'</span></div>';});
+  var ord=v.iho_orders||{};[['special','Special'],['order1a','Order 1a'],['order2','Order 2']].forEach(function(o){var e=ord[o[0]];if(!e)return;
+    h+='<div class="iho"><span class="nm">'+o[1]+'</span><span class="tr"><span class="fl" style="width:'+e.pass_pct+'%"></span></span><span class="p">'+e.pass_pct+'%</span></div>';});
+  h+='<div class="mrow"><span class="k">IHO order (p95≤TVU)</span><span class="v">'+(v.order_label||'—')+'</span></div>';
+  h+='<div class="mrow"><span class="k">CATZOC</span><span class="v">'+(v.catzoc||'—')+'</span></div>';
+  if(v.datum_mismatch_note)h+='<div style="font-size:10px;color:var(--danger,#ff6b6b);margin-top:6px">'+v.datum_mismatch_note+'</div>';
+  if(v.detection_capability_note)h+='<div style="font-size:10px;color:var(--text-dim);margin-top:6px">'+v.detection_capability_note+'</div>';
+  if(v.tpu_caveat)h+='<div style="font-size:10px;color:var(--text-dim);margin-top:6px">'+v.tpu_caveat+'</div>';
+  if(v.saved_to_report)h+='<div style="font-size:10px;color:var(--accent);margin-top:6px">Saved to report '+v.saved_to_report+'.</div>';
+  document.getElementById('valOut').innerHTML=h;}
+document.getElementById('calBtn').onclick=async function(){var out=document.getElementById('calOut');this.disabled=true;
+  out.innerHTML='<div style="font-size:11px;color:var(--text-dim);margin-top:10px">Fitting local calibration (80/20 holdout)…</div>';
+  try{ var r=await fetch('/api/bathymetry/calibrate',{method:'POST',headers:Object.assign({'Content-Type':'application/json'},authHeaders()),credentials:'include',
+      body:JSON.stringify({report_code:state.code,observed:state.snd.pts})});
+    var j=await r.json(); if(!r.ok)throw new Error(j.detail||('API '+r.status));
+    var c=j.calibration||{},hb=(c.holdout||{}).before||{},ha=(c.holdout||{}).after||{};
+    var h='<div style="height:8px;border-bottom:1px solid var(--border);margin:10px 0 8px"></div>';
+    h+='<div class="mrow"><span class="k">Points (fit/holdout)</span><span class="v">'+(c.n_train||'—')+' / '+(c.n_holdout||'—')+'</span></div>';
+    h+='<div class="mrow"><span class="k">Holdout RMSE</span><span class="v">'+(hb.rmse_m!=null?hb.rmse_m:'—')+' → <b style="color:var(--accent)">'+(ha.rmse_m!=null?ha.rmse_m:'—')+'</b> m</span></div>';
+    h+='<div class="mrow"><span class="k">Holdout bias</span><span class="v">'+(hb.bias_m!=null?hb.bias_m:'—')+' → '+(ha.bias_m!=null?ha.bias_m:'—')+' m</span></div>';
+    h+='<div style="font-size:10px;color:var(--text-dim);margin-top:6px">New derived layer created — the original survey is preserved.</div>';
+    h+='<div class="crow" style="margin-top:8px"><button class="btn" id="calOpen">↳ Open calibrated survey</button></div>';
+    out.innerHTML=h;
+    document.getElementById('calOpen').onclick=async function(){await loadReport(j.report_code);document.getElementById('calOut').innerHTML='';document.getElementById('valOut').innerHTML='';};
+  }catch(e){out.innerHTML='<div style="font-size:11px;color:var(--danger,#ff6b6b);margin-top:10px">'+e.message+'</div>';}
+  finally{sndRefresh();}};
+
 // ───── views ─────
 function switchView(v){state.view=v;document.querySelectorAll('.vtab').forEach(x=>x.classList.toggle('active',x.dataset.v===v));document.querySelectorAll('.pane').forEach(p=>p.classList.toggle('active',p.dataset.v===v));
   document.getElementById('tools').style.display=(v==='map'&&state.grid)?'flex':'none';
   document.getElementById('metrics').classList.toggle('show', !!state.grid && v!=='sweep' && v!=='cmp');
+  document.getElementById('sndPanel').classList.toggle('show', !!state.grid && (v==='map'||v==='d3'));
   document.getElementById('console').style.display=(state.grid||v==='cmp'||v==='sweep')?'none':'block';
   document.getElementById('locator').classList.toggle('show',v==='d3'&&state.ctx3d&&!!state.grid);
   document.getElementById('northarrow').classList.toggle('show',v==='d3'&&state.ctx3d&&!!state.grid);
@@ -758,13 +863,15 @@ function resetSurvey(){
   state.tool='pan'; map.getCanvas().style.cursor='';
   document.getElementById('ctlbar').classList.remove('show');
   document.getElementById('rampgal').classList.remove('show');
+  document.getElementById('sndPanel').classList.remove('show');
+  document.getElementById('valOut').innerHTML='';document.getElementById('calOut').innerHTML='';
   document.getElementById('newSurveyBtn').style.display='none';
   // reset console + empty states
   document.getElementById('toStep2').disabled=true;
   document.getElementById('areaNote').textContent='Pick a UAE preset or draw a polygon.';
   document.querySelectorAll('#presets .chip').forEach(function(x){x.classList.remove('active');});
   document.getElementById('prog').style.display='none';
-  document.getElementById('progTxt').textContent='Fetching Sentinel-2 & running DL-Pro…';
+  document.getElementById('progTxt').textContent='Fetching Sentinel-2 & running the depth engine…';
   document.getElementById('genBtn').disabled=false;
   showStep(1);
   document.getElementById('empty3d').style.display='';
