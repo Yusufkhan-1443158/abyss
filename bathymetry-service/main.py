@@ -35,9 +35,11 @@ log = logging.getLogger("bathymetry")
 
 app = FastAPI(title="Abyss Bathymetry Service", version="2.1.0")
 
-DEFAULT_ENGINE = "uae-sdb-ensemble"   # registry-v1 clustered ensemble (VMarch)
+DEFAULT_ENGINE = "vmarch-sdb"         # full VMarch production chain (Railway)
 FALLBACK_ENGINE = "dl-pro-v3"
 ENGINES = (DEFAULT_ENGINE, FALLBACK_ENGINE)
+# interim clients sent the simplified-ensemble name for the ROI default
+ENGINE_ALIASES = {"uae-sdb-ensemble": DEFAULT_ENGINE}
 MAX_DEPTH_M = 25.0
 MAX_SCENES = 7
 DEPTH_BUCKET = "depth"
@@ -219,17 +221,17 @@ def health():
 
 @app.get("/bathymetry/models")
 def models():
+    from vmarch_engine import MODEL_LABEL, MODEL_VERSION
     info = {"models": list(ENGINES), "default": DEFAULT_ENGINE,
-            "units": "meters", "max_depth_m": MAX_DEPTH_M}
+            "units": "meters", "max_depth_m": MAX_DEPTH_M,
+            "meta": {"name": DEFAULT_ENGINE, "label": MODEL_LABEL,
+                     "version": MODEL_VERSION}}
     try:
         from sdb_engine import model_info
         eng = model_info()
         info["raster_engine"] = eng
-        info["meta"] = {
-            "name": DEFAULT_ENGINE,
-            "version": f"registry-v{eng.get('registry_version', 1)}",
-            "in_sample_rmse": (eng.get("calibration") or {}).get("in_sample_rmse_m"),
-        }
+        info["meta"]["in_sample_rmse"] = (
+            (eng.get("calibration") or {}).get("in_sample_rmse_m"))
     except Exception as ex:
         info["raster_engine_error"] = str(ex)
     try:
@@ -432,10 +434,17 @@ def _sample_depth_raster(raster_id: str, max_points: int = 200_000) -> list:
             for r, c, x, y in zip(rows, cols, xs, ys)]
 
 
-def _run_roi_engine(s2, bbox, engine):
+def _uae_model():
+    """Production load_uae_model semantics: prefer the CNN/MLP variant,
+    fall back to the RF. Returns the model object (predict/fine_tune) or None."""
+    from sdb_engine import uae_cnn, uae_rf
+    return uae_cnn.load_model() or uae_rf.load_model()
+
+
+def _run_roi_engine(s2, bbox, engine, gebco=None):
     """Run one fetched S2 scene through the selected depth engine, normalised
-    to a shared contract. The UAE ensemble (registry-v1) is the default; if it
-    cannot run, the scene falls back to DL-Pro with provenance recorded."""
+    to a shared contract. The full VMarch chain is the default; if it cannot
+    run, the scene falls back to DL-Pro with provenance recorded."""
     if engine == FALLBACK_ENGINE:
         from dl_pro_engine import predict_dl_pro
         r = predict_dl_pro(s2, bbox=bbox)
@@ -452,21 +461,49 @@ def _run_roi_engine(s2, bbox, engine):
             "holdout_metrics": mm.get("holdout_metrics", {}),
             "engine": FALLBACK_ENGINE, "engine_fallback": None,
         }
-    import sdb_engine
     try:
-        r = sdb_engine.infer_s2_scene(s2, max_depth=MAX_DEPTH_M, bbox4326=bbox)
+        from vmarch_engine import run_vmarch
+        # Land-authoritative vector-coastline cut on the WATER MASK before
+        # inference, so deep-water stats and calibration never see land.
+        scene = dict(s2)
+        wm = np.asarray(scene.get("water_mask"), bool)
+        try:
+            from sdb_engine.coastline_mask import coastline_land_for
+            land, _ = coastline_land_for(bbox, wm.shape)
+            if land is not None:
+                wm = wm & ~land
+        except Exception:
+            pass
+        scene["water_mask"] = wm
+        # caller prefetched GEBCO once per ROI — never re-fetch per scene
+        r = run_vmarch(scene, bbox, uae_model=_uae_model(), gebco=gebco,
+                       fetch_refs=False)
         if not np.isfinite(r["depth"]).any():
-            raise RuntimeError("ensemble produced no valid water pixels")
+            raise RuntimeError("VMarch produced no valid water pixels")
     except Exception as ex:
-        log.warning("UAE ensemble unavailable (%s) — falling back to DL-Pro", ex)
+        log.warning("VMarch chain unavailable (%s) — falling back to DL-Pro", ex)
         out = _run_roi_engine(s2, bbox, FALLBACK_ENGINE)
         out["engine_fallback"] = f"{DEFAULT_ENGINE} unavailable: {ex}"
         return out
+    m = r.get("metrics") or {}
+    iho = {}
+    if m.get("s44_1a_pct") is not None:
+        iho = {"Order_1a": m["s44_1a_pct"], "Order_2": m["s44_order2_pct"]}
+    holdout = {k2: m[k1] for k1, k2 in
+               (("rmse_m", "rmse"), ("mae_m", "mae"), ("bias_m", "bias"),
+                ("r2", "r2"), ("n_test", "n")) if m.get(k1) is not None}
     return {
         "depth": r["depth"], "sigma": r.get("sigma"),
         "model": r["model"], "model_version": r["model_version"],
-        "method": r["method"], "calibration": r.get("calibration"),
-        "iho_s44": {}, "holdout_metrics": {}, "mask": r.get("mask"),
+        "model_label": r.get("model_label"),
+        "method": r["method"], "calibration": {
+            "ls_ensemble": r.get("ls_method"),
+            "uae_blend": r.get("uae_blend"),
+            "bias_correction": r.get("bias_correction"),
+            "refs": r.get("refs"),
+            "note": r.get("confidence"),
+        },
+        "iho_s44": iho, "holdout_metrics": holdout,
         "engine": DEFAULT_ENGINE, "engine_fallback": None,
     }
 
@@ -576,6 +613,7 @@ def infer(reqp: InferRequest):
 
     n_scenes = max(1, min(int(reqp.n_scenes or 1), MAX_SCENES))
     engine = (reqp.engine or DEFAULT_ENGINE).strip().lower()
+    engine = ENGINE_ALIASES.get(engine, engine)
     if engine not in ENGINES:
         raise HTTPException(status_code=400,
                             detail=f"unknown engine '{engine}' "
@@ -596,10 +634,20 @@ def infer(reqp: InferRequest):
         log.exception("S2 fetch failed")
         raise HTTPException(status_code=502, detail=f"S2 fetch failed: {ex}")
 
-    # 2. Depth inference, once per scene (UAE ensemble default; DL-Pro on
-    #    request or as automatic fallback).
+    # 2. Depth inference, once per scene (full VMarch chain default; DL-Pro
+    #    on request or as automatic fallback). GEBCO reference anchors are
+    #    fetched ONCE per ROI and shared across the composite's scenes.
+    gebco = None
+    if engine == DEFAULT_ENGINE:
+        try:
+            from vmarch_engine import fetch_gebco, has_insitu
+            if not has_insitu(bbox):
+                gebco = fetch_gebco(bbox)
+        except Exception as ex:
+            log.info("GEBCO prefetch failed (%s)", ex)
     try:
-        scene_runs = [(s2, _run_roi_engine(s2, bbox, engine)) for s2 in scenes]
+        scene_runs = [(s2, _run_roi_engine(s2, bbox, engine, gebco=gebco))
+                      for s2 in scenes]
     except Exception as ex:
         log.exception("depth inference failed")
         raise HTTPException(status_code=500, detail=f"inference failed: {ex}")
@@ -683,6 +731,7 @@ def infer(reqp: InferRequest):
     extra = {
         "model": result["model"],
         "model_version": result.get("model_version"),
+        "model_label": result.get("model_label"),
         "method": result.get("method"),
         "engine": result.get("engine"),
         "engine_requested": engine,

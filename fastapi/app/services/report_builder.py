@@ -32,6 +32,40 @@ def _summary_text(site: str, stats: dict, model: str) -> str:
 def _methodology_text(model: str, infer_data: dict | None = None) -> str:
     d = infer_data or {}
     calib = d.get("calibration") or {}
+    if model == "vmarch-sdb":
+        blend = calib.get("uae_blend") or {}
+        bias = calib.get("bias_correction") or {}
+        refs = calib.get("refs") or {}
+        inside = blend.get("inside_predefined")
+        bias_txt = (
+            f"3-stage bias correction applied ({bias.get('stage1', 'isotonic')} "
+            f"recalibration → per-pixel kNN-IDW residual field → ±3 m clamp; "
+            f"training RMSE {bias.get('pre_rmse_m', '—')}→"
+            f"{bias.get('post_rmse_m', '—')} m on {bias.get('n_train_used', '—')} "
+            "reference anchors)" if bias.get("applied") else
+            "3-stage bias correction skipped (insufficient reference anchors "
+            "in the ROI)")
+        return (
+            "Satellite-Derived Bathymetry — VMarch production method (as deployed "
+            "on the Bathymetry-from-Space Railway platform). Per-pixel depth is a "
+            "weighted fusion of (1) Lyzenga (1985/2006) multi-band log-linear WLS "
+            "on deep-water-subtracted reflectance, (2) Stumpf (2003) blue/green "
+            "and blue/red log-ratios, combined by inverse-RMSE ensemble "
+            f"({calib.get('ls_ensemble', '—')}), and (3) the UAE-clustered "
+            "RF/MLP pretrained ensemble blended with REGION-AWARE weights "
+            f"(w_UAE={blend.get('w_uae', '—')}; "
+            + ("inside a calibrated UAE region → 90% Lyzenga+Stumpf / 10% "
+               "pretrained" if inside else
+               "outside the calibration envelopes → 50/50 transfer-learning "
+               "blend") +
+            f"). Calibration anchors: {refs.get('user', 0)} user points, "
+            f"{refs.get('gebco', 0)} GEBCO fall-through points. " + bias_txt +
+            ". Output clamped to 0–25 m; land cut with SCL/NDWI + vector "
+            "coastline; per-pixel σ is a TPU-style total "
+            "(model/tide/refraction/reference/georeferencing terms). Depth "
+            "values are model estimates and must be validated against in-situ "
+            "soundings before navigational use."
+        )
     if model == "uae-sdb-ensemble":
         return (
             "Satellite-Derived Bathymetry (SDB). Per-pixel depth is estimated from the "
@@ -79,7 +113,8 @@ def _metadata_rows(report_code, site, model, infer_data, stats, acquisition,
     rows = [
         ["Report code", report_code],
         ["Survey area", site],
-        ["Model", f"{model} {infer_data.get('model_version') or ''}".strip()],
+        ["Model", infer_data.get("model_label")
+         or f"{model} {infer_data.get('model_version') or ''}".strip()],
     ]
     if infer_data.get("method"):
         rows.append(["Method", infer_data["method"]])
@@ -374,6 +409,7 @@ def build_report(
                 "max_depth_m": infer_data.get("max_depth_m"),
                 "model": model,
                 "model_version": infer_data.get("model_version"),
+                "model_label": infer_data.get("model_label"),
                 "engine": infer_data.get("engine"),
                 "method": infer_data.get("method"),
                 "calibrated": infer_data.get("calibrated"),

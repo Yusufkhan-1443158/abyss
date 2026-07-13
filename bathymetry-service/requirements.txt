@@ -13,3 +13,4 @@ Pillow>=10.0
 python-multipart>=0.0.9
 pystac-client>=0.7
 planetary-computer>=1.0
+global-land-mask>=1.0

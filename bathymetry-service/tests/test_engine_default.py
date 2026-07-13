@@ -1,5 +1,5 @@
-"""ROI engine selection: UAE ensemble is the default, DL-Pro stays available
-on explicit request, and local calibration emits a new depth product."""
+"""ROI engine selection: the full VMarch chain is the default, DL-Pro stays
+available on explicit request, and local calibration emits a new product."""
 import numpy as np
 
 from conftest import make_s2, install_fake_dl_pro
@@ -14,7 +14,7 @@ def _patch_fetch(monkeypatch):
         lambda bbox, sd, ed, max_cloud=40, **kw: make_s2(bbox))
 
 
-def test_roi_default_engine_is_uae_ensemble(monkeypatch, fake_minio):
+def test_roi_default_engine_is_vmarch(monkeypatch, fake_minio):
     from fastapi.testclient import TestClient
     import main
 
@@ -25,13 +25,36 @@ def test_roi_default_engine_is_uae_ensemble(monkeypatch, fake_minio):
                     json={"raster_id": "eng-default", "bbox": BBOX})
     assert r.status_code == 200, r.text
     p = r.json()
-    assert p["model"] == "uae-sdb-ensemble"
+    assert p["model"] == "vmarch-sdb"
     assert p["model_version"] == "registry-v1"
-    assert p["engine"] == "uae-sdb-ensemble"
-    assert p["engine_requested"] == "uae-sdb-ensemble"
-    assert p["calibration"]["registry_version"] == 1
+    assert "VMarch SDB (Lyzenga+Stumpf+UAE ensemble" in p["model_label"]
+    assert p["engine"] == "vmarch-sdb"
+    assert p["engine_requested"] == "vmarch-sdb"
+    calib = p["calibration"]
+    assert calib["uae_blend"]["used"] is True
+    # BBOX contains the Old Mussafah preset → region-aware 90/10 blend and
+    # bundled in-situ anchors drive the 3-stage bias correction.
+    assert calib["uae_blend"]["inside_predefined"] is True
+    assert calib["uae_blend"]["w_uae"] == 0.10
+    assert calib["refs"]["in_situ"] >= 30
+    assert calib["bias_correction"]["applied"] is True
+    assert p["holdout_metrics"].get("n", 0) >= 5
     assert np.isfinite(np.array(
         [v for row in p["grid"]["depth"] for v in row if v is not None])).all()
+
+
+def test_roi_engine_alias_maps_to_vmarch(monkeypatch, fake_minio):
+    from fastapi.testclient import TestClient
+    import main
+
+    _patch_fetch(monkeypatch)
+    monkeypatch.setenv("TIDE_CORRECTION", "0")
+    client = TestClient(main.app)
+    r = client.post("/bathymetry/infer",
+                    json={"raster_id": "eng-alias", "bbox": BBOX,
+                          "engine": "uae-sdb-ensemble"})
+    assert r.status_code == 200, r.text
+    assert r.json()["model"] == "vmarch-sdb"
 
 
 def test_roi_explicit_dl_pro_still_works(monkeypatch, fake_minio):

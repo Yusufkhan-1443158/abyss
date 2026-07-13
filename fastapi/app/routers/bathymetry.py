@@ -64,9 +64,11 @@ async def run_roi(
     except (TypeError, ValueError):
         n_scenes = 1
     engine = (payload.get("engine") or "").strip().lower() or None
-    if engine not in (None, "uae-sdb-ensemble", "dl-pro-v3"):
+    if engine == "uae-sdb-ensemble":  # interim alias for the ROI default
+        engine = "vmarch-sdb"
+    if engine not in (None, "vmarch-sdb", "dl-pro-v3"):
         raise HTTPException(status_code=400,
-                            detail="engine must be 'uae-sdb-ensemble' or 'dl-pro-v3'")
+                            detail="engine must be 'vmarch-sdb' or 'dl-pro-v3'")
 
     model, version = current_model(BATHYMETRY_SERVICE_URL)
     ckey = result_key(bbox, sd, ed, engine or model, version)
