@@ -75,6 +75,12 @@ services:
     environment:
       PG_PASSWORD: postgres
 
+  vmarch-core:
+    # Local dev: reuse the host's Earth Engine user credentials so the
+    # platform's GEE imagery fallback works without a service-account file.
+    volumes:
+      - ~/.config/earthengine:/root/.config/earthengine:ro
+
   nginx:
     # Swap the TLS config for the HTTP-only dev config (volumes merge by target,
     # so this replaces /etc/nginx/conf.d; the unused certs mount stays harmless).

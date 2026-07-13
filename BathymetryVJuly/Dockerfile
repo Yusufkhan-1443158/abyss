@@ -31,6 +31,10 @@ ENV PLAYWRIGHT_BROWSERS_PATH=/usr/lib
 ENV CHROMIUM_PATH=/usr/bin/chromium
 
 COPY backend/ ./backend/
+# In-situ calibration surveys (KP / KP_EMAL / OMC xyz + SWOT_Dhanna shp).
+# Without them _load_xyz_full silently finds 0 points and every run
+# calibrates on GEBCO anchors only — depths come out flattened/garbage.
+COPY validation/ ./validation/
 COPY --from=frontend-build /app/frontend/build ./frontend/build
 # Full user guide served by GET /api/user-guide (Help panel links to it).
 COPY USER_GUIDE.md ./USER_GUIDE.md

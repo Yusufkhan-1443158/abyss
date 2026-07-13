@@ -11278,6 +11278,10 @@ def api_sdb_pro():
             user_pts=data.get('user_points', []) or [],
             max_cloud=int(data.get('max_cloud', 20)),
             fetch_sliderule=bool(data.get('use_sliderule', False)),
+            # Service-to-service callers (no proxy size limit) can ask for the
+            # georeferenced product inline instead of a second /geotiff run.
+            include_geotiff=bool(data.get('include_geotiff', False)),
+            res_override=data.get('resolution_m'),
         )
         return jsonify(_json_safe(result))
     except Exception as ex:
@@ -11362,6 +11366,9 @@ def api_very_hr_clustered():
                     max_cloud=int(data.get('max_cloud', 20)),
                     fetch_sliderule=bool(data.get('aug_use_sliderule', False)),
                     res_override=user_res,
+                    # Service-to-service callers ingest the depth product
+                    # directly from this response (no proxy size limit).
+                    include_geotiff=bool(data.get('include_geotiff', False)),
                 )
                 fast['imagery_source'] = imagery_source
                 fast['site'] = site_key

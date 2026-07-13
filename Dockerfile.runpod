@@ -57,10 +57,27 @@ RUN python3 -m venv /opt/venv-bathy \
     && /opt/venv-bathy/bin/pip install --no-cache-dir torch==2.2.2 --index-url https://download.pytorch.org/whl/cpu \
     && /opt/venv-bathy/bin/pip install --no-cache-dir -c /tmp/constraints.txt -r /tmp/req-bathy.txt
 
+# ---- VMarch platform python env (/opt/venv-vmarch) --------------------------
+# The user's actual Bathymetry_VMarch platform (vmarch-core) — the
+# vmarch-core-* studio method cards call its REAL endpoints. CPU torch reused
+# from its own index; requirements are the platform's own file. numpy<2 is NOT
+# pinned here (the platform pipeline was developed on its own resolution).
+COPY BathymetryVJuly/backend/requirements.txt /tmp/req-vmarch.txt
+RUN python3 -m venv /opt/venv-vmarch \
+    && /opt/venv-vmarch/bin/pip install --no-cache-dir -U pip setuptools wheel \
+    && /opt/venv-vmarch/bin/pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu \
+    && /opt/venv-vmarch/bin/pip install --no-cache-dir -r /tmp/req-vmarch.txt
+
 # ---- Application code --------------------------------------------------------
 WORKDIR /app
 COPY fastapi/ /app/fastapi/
 COPY bathymetry-service/ /app/bathymetry-service/
+# vmarch-core: API-only in the single-container image (no React build — the
+# studio talks to its /api endpoints through the bathymetry service adapter).
+COPY BathymetryVJuly/backend/ /app/vmarch-core/backend/
+COPY BathymetryVJuly/validation/ /app/vmarch-core/validation/
+COPY BathymetryVJuly/samples/ /app/vmarch-core/samples/
+COPY BathymetryVJuly/USER_GUIDE.md /app/vmarch-core/USER_GUIDE.md
 COPY migrations/ /app/migrations/
 COPY secure-config/keys/GENERATE.sh /app/secure-config/keys/GENERATE.sh
 
@@ -91,6 +108,7 @@ ENV PG_HOST=127.0.0.1 \
     MINIO_ACCESS_KEY=admin \
     MINIO_SECURE=false \
     BATHYMETRY_SERVICE_URL=http://127.0.0.1:8002 \
+    VMARCH_CORE_URL=http://127.0.0.1:8080 \
     SW_TILE_CACHE=1 \
     SW_REDIS_URL=redis://127.0.0.1:6380/0 \
     DEV_NO_AUTH=false \

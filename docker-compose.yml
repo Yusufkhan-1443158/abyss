@@ -28,6 +28,8 @@ volumes:
   postgres-data:
   minio-data:
   redis-data:
+  vmarch-cache:      # vmarch-core S2/coastline caches (scene pinning)
+  vmarch-downloads:  # vmarch-core MLE GeoTIFF artifacts (/downloads)
   raster-cache:   # shared /tmp/raster_cache so the COG built at ingest (worker)
                   # is instantly visible to the tile renderer (fastapi).
 
@@ -277,6 +279,8 @@ services:
       MINIO_ENDPOINT: globe-minio:9000
       MINIO_ACCESS_KEY: admin
       MINIO_SECURE: "false"
+      # Real VMarch platform service — the vmarch-core-* engines call it.
+      VMARCH_CORE_URL: http://vmarch-core:8080
     entrypoint:
       - sh
       - -c
@@ -288,6 +292,44 @@ services:
     depends_on:
       globe-minio:
         condition: service_healthy
+
+  # ---- VMarch core (the user's actual Bathymetry_VMarch platform) ------------
+  # Built from the full platform checked in at ./BathymetryVJuly — its own
+  # Dockerfile, gunicorn backend.app:app on :8080. The bathymetry service
+  # delegates the "vmarch-core-*" studio method cards to its REAL endpoints
+  # (/api/sdb-pro, /api/very-hr-clustered, /api/very-hr-mle) so the products
+  # are computed by the platform code itself, not a port. Internal only — no
+  # published ports. Imagery credentials come from a gitignored env file
+  # (variable list documented in Bathymetry_ADport.md).
+  vmarch-core:
+    build:
+      context: ./BathymetryVJuly
+      dockerfile: Dockerfile
+    image: abyss-vmarch-core:latest
+    container_name: abyss-vmarch-core
+    restart: unless-stopped
+    # Platform Dockerfile CMD uses --timeout 600 (Railway proxy window) and
+    # --preload. Here: timeout raised for the multi-scene MLE run, and
+    # --preload dropped — the app starts a warm-up thread at import, and
+    # forking workers while that thread holds the import lock deadlocks the
+    # child on its next import (observed: worker wedged in ee.Initialize).
+    command: ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "2",
+              "--timeout", "3600", "backend.app:app"]
+    env_file:
+      - path: ./secure-config/vmarch-core.env
+        required: false
+    volumes:
+      # Imagery/result caches survive restarts: scene choice stays pinned per
+      # (bbox, dates) and MLE artifacts under /downloads stay resolvable.
+      - vmarch-cache:/app/cache
+      - vmarch-downloads:/app/backend/ocean/downloads
+    networks: [abyss-net]
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request;urllib.request.urlopen('http://localhost:8080/api/health',timeout=5)\""]
+      interval: 15s
+      timeout: 10s
+      retries: 40
+      start_period: 60s
 
   # ---- nginx (TLS · static apps + API reverse proxy + OSM basemap) -----------
   nginx:

@@ -24,3 +24,6 @@ __pycache__/
 # Local env files
 .env
 .env.local
+
+# vmarch-core imagery credentials (SH/GEE/Mapbox/EarthData/Gemini) — local only.
+secure-config/vmarch-core.env

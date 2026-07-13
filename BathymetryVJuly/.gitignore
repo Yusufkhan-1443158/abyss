@@ -173,3 +173,10 @@ dbg_err.txt
 !backend/models/**/*.pt
 !backend/models/*.pt
 !backend/models/*.pkl
+
+# Delivery-repo override: the in-situ calibration surveys MUST ship with this
+# folder — without them the image builds fine but silently calibrates on
+# GEBCO anchors only (flattened/garbage depths). 2 MB, same files as
+# bathymetry-service/data/insitu.
+!/validation/
+!/validation/**

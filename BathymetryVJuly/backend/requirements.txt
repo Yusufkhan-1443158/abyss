@@ -30,3 +30,4 @@ gunicorn>=23.0
 torch>=2.1.0
 playwright>=1.40
 tabulate>=0.9
+earthengine-api>=0.1.380
