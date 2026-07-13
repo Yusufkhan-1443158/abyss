@@ -250,7 +250,7 @@
   <div class="ph" id="ph2">
     <div class="ch"><button class="ibtn" id="back2" style="width:26px;height:26px" title="Back to survey area" aria-label="Back to survey area">←</button><span class="ctitle">② Method &amp; parameters</span><span class="stepdots"><span class="dot on"></span><span class="dot on"></span></span></div>
     <div class="cb">
-      <div class="methods" id="engines"><div class="mcard active" data-m="uae-sdb-ensemble"><div><div class="nm">UAE SDB Ensemble</div><div class="ds">Clustered RF+MLP · 13 spectral features · registry v1</div></div><span class="tag">production</span></div>
+      <div class="methods" id="engines"><div class="mcard active" data-m="vmarch-sdb"><div><div class="nm">VMarch SDB</div><div class="ds">Lyzenga+Stumpf WLS + UAE cluster ensemble (region-aware) + 3-stage bias correction · registry v1</div></div><span class="tag">production</span></div>
         <div class="mcard" data-m="dl-pro-v3"><div><div class="nm">DL-Pro v3</div><div class="ds">Turbidity-aware MLP · RMSE 2.84 m</div></div><span class="tag">fallback</span></div></div>
       <div class="cgrid" style="margin-top:12px"><div><label>Start</label><input type="date" id="sd" value="2023-01-01"></div><div><label>End</label><input type="date" id="ed" value="2024-12-31"></div></div>
       <div style="margin-top:10px"><label>Max cloud · <span id="ccv">20</span>%</label><input type="range" id="cc" min="5" max="80" value="20" style="width:100%"></div>
@@ -310,7 +310,7 @@ map.on('style.load',function(){ if(state.grid){ renderOverlay(); if(state.contou
 
 var TRCOLORS=['#00f5ff','#ffd166','#ff6b6b','#a78bfa','#4ade80'];
 var state={bbox:null,grid:null,gridRaw:null,sigma:null,bounds:null,maxDepth:25,cmap:'bathy',tool:'pan',view:'map',
-  engine:'uae-sdb-ensemble',nScenes:1,snd:{pts:[],order:'lonlat',name:''},
+  engine:'vmarch-sdb',nScenes:1,snd:{pts:[],order:'lonlat',name:''},
   slice:[0,25],contourInt:2,contoursOn:false,labels:true,opacity:.85,normalize:true,zexag:1,tex:'imagery',pins:[],lastProfile:null,code:null,stats:null,
   // 01/02/04 map modes
   mapMode:'flat', blend:0.7, reliefExag:3, sunAz:315,
@@ -358,7 +358,7 @@ document.getElementById('genBtn').onclick=async function(){ if(!state.bbox)retur
   }catch(e){document.getElementById('progTxt').textContent='Error: '+e.message;} finally{this.disabled=false;} };
 function poll(id){return new Promise(function(res,rej){var n=0;var lim=state.nScenes>1?300:120;var t=setInterval(async function(){n++;
   try{var r=await fetch('/api/bathymetry/jobs/'+id,{headers:authHeaders(),credentials:'include'});var j=await r.json();
-    document.getElementById('progTxt').textContent='Running '+(state.engine==='dl-pro-v3'?'DL-Pro v3':'UAE SDB ensemble')+(state.nScenes>1?' × '+state.nScenes+' scenes':'')+'… ('+(n*3)+'s)';
+    document.getElementById('progTxt').textContent='Running '+(state.engine==='dl-pro-v3'?'DL-Pro v3':'VMarch SDB (Lyzenga+Stumpf+UAE ensemble)')+(state.nScenes>1?' × '+state.nScenes+' scenes':'')+'… ('+(n*3)+'s)';
     if(j.status==='done'){clearInterval(t);res(j.report_code);}else if(j.status==='failed'){clearInterval(t);rej(new Error(j.error||'failed'));}}catch(e){}
   if(n>lim){clearInterval(t);rej(new Error('timeout'));}},3000);});}
 
@@ -542,7 +542,9 @@ function renderHist(){if(!state.grid)return;var cv=document.getElementById('chis
   document.getElementById('histStats').innerHTML='<div class="statcards">'+[['mean_m','Mean'],['max_m','Max'],['min_m','Min'],['std_m','Std'],['coverage_pct','Coverage %']].map(c=>'<div class="c"><div class="v">'+(state.stats[c[0]]!=null?state.stats[c[0]]:'—')+'</div><div class="l">'+c[1]+'</div></div>').join('')+'</div>';}
 
 function renderMetrics(){var st=state.stats,iho=st.iho_s44_pct||{},hold=st.holdout_metrics||{};var h='';
-  if(st.model)h+='<div class="mrow"><span class="k">Engine</span><span class="v" style="font-size:10px">'+st.model+(st.model_version?' '+st.model_version:'')+'</span></div>';
+  if(st.model){var legacyEng=!st.model_label&&(st.model==='dl-pro-v3'||st.model==='uae-sdb-ensemble');
+    h+='<div class="mrow" style="align-items:flex-start"><span class="k">Engine</span><span class="v" style="font-size:10px;max-width:155px;text-align:right;white-space:normal">'+(st.model_label||st.model+(st.model_version?' '+st.model_version:''))+'</span></div>';
+    if(legacyEng)h+='<div style="font-size:10px;color:var(--danger,#ff6b6b);margin:2px 0 4px;text-align:right">legacy engine — re-run this survey for the VMarch method</div>';}
   [['mean_m','Mean depth','m'],['max_m','Max depth','m'],['coverage_pct','Coverage','%'],['std_m','Std dev','m']].forEach(c=>h+='<div class="mrow"><span class="k">'+c[1]+'</span><span class="v">'+(st[c[0]]!=null?st[c[0]]+' '+c[2]:'—')+'</span></div>');
   h+='<div style="height:8px"></div>';['Special','Order_1a','Order_2','Order_2b'].forEach(function(k){var v=iho[k];if(v==null)return;h+='<div class="iho"><span class="nm">'+k.replace('_',' ')+'</span><span class="tr"><span class="fl" style="width:'+v+'%"></span></span><span class="p">'+v+'%</span></div>';});
   h+='<div class="mrow" style="margin-top:8px"><span class="k">Hold-out RMSE</span><span class="v">'+(hold.rmse!=null?hold.rmse+' m':'—')+'</span></div>';
