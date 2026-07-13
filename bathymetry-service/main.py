@@ -35,9 +35,12 @@ log = logging.getLogger("bathymetry")
 
 app = FastAPI(title="Abyss Bathymetry Service", version="2.1.0")
 
-DEFAULT_ENGINE = "vmarch-sdb"         # full VMarch production chain (Railway)
+DEFAULT_ENGINE = "vmarch-sdb"         # offline VMarch chain (port) — fallback
 FALLBACK_ENGINE = "dl-pro-v3"
-ENGINES = (DEFAULT_ENGINE, FALLBACK_ENGINE)
+# vmarch-core-* engines delegate to the REAL Bathymetry_VMarch platform
+# running in the vmarch-core container (see vmarch_core_client.py).
+from vmarch_core_client import CORE_ENGINES  # noqa: E402
+ENGINES = tuple(CORE_ENGINES) + (DEFAULT_ENGINE, FALLBACK_ENGINE)
 # interim clients sent the simplified-ensemble name for the ROI default
 ENGINE_ALIASES = {"uae-sdb-ensemble": DEFAULT_ENGINE}
 MAX_DEPTH_M = 25.0
@@ -129,6 +132,10 @@ class InferRequest(BaseModel):
     n_scenes: int = 1
     # ROI path: depth engine — DEFAULT_ENGINE unless explicitly overridden.
     engine: str | None = None
+    # ROI path: output grid resolution (10/20/50/100 m — Railway UI parity).
+    resolution_m: int | None = None
+    # UI method-card name, carried into provenance only.
+    method_card: str | None = None
 
 
 class CalibrateRequest(BaseModel):
@@ -216,7 +223,11 @@ def _parse_bbox(bbox):
 
 @app.get("/bathymetry/health")
 def health():
-    return {"status": "ok", "model": DEFAULT_ENGINE, "engines": list(ENGINES)}
+    from vmarch_core_client import core_health
+    core = core_health()
+    return {"status": "ok", "model": DEFAULT_ENGINE, "engines": list(ENGINES),
+            "vmarch_core": {"reachable": core is not None,
+                            "health": core}}
 
 
 @app.get("/bathymetry/models")
@@ -619,15 +630,47 @@ def infer(reqp: InferRequest):
                             detail=f"unknown engine '{engine}' "
                                    f"(choose from {list(ENGINES)})")
 
+    res_m = int(reqp.resolution_m or 10)
+    if res_m not in (10, 20, 50, 100):
+        raise HTTPException(status_code=400,
+                            detail="resolution_m must be 10, 20, 50 or 100")
+
+    # 0. Real-platform engines: delegate the whole run (imagery, masking,
+    #    calibration, tide policy) to the vmarch-core container and ingest
+    #    its GeoTIFF + provenance verbatim. If the platform is unreachable,
+    #    fall through to the offline VMarch chain (port), honestly labelled.
+    core_fallback_note = None
+    if engine in CORE_ENGINES:
+        from vmarch_core_client import run_core_engine, VMarchCoreError
+        try:
+            core = run_core_engine(engine, bbox, reqp.start_date,
+                                   reqp.end_date, max_cloud=reqp.max_cloud,
+                                   n_scenes=n_scenes, resolution_m=res_m)
+        except VMarchCoreError as ex:
+            log.warning("vmarch-core run failed (%s) — offline VMarch (port) "
+                        "fallback", ex)
+            core_fallback_note = f"{engine} unavailable: {ex}"
+            engine = DEFAULT_ENGINE
+        else:
+            client = _minio()
+            _ensure_bucket(client, DEPTH_BUCKET)
+            extra = core["extra"]
+            extra["engine_requested"] = engine
+            extra["method_card"] = reqp.method_card
+            return _products_payload(client, reqp.raster_id, core["depth"],
+                                     core.get("sigma"), core["transform"],
+                                     "EPSG:4326", core["bbox"], extra)
+
     # 1. Free Sentinel-2 L2A for the ROI.
     from s2_fetch import fetch_s2, fetch_s2_scenes, S2FetchError
     try:
         if n_scenes == 1:
             scenes = [fetch_s2(bbox, reqp.start_date, reqp.end_date,
-                               max_cloud=reqp.max_cloud)]
+                               max_cloud=reqp.max_cloud, res_m=res_m)]
         else:
             scenes = fetch_s2_scenes(bbox, reqp.start_date, reqp.end_date,
-                                     max_cloud=reqp.max_cloud, n_scenes=n_scenes)
+                                     max_cloud=reqp.max_cloud, n_scenes=n_scenes,
+                                     res_m=res_m)
     except S2FetchError as ex:
         raise HTTPException(status_code=422, detail=str(ex))
     except Exception as ex:
@@ -735,6 +778,8 @@ def infer(reqp: InferRequest):
         "method": result.get("method"),
         "engine": result.get("engine"),
         "engine_requested": engine,
+        "resolution_m": res_m,
+        "method_card": reqp.method_card,
         "iho_s44_pct": iho,
         "holdout_metrics": {k: round(float(v), 3) for k, v in holdout.items()
                             if isinstance(v, (int, float))},
@@ -745,7 +790,11 @@ def infer(reqp: InferRequest):
         "tide": tide,
         "mask_coastline": coast_info,
     }
-    if result.get("engine_fallback"):
+    if core_fallback_note:
+        extra["engine_fallback"] = core_fallback_note
+        extra["model_label"] = ((result.get("model_label") or engine)
+                                + " (port — offline fallback)")
+    elif result.get("engine_fallback"):
         extra["engine_fallback"] = result["engine_fallback"]
     if composite_block is not None:
         extra["composite"] = composite_block

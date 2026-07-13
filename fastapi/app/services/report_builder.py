@@ -116,8 +116,19 @@ def _metadata_rows(report_code, site, model, infer_data, stats, acquisition,
         ["Model", infer_data.get("model_label")
          or f"{model} {infer_data.get('model_version') or ''}".strip()],
     ]
+    if infer_data.get("method_card"):
+        rows.append(["Method preset", infer_data["method_card"]])
+    if infer_data.get("vmarch_core"):
+        vc = infer_data["vmarch_core"]
+        ver = vc.get("platform_version")
+        rows.append(["Computed by",
+                     "Bathymetry-from-Space platform"
+                     + (f" v{ver}" if ver else "")
+                     + (f" — {vc.get('endpoint')}" if vc.get("endpoint") else "")])
     if infer_data.get("method"):
         rows.append(["Method", infer_data["method"]])
+    if infer_data.get("resolution_m"):
+        rows.append(["Output resolution", f"{infer_data['resolution_m']} m"])
     if infer_data.get("engine_fallback"):
         rows.append(["Engine fallback", infer_data["engine_fallback"]])
     if infer_data.get("scene_id"):
@@ -410,6 +421,8 @@ def build_report(
                 "model": model,
                 "model_version": infer_data.get("model_version"),
                 "model_label": infer_data.get("model_label"),
+                "method_card": infer_data.get("method_card"),
+                "resolution_m": infer_data.get("resolution_m"),
                 "engine": infer_data.get("engine"),
                 "method": infer_data.get("method"),
                 "calibrated": infer_data.get("calibrated"),
@@ -419,6 +432,10 @@ def build_report(
                 "infer_raster_id": infer_data.get("raster_id"),
                 "depth_raw_key": infer_data.get("depth_raw_key"),
                 **({"tide": infer_data["tide"]} if infer_data.get("tide") else {}),
+                # Untouched provenance block from the real VMarch platform
+                # (vmarch-core) — method labels/metrics verbatim.
+                **({"vmarch_core": infer_data["vmarch_core"]}
+                   if infer_data.get("vmarch_core") else {}),
                 **({"composite": composite} if composite else {}),
                 **({"validation": validation} if validation else {}),
                 **({"calibration_local": calibration_local} if calibration_local else {}),

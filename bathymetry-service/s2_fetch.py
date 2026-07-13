@@ -50,10 +50,13 @@ def _cache_client():
     )
 
 
-def _cache_key(bbox, start_date, end_date, max_cloud, max_px, scene_id=None):
+def _cache_key(bbox, start_date, end_date, max_cloud, max_px, scene_id=None,
+               res_m=10):
     w, s, e, n = bbox
     raw = (f"{round(w, 5)},{round(s, 5)},{round(e, 5)},{round(n, 5)}"
            f"|{start_date}|{end_date}|{max_cloud}|{max_px}")
+    if int(res_m) != 10:
+        raw += f"|r{int(res_m)}"
     if scene_id:
         raw += f"|{scene_id}"
     # "s2h_": harmonized-DN convention (baseline >= 04.00 offset removed) —
@@ -128,7 +131,7 @@ def _read_band(href, dst_crs, dst_transform, width, height, resampling):
             return vrt.read(1)
 
 
-def _warp_item(item, bbox, max_px):
+def _warp_item(item, bbox, max_px, res_m=10):
     """Warp one signed STAC item's bands onto the bbox target grid and build
     the s2 dict (bands, NDWI, water mask, georef). Shared by the single-scene
     and multi-scene fetch paths — output identical to the original inline code."""
@@ -136,7 +139,7 @@ def _warp_item(item, bbox, max_px):
 
     w, s, e, n = bbox
     cloud = item.properties.get("eo:cloud_cover")
-    width, height, transform = _target_grid(bbox, max_px=max_px)
+    width, height, transform = _target_grid(bbox, res_m=float(res_m), max_px=max_px)
     dst_crs = "EPSG:4326"
 
     # Collect the band-read tasks (skip a missing coastal/B01 — engine falls back
@@ -214,7 +217,7 @@ def _warp_item(item, bbox, max_px):
 
 
 def fetch_s2(bbox, start_date="2023-01-01", end_date="2024-12-31",
-             max_cloud=40, max_px=1024, use_cache=True):
+             max_cloud=40, max_px=1024, use_cache=True, res_m=10):
     """Fetch a least-cloudy Sentinel-2 L2A scene for bbox=[W,S,E,N].
 
     Cached: the warped band stack for a given (area, dates, cloud, resolution)
@@ -222,7 +225,8 @@ def fetch_s2(bbox, start_date="2023-01-01", end_date="2024-12-31",
     re-inference after a model change never re-pull from Planetary Computer.
     """
     cache_client = None
-    cache_obj = _cache_key(bbox, start_date, end_date, max_cloud, max_px)
+    cache_obj = _cache_key(bbox, start_date, end_date, max_cloud, max_px,
+                           res_m=res_m)
     if use_cache:
         try:
             cache_client = _cache_client()
@@ -269,7 +273,7 @@ def fetch_s2(bbox, start_date="2023-01-01", end_date="2024-12-31",
     log.info("S2 scene %s cloud=%.1f%%",
              item.id, item.properties.get("eo:cloud_cover") or -1)
 
-    s2 = _warp_item(item, bbox, max_px)
+    s2 = _warp_item(item, bbox, max_px, res_m=res_m)
 
     # Store the warped band stack so this ROI never re-pulls (model-independent).
     if use_cache and cache_client is not None:
@@ -286,7 +290,8 @@ def fetch_s2(bbox, start_date="2023-01-01", end_date="2024-12-31",
 
 
 def fetch_s2_scenes(bbox, start_date="2023-01-01", end_date="2024-12-31",
-                    max_cloud=40, n_scenes=3, max_px=1024, use_cache=True):
+                    max_cloud=40, n_scenes=3, max_px=1024, use_cache=True,
+                    res_m=10):
     """Fetch up to `n_scenes` distinct-date Sentinel-2 L2A scenes for
     bbox=[W,S,E,N], cloud-ascending. Same STAC search as fetch_s2; each scene's
     warped band stack is cached per (area, dates, cloud, resolution, scene_id).
@@ -337,7 +342,7 @@ def fetch_s2_scenes(bbox, start_date="2023-01-01", end_date="2024-12-31",
     scenes = []
     for item in picked:
         cache_obj = _cache_key(bbox, start_date, end_date, max_cloud, max_px,
-                               scene_id=item.id)
+                               scene_id=item.id, res_m=res_m)
         if cache_client is not None:
             try:
                 resp = cache_client.get_object(S2_CACHE_BUCKET, cache_obj)
@@ -352,7 +357,7 @@ def fetch_s2_scenes(bbox, start_date="2023-01-01", end_date="2024-12-31",
             except Exception:
                 pass
         try:
-            s2 = _warp_item(item, bbox, max_px)
+            s2 = _warp_item(item, bbox, max_px, res_m=res_m)
         except S2FetchError as ex:
             log.warning("scene %s skipped: %s", item.id, ex)
             continue

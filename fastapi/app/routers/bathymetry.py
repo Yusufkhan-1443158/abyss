@@ -66,14 +66,35 @@ async def run_roi(
     engine = (payload.get("engine") or "").strip().lower() or None
     if engine == "uae-sdb-ensemble":  # interim alias for the ROI default
         engine = "vmarch-sdb"
-    if engine not in (None, "vmarch-sdb", "dl-pro-v3"):
+    _ENGINES = (None, "vmarch-core-standard", "vmarch-core-clustered",
+                "vmarch-core-mle", "vmarch-core-wave",
+                "vmarch-sdb", "dl-pro-v3")
+    if engine not in _ENGINES:
         raise HTTPException(status_code=400,
-                            detail="engine must be 'vmarch-sdb' or 'dl-pro-v3'")
+                            detail="engine must be one of "
+                                   f"{[e for e in _ENGINES if e]}")
+    try:
+        resolution_m = int(payload.get("resolution_m") or 10)
+    except (TypeError, ValueError):
+        resolution_m = 10
+    if resolution_m not in (10, 20, 50, 100):
+        raise HTTPException(status_code=400,
+                            detail="resolution_m must be 10, 20, 50 or 100")
+    method_card = (str(payload.get("method") or "").strip()[:64]) or None
+    try:
+        max_cloud = int(payload.get("max_cloud") or 40)
+    except (TypeError, ValueError):
+        max_cloud = 40
+    max_cloud = max(5, min(max_cloud, 80))
 
     model, version = current_model(BATHYMETRY_SERVICE_URL)
     ckey = result_key(bbox, sd, ed, engine or model, version)
     if n_scenes > 1:  # composite products dedup separately from single-scene
         ckey = f"{ckey}-n{n_scenes}"
+    if resolution_m != 10:
+        ckey = f"{ckey}-r{resolution_m}"
+    if max_cloud != 40:  # legacy implicit default — keep old cache keys valid
+        ckey = f"{ckey}-c{max_cloud}"
 
     # Dedup: return the stored product for an identical (area, dates, model) run.
     if not force:
@@ -107,7 +128,8 @@ async def run_roi(
     db.commit()
     from ..services.bathymetry_tasks import run_bathymetry_roi
     run_bathymetry_roi.apply_async(args=[job_id, bbox, sd, ed, name, ckey,
-                                         n_scenes, engine],
+                                         n_scenes, engine, resolution_m,
+                                         method_card, max_cloud],
                                    queue="sw_bg")
     return {"job_id": job_id, "status": "running"}
 

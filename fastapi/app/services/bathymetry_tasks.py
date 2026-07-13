@@ -153,7 +153,8 @@ def run_bathymetry(self, source_raster_id: str) -> dict:
 @celery.task(name="run_bathymetry_roi", bind=True, max_retries=0)
 def run_bathymetry_roi(self, job_id, bbox, start_date="2023-01-01",
                        end_date="2024-12-31", name="Survey area", cache_key=None,
-                       n_scenes=1, engine=None):
+                       n_scenes=1, engine=None, resolution_m=10,
+                       method_card=None, max_cloud=40):
     """ROI-first SDB run (no uploaded source): the Studio draws an area; we fetch
     Sentinel-2 for it, run the depth engine (UAE SDB ensemble by default,
     DL-Pro on request), ingest the depth product, and build a report.
@@ -164,14 +165,22 @@ def run_bathymetry_roi(self, job_id, bbox, start_date="2023-01-01",
     try:
         body = {"raster_id": job_id, "bbox": bbox,
                 "start_date": start_date, "end_date": end_date,
-                "n_scenes": int(n_scenes or 1)}
+                "n_scenes": int(n_scenes or 1),
+                "resolution_m": int(resolution_m or 10),
+                "max_cloud": int(max_cloud or 40)}
         if engine:
             body["engine"] = engine
+        if method_card:
+            body["method_card"] = method_card
         try:
+            # vmarch-core delegated runs fetch their own imagery and (for MLE)
+            # iterate scenes — give them a longer ceiling than the local path.
+            read_timeout = 3900.0 if str(engine or "").startswith("vmarch-core") \
+                else 900.0
             resp = httpx.post(
                 f"{BATHYMETRY_SERVICE_URL}/bathymetry/infer",
                 json=body,
-                timeout=httpx.Timeout(900.0, connect=10.0),
+                timeout=httpx.Timeout(read_timeout, connect=10.0),
             )
             resp.raise_for_status()
             data = resp.json()

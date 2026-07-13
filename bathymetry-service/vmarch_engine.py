@@ -49,8 +49,8 @@ MAX_DEPTH_M = 25.0
 
 MODEL_NAME = "vmarch-sdb"
 MODEL_VERSION = "registry-v1"
-MODEL_LABEL = ("VMarch SDB (Lyzenga+Stumpf+UAE ensemble, bias-corrected) "
-               "registry-v1")
+MODEL_LABEL = ("VMarch SDB (port) — Lyzenga+Stumpf+UAE ensemble, "
+               "bias-corrected · registry-v1")
 METHOD = ("VMarch SDB — Lyzenga(1985/2006) WLS + Stumpf log-ratio "
           "(inverse-RMSE ensemble) + UAE cluster ensemble region-aware blend "
           "+ 3-stage bias correction (isotonic → residual IDW → ±3 m clamp)")
