@@ -70,6 +70,7 @@
   .cgrid{ display:grid; grid-template-columns:1fr 1fr; gap:9px; } .cb label{ display:block; font-size:10px; color:var(--text-dim); margin-bottom:4px; text-transform:uppercase; letter-spacing:.08em; }
   .cb input{ width:100%; padding:8px; border-radius:8px; font:inherit; font-size:12px; background:var(--bg-input,rgba(255,255,255,.05)); color:var(--text); border:1px solid var(--border); }
   .methods{ display:flex; flex-direction:column; gap:7px; } .mcard{ display:flex; align-items:center; gap:9px; padding:9px 11px; border:1px solid var(--border); border-radius:10px; cursor:pointer; }
+  .mcard.disabled{ opacity:.42; cursor:not-allowed; } .tag.core-tag{ color:var(--accent,#00f5ff); border-color:var(--accent,#00f5ff); } .tag.warn{ color:#ffd166; border-color:#ffd166; }
   .mcard.active{ border-color:var(--accent); background:var(--accent-dim); } .mcard.soon{ opacity:.4; cursor:not-allowed; }
   .mcard .nm{ font-weight:600; font-size:12px; } .mcard .ds{ font-size:10px; color:var(--text-dim); } .mcard .tag{ margin-left:auto; font-size:9px; border:1px solid var(--border); padding:2px 6px; border-radius:999px; color:var(--text-dim); }
   .crow{ display:flex; gap:8px; margin-top:12px; }
@@ -250,8 +251,14 @@
   <div class="ph" id="ph2">
     <div class="ch"><button class="ibtn" id="back2" style="width:26px;height:26px" title="Back to survey area" aria-label="Back to survey area">←</button><span class="ctitle">② Method &amp; parameters</span><span class="stepdots"><span class="dot on"></span><span class="dot on"></span></span></div>
     <div class="cb">
-      <div class="methods" id="engines"><div class="mcard active" data-m="vmarch-sdb"><div><div class="nm">VMarch SDB</div><div class="ds">Lyzenga+Stumpf WLS + UAE cluster ensemble (region-aware) + 3-stage bias correction · registry v1</div></div><span class="tag">production</span></div>
-        <div class="mcard" data-m="dl-pro-v3"><div><div class="nm">DL-Pro v3</div><div class="ds">Turbidity-aware MLP · RMSE 2.84 m</div></div><span class="tag">fallback</span></div></div>
+      <div class="methods" id="engines">
+        <div class="mcard active" data-m="vmarch-core-standard" data-name="VMarch SDB Standard"><div><div class="nm">VMarch SDB Standard</div><div class="ds">Bathymetry-from-Space platform standard run — the platform's own imagery, masks &amp; calibration chain</div></div><span class="tag core-tag">live platform</span></div>
+        <div class="mcard" data-m="vmarch-core-clustered" data-name="Very-HR Clustered"><div><div class="nm">Very-HR Clustered</div><div class="ds">Platform Very-HR Clustered SDB pipeline (Sentinel-2 source)</div></div><span class="tag core-tag">live platform</span></div>
+        <div class="mcard" data-m="vmarch-core-mle" data-name="Multi-Scene MLE"><div><div class="nm">Multi-Scene MLE</div><div class="ds">Platform multi-scene MLE composite over the end-date year — 3/5/7 scenes, per-scene QC + inter-scene σ</div></div><span class="tag core-tag">live platform</span></div>
+        <div class="mcard" data-m="vmarch-core-wave" data-name="Wave-Kinematics SDB"><div><div class="nm">Wave-Kinematics SDB</div><div class="ds">Platform S2Shores/Almar wave-dispersion physics — best on swell-exposed coasts (e.g. east coast); scenes = ranked+fused</div></div><span class="tag core-tag">live platform</span></div>
+        <div class="mcard disabled" data-m="icesat2"><div><div class="nm">ICESat-2 Photon</div><div class="ds">Available on the platform (EarthData creds OK, granule search verified) — produces along-track soundings, not a survey grid, so it is not wired to the studio raster pipeline</div></div><span class="tag">not wired</span></div>
+        <div class="mcard" data-m="vmarch-sdb" data-name="VMarch SDB (port)"><div><div class="nm">VMarch SDB (port)</div><div class="ds">Ported Lyzenga+Stumpf+UAE ensemble chain — offline fallback when the platform is unreachable · registry v1</div></div><span class="tag">port</span></div>
+        <div class="mcard" data-m="dl-pro-v3" data-name="DL-Pro v3"><div><div class="nm">DL-Pro v3</div><div class="ds">Turbidity-aware MLP · RMSE 2.84 m</div></div><span class="tag">fallback</span></div></div>
       <div class="cgrid" style="margin-top:12px"><div><label>Start</label><input type="date" id="sd" value="2023-01-01"></div><div><label>End</label><input type="date" id="ed" value="2024-12-31"></div></div>
       <div style="margin-top:10px"><label>Max cloud · <span id="ccv">20</span>%</label><input type="range" id="cc" min="5" max="80" value="20" style="width:100%"></div>
       <div style="margin-top:10px"><label>Scenes · multi-temporal composite</label><div class="seg" id="nsc"><button data-n="1" class="active">1</button><button data-n="3">3</button><button data-n="5">5</button><button data-n="7">7</button></div>
@@ -310,7 +317,7 @@ map.on('style.load',function(){ if(state.grid){ renderOverlay(); if(state.contou
 
 var TRCOLORS=['#00f5ff','#ffd166','#ff6b6b','#a78bfa','#4ade80'];
 var state={bbox:null,grid:null,gridRaw:null,sigma:null,bounds:null,maxDepth:25,cmap:'bathy',tool:'pan',view:'map',
-  engine:'vmarch-sdb',nScenes:1,snd:{pts:[],order:'lonlat',name:''},
+  engine:'vmarch-core-standard',methodName:'VMarch SDB Standard',nScenes:1,snd:{pts:[],order:'lonlat',name:''},
   slice:[0,25],contourInt:2,contoursOn:false,labels:true,opacity:.85,normalize:true,zexag:1,tex:'imagery',pins:[],lastProfile:null,code:null,stats:null,
   // 01/02/04 map modes
   mapMode:'flat', blend:0.7, reliefExag:3, sunAz:315,
@@ -343,7 +350,20 @@ function showStep(n){document.getElementById('ph1').classList.toggle('active',n=
 document.getElementById('toStep2').onclick=function(){showStep(2);};document.getElementById('back2').onclick=function(){showStep(1);};
 document.getElementById('cc').oninput=function(){document.getElementById('ccv').textContent=this.value;};
 document.querySelectorAll('#engines .mcard').forEach(function(c){c.onclick=function(){
-  document.querySelectorAll('#engines .mcard').forEach(x=>x.classList.remove('active'));c.classList.add('active');state.engine=c.dataset.m;};});
+  if(c.classList.contains('disabled'))return;
+  document.querySelectorAll('#engines .mcard').forEach(x=>x.classList.remove('active'));c.classList.add('active');
+  state.engine=c.dataset.m;state.methodName=c.dataset.name||c.querySelector('.nm').textContent;};});
+// Live-platform status: badge the vmarch-core cards from the REAL service
+// health (never assumed). If the platform container is unreachable the cards
+// stay selectable but say so — the backend falls back to the (port) engine
+// with provenance recorded.
+(async function(){try{
+  var r=await fetch('/api/bathymetry/health',{headers:authHeaders(),credentials:'include'});var j=await r.json();
+  var core=(j&&j.vmarch_core)||{};var h=core.health||{};
+  document.querySelectorAll('#engines .mcard .tag.core-tag').forEach(function(t){
+    if(core.reachable){t.textContent='live platform'+(h.v?' v'+h.v:'');}
+    else{t.textContent='offline → (port) fallback';t.classList.add('warn');}});
+}catch(e){}})();
 document.querySelectorAll('#nsc button').forEach(function(b){b.onclick=function(){
   document.querySelectorAll('#nsc button').forEach(x=>x.classList.remove('active'));b.classList.add('active');state.nScenes=+b.dataset.n;
   document.getElementById('nscNote').textContent=state.nScenes===1?'Single least-cloudy scene.':state.nScenes+' distinct-date scenes, inverse-variance composite (glint-gated).';};});
@@ -352,13 +372,13 @@ document.querySelectorAll('#nsc button').forEach(function(b){b.onclick=function(
 document.getElementById('genBtn').onclick=async function(){ if(!state.bbox)return; this.disabled=true; document.getElementById('prog').style.display='block';
   try{ var r=await fetch('/api/bathymetry/roi',{method:'POST',headers:Object.assign({'Content-Type':'application/json'},authHeaders()),credentials:'include',
       body:JSON.stringify({bbox:{west:state.bbox[0],south:state.bbox[1],east:state.bbox[2],north:state.bbox[3]},name:state.areaName,start_date:sd.value,end_date:ed.value,
-        n_scenes:state.nScenes,engine:state.engine})});
+        n_scenes:state.nScenes,engine:state.engine,method:state.methodName,max_cloud:+document.getElementById('cc').value})});
     var j=await r.json(); if(!j.job_id)throw new Error(j.detail||'failed'); var code=await poll(j.job_id); await loadReport(code);
     document.getElementById('console').style.display='none';
   }catch(e){document.getElementById('progTxt').textContent='Error: '+e.message;} finally{this.disabled=false;} };
-function poll(id){return new Promise(function(res,rej){var n=0;var lim=state.nScenes>1?300:120;var t=setInterval(async function(){n++;
+function poll(id){return new Promise(function(res,rej){var n=0;var lim=state.engine==='vmarch-core-mle'?1300:(state.engine.indexOf('vmarch-core')===0?450:(state.nScenes>1?300:120));var t=setInterval(async function(){n++;
   try{var r=await fetch('/api/bathymetry/jobs/'+id,{headers:authHeaders(),credentials:'include'});var j=await r.json();
-    document.getElementById('progTxt').textContent='Running '+(state.engine==='dl-pro-v3'?'DL-Pro v3':'VMarch SDB (Lyzenga+Stumpf+UAE ensemble)')+(state.nScenes>1?' × '+state.nScenes+' scenes':'')+'… ('+(n*3)+'s)';
+    document.getElementById('progTxt').textContent='Running '+(state.methodName||state.engine)+(state.nScenes>1?' × '+state.nScenes+' scenes':'')+'… ('+(n*3)+'s)';
     if(j.status==='done'){clearInterval(t);res(j.report_code);}else if(j.status==='failed'){clearInterval(t);rej(new Error(j.error||'failed'));}}catch(e){}
   if(n>lim){clearInterval(t);rej(new Error('timeout'));}},3000);});}
 
