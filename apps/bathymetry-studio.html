@@ -63,12 +63,12 @@
   .ch{ display:flex; align-items:center; gap:10px; padding:11px 16px; border-bottom:1px solid var(--border); }
   .ctitle{ font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:var(--accent); }
   .stepdots{ display:flex; gap:5px; margin-left:auto; } .dot{ width:7px; height:7px; border-radius:50%; background:rgba(255,255,255,.18); } .dot.on{ background:var(--accent); }
-  .cb{ padding:15px 16px; }
+  .cb{ padding:15px 16px; max-height:calc(100vh - 150px); overflow-y:auto; overscroll-behavior:contain; }
   .chips{ display:flex; flex-wrap:wrap; gap:7px; } .chip{ font-size:12px; padding:8px 12px; border-radius:999px; cursor:pointer; border:1px solid var(--border); background:rgba(255,255,255,.03); color:var(--text); }
   .chip:hover{ border-color:var(--accent); } .chip.active{ background:var(--accent-dim); border-color:var(--accent); color:var(--accent); }
   .cgrid{ display:grid; grid-template-columns:1fr 1fr; gap:9px; } .cb label{ display:block; font-size:10px; color:var(--text-dim); margin-bottom:4px; text-transform:uppercase; letter-spacing:.08em; }
   .cb input{ width:100%; padding:8px; border-radius:8px; font:inherit; font-size:12px; background:var(--bg-input,rgba(255,255,255,.05)); color:var(--text); border:1px solid var(--border); }
-  .methods{ display:flex; flex-direction:column; gap:7px; } .mcard{ display:flex; align-items:center; gap:9px; padding:9px 11px; border:1px solid var(--border); border-radius:10px; cursor:pointer; }
+  .methods{ display:flex; flex-direction:column; gap:7px; max-height:34vh; overflow-y:auto; padding-right:4px; overscroll-behavior:contain; } .mcard{ display:flex; align-items:center; gap:9px; padding:8px 11px; border:1px solid var(--border); border-radius:10px; cursor:pointer; }
   .mcard.disabled{ opacity:.42; cursor:not-allowed; } .tag.core-tag{ color:var(--accent,#00f5ff); border-color:var(--accent,#00f5ff); } .tag.warn{ color:#ffd166; border-color:#ffd166; }
   .mcard.active{ border-color:var(--accent); background:var(--accent-dim); } .mcard.soon{ opacity:.4; cursor:not-allowed; }
   .mcard .nm{ font-weight:600; font-size:12px; } .mcard .ds{ font-size:10px; color:var(--text-dim); } .mcard .tag{ margin-left:auto; font-size:9px; border:1px solid var(--border); padding:2px 6px; border-radius:999px; color:var(--text-dim); }
