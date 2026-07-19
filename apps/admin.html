@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<script>(function(){document.documentElement.setAttribute("data-theme","dark");try{localStorage.removeItem("glyph_theme");}catch(e){}var l=localStorage.getItem("glyph_lang")||"en";if(l==="ar"){document.documentElement.setAttribute("dir","rtl");document.documentElement.setAttribute("lang","ar");}})()</script>
+<script>(function(){var t=null;try{t=localStorage.getItem("glyph_theme");}catch(e){}document.documentElement.setAttribute("data-theme",t==="light"?"light":"dark");var l=localStorage.getItem("glyph_lang")||"en";if(l==="ar"){document.documentElement.setAttribute("dir","rtl");document.documentElement.setAttribute("lang","ar");}})()</script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Admin Panel — Abyss</title>
 <link rel="stylesheet" href="/fonts/outfit.css">
@@ -41,18 +41,35 @@
     --z-toast: 1100;
 }
 
+/* === LIGHT THEME overrides for the local token set (toggled via [data-theme]) === */
+:root[data-theme="light"] {
+    --bg-dark: #eef1f6;
+    --bg-card: rgba(255, 255, 255, 0.92);
+    --bg-card-hover: rgba(255, 255, 255, 0.98);
+    --bg-input: rgba(15, 23, 42, 0.05);
+    --bg-overlay: rgba(15, 23, 42, 0.4);
+    --accent-cyan: #028a9e;
+    --text-primary: rgba(15, 23, 42, 0.92);
+    --text-secondary: rgba(15, 23, 42, 0.62);
+    --text-muted: rgba(15, 23, 42, 0.38);
+    --border-subtle: rgba(15, 23, 42, 0.10);
+    --border-accent: rgba(2, 138, 158, 0.35);
+    --shadow-lg: 0 8px 32px rgba(15, 23, 42, 0.14);
+}
+
+
 /* === RESET === */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; }
 body { background: var(--bg-dark); color: var(--text-primary); font-family: var(--font-sans); overflow: hidden; }
-.logo-globe { margin-right: 8px; vertical-align: middle; filter: drop-shadow(0 0 4px rgba(0,245,255,0.5)); animation: logoSpin 30s linear infinite; }
+.logo-globe { margin-right: 8px; vertical-align: middle; filter: drop-shadow(0 0 4px rgba(var(--accent-rgb),0.5)); animation: logoSpin 30s linear infinite; }
 @keyframes logoSpin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
 /* === SCROLLBAR === */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.25); }
+::-webkit-scrollbar-thumb { background: rgba(var(--ink),0.15); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(var(--ink),0.25); }
 
 /* === APP LAYOUT === */
 .app {
@@ -108,7 +125,7 @@ body { background: var(--bg-dark); color: var(--text-primary); font-family: var(
     white-space: nowrap;
     text-decoration: none;
 }
-.nav-link:hover { color: var(--text-primary); background: rgba(255,255,255,0.04); }
+.nav-link:hover { color: var(--text-primary); background: rgba(var(--ink),0.04); }
 .nav-link.active {
     color: var(--accent-cyan);
     border-bottom: 2px solid var(--accent-cyan);
@@ -189,11 +206,11 @@ body { background: var(--bg-dark); color: var(--text-primary); font-family: var(
     width: 100%;
 }
 .sidebar-link:hover {
-    background: rgba(255,255,255,0.04);
+    background: rgba(var(--ink),0.04);
     color: var(--text-primary);
 }
 .sidebar-link.active {
-    background: rgba(0,245,255,0.08);
+    background: rgba(var(--accent-rgb),0.08);
     color: var(--accent-cyan);
     border-left: 2px solid var(--accent-cyan);
 }
@@ -271,7 +288,7 @@ body { background: var(--bg-dark); color: var(--text-primary); font-family: var(
 .form-select {
     cursor: pointer;
 }
-.form-select option { background: #1a1f2e; color: #e0e0e0; }
+.form-select option { background: var(--bg3); color: var(--text); }
 .form-textarea { resize: vertical; min-height: 60px; width: 100%; }
 
 .filter-select {
@@ -285,7 +302,7 @@ body { background: var(--bg-dark); color: var(--text-primary); font-family: var(
     outline: none;
     cursor: pointer;
 }
-.filter-select option { background: #1a1f2e; color: #e0e0e0; }
+.filter-select option { background: var(--bg3); color: var(--text); }
 
 /* === BUTTONS === */
 .btn {
@@ -304,17 +321,17 @@ body { background: var(--bg-dark); color: var(--text-primary); font-family: var(
     white-space: nowrap;
 }
 .btn-primary {
-    background: rgba(0,245,255,0.12);
+    background: rgba(var(--accent-rgb),0.12);
     color: var(--accent-cyan);
-    border-color: rgba(0,245,255,0.25);
+    border-color: rgba(var(--accent-rgb),0.25);
 }
-.btn-primary:hover { background: rgba(0,245,255,0.2); border-color: rgba(0,245,255,0.4); }
+.btn-primary:hover { background: rgba(var(--accent-rgb),0.2); border-color: rgba(var(--accent-rgb),0.4); }
 .btn-ghost {
     background: transparent;
     color: var(--text-secondary);
     border-color: var(--border-subtle);
 }
-.btn-ghost:hover { color: var(--text-primary); border-color: rgba(255,255,255,0.15); background: rgba(255,255,255,0.03); }
+.btn-ghost:hover { color: var(--text-primary); border-color: rgba(var(--ink),0.15); background: rgba(var(--ink),0.03); }
 .btn-danger {
     background: rgba(239,68,68,0.1);
     color: var(--accent-red);
@@ -355,11 +372,11 @@ body { background: var(--bg-dark); color: var(--text-primary); font-family: var(
 .data-table td {
     padding: 10px 14px;
     font-size: 13px;
-    border-bottom: 1px solid rgba(255,255,255,0.04);
+    border-bottom: 1px solid rgba(var(--ink),0.04);
     color: var(--text-primary);
     vertical-align: middle;
 }
-.data-table tr:hover td { background: rgba(255,255,255,0.02); }
+.data-table tr:hover td { background: rgba(var(--ink),0.02); }
 .data-table .actions { display: flex; gap: 6px; }
 
 /* === BADGES === */
@@ -374,7 +391,7 @@ body { background: var(--bg-dark); color: var(--text-primary); font-family: var(
     text-transform: uppercase;
 }
 .badge-admin { background: rgba(168,85,247,0.15); color: var(--accent-purple); }
-.badge-analyst { background: rgba(0,245,255,0.12); color: var(--accent-cyan); }
+.badge-analyst { background: rgba(var(--accent-rgb),0.12); color: var(--accent-cyan); }
 .badge-viewer { background: rgba(245,158,11,0.12); color: var(--accent-orange); }
 .badge-active { background: rgba(34,197,94,0.12); color: var(--accent-green); }
 .badge-disabled { background: rgba(239,68,68,0.12); color: var(--accent-red); }
@@ -397,8 +414,8 @@ body { background: var(--bg-dark); color: var(--text-primary); font-family: var(
     transition: border-color var(--transition-fast);
     cursor: pointer;
 }
-.group-card:hover { border-color: rgba(255,255,255,0.12); }
-.group-card.selected { border-color: var(--accent-cyan); box-shadow: 0 0 16px rgba(0,245,255,0.08); }
+.group-card:hover { border-color: rgba(var(--ink),0.12); }
+.group-card.selected { border-color: var(--accent-cyan); box-shadow: 0 0 16px rgba(var(--accent-rgb),0.08); }
 .group-card-header {
     display: flex;
     align-items: flex-start;
@@ -425,7 +442,7 @@ body { background: var(--bg-dark); color: var(--text-primary); font-family: var(
     border-radius: var(--radius-full);
 }
 .chip-user { background: rgba(168,85,247,0.1); color: var(--accent-purple); border: 1px solid rgba(168,85,247,0.2); }
-.chip-aoi { background: rgba(0,245,255,0.1); color: var(--accent-cyan); border: 1px solid rgba(0,245,255,0.2); }
+.chip-aoi { background: rgba(var(--accent-rgb),0.1); color: var(--accent-cyan); border: 1px solid rgba(var(--accent-rgb),0.2); }
 .chip-none { background: transparent; color: var(--text-muted); font-style: italic; border: 1px dashed var(--border-subtle); }
 
 .section-label-sm {
@@ -481,9 +498,9 @@ body { background: var(--bg-dark); color: var(--text-primary); font-family: var(
     border-radius: var(--radius-sm);
     font-size: 12px;
     color: var(--text-secondary);
-    background: rgba(255,255,255,0.02);
+    background: rgba(var(--ink),0.02);
 }
-.member-item:hover { background: rgba(255,255,255,0.04); }
+.member-item:hover { background: rgba(var(--ink),0.04); }
 
 /* === AOI TAB === */
 .aoi-layout {
@@ -527,14 +544,14 @@ body { background: var(--bg-dark); color: var(--text-primary); font-family: var(
     align-items: center;
     gap: 10px;
     padding: 10px 12px;
-    border-bottom: 1px solid rgba(255,255,255,0.04);
+    border-bottom: 1px solid rgba(var(--ink),0.04);
     font-size: 13px;
     cursor: pointer;
     transition: background var(--transition-fast);
     border-radius: var(--radius-sm);
 }
-.aoi-item:hover { background: rgba(255,255,255,0.04); }
-.aoi-item.selected { background: rgba(0,245,255,0.06); border-left: 2px solid var(--accent-cyan); }
+.aoi-item:hover { background: rgba(var(--ink),0.04); }
+.aoi-item.selected { background: rgba(var(--accent-rgb),0.06); border-left: 2px solid var(--accent-cyan); }
 .aoi-item-dot {
     width: 10px;
     height: 10px;
@@ -589,12 +606,12 @@ body { background: var(--bg-dark); color: var(--text-primary); font-family: var(
     position: relative;
     width: 40px;
     height: 22px;
-    background: rgba(255,255,255,0.1);
+    background: rgba(var(--ink),0.1);
     border-radius: 11px;
     cursor: pointer;
     transition: background var(--transition-fast);
 }
-.toggle.on { background: rgba(0,245,255,0.3); }
+.toggle.on { background: rgba(var(--accent-rgb),0.3); }
 .toggle-knob {
     position: absolute;
     top: 3px;
@@ -659,12 +676,12 @@ body { background: var(--bg-dark); color: var(--text-primary); font-family: var(
     padding: 8px 12px;
     font-size: 13px;
     color: var(--text-primary);
-    border-bottom: 1px solid rgba(255,255,255,0.03);
+    border-bottom: 1px solid rgba(var(--ink),0.03);
     cursor: pointer;
     transition: background var(--transition-fast);
 }
 .checkbox-item:last-child { border-bottom: none; }
-.checkbox-item:hover { background: rgba(255,255,255,0.03); }
+.checkbox-item:hover { background: rgba(var(--ink),0.03); }
 .checkbox-item input[type="checkbox"] { accent-color: var(--accent-cyan); width: 16px; height: 16px; cursor: pointer; }
 
 /* === TOAST === */
@@ -701,7 +718,7 @@ body { background: var(--bg-dark); color: var(--text-primary); font-family: var(
 
 /* === MAPLIBRE OVERRIDES === */
 .maplibregl-popup-content {
-    background: rgba(15,15,30,0.95) !important;
+    background: rgba(var(--panel-rgb),0.95) !important;
     border: 1px solid var(--border-subtle) !important;
     border-radius: var(--radius-sm) !important;
     color: var(--text-primary) !important;
@@ -711,8 +728,8 @@ body { background: var(--bg-dark); color: var(--text-primary); font-family: var(
 }
 .maplibregl-popup-close-button { color: var(--text-muted); font-size: 16px; padding: 4px 8px; }
 .maplibregl-popup-close-button:hover { color: var(--text-primary); background: none; }
-.maplibregl-popup-anchor-bottom .maplibregl-popup-tip { border-top-color: rgba(15,15,30,0.95); }
-.maplibregl-popup-anchor-top .maplibregl-popup-tip { border-bottom-color: rgba(15,15,30,0.95); }
+.maplibregl-popup-anchor-bottom .maplibregl-popup-tip { border-top-color: rgba(var(--panel-rgb),0.95); }
+.maplibregl-popup-anchor-top .maplibregl-popup-tip { border-bottom-color: rgba(var(--panel-rgb),0.95); }
 
 /* === SECTION TITLE === */
 .page-title {
@@ -738,7 +755,7 @@ body { background: var(--bg-dark); color: var(--text-primary); font-family: var(
     width: 36px;
     height: 36px;
     border-radius: 50%;
-    background: rgba(15, 15, 25, 0.85);
+    background: rgba(var(--panel-rgb), 0.85);
     border: 1px solid var(--border-subtle);
     color: var(--text-secondary);
     font-size: 14px;
@@ -758,7 +775,7 @@ body { background: var(--bg-dark); color: var(--text-primary); font-family: var(
     bottom: 44px;
     right: 0;
     width: 240px;
-    background: rgba(15, 15, 25, 0.95);
+    background: rgba(var(--panel-rgb), 0.95);
     border: 1px solid var(--border-subtle);
     border-radius: var(--radius-lg);
     padding: 12px;
@@ -938,7 +955,7 @@ body { background: var(--bg-dark); color: var(--text-primary); font-family: var(
     transition: all var(--transition-fast);
 }
 .url-mode-btn.active {
-    background: rgba(0,245,255,0.1);
+    background: rgba(var(--accent-rgb),0.1);
     color: var(--accent-cyan);
 }
 .url-host-row {
@@ -970,11 +987,11 @@ body { background: var(--bg-dark); color: var(--text-primary); font-family: var(
 [dir="rtl"] body { font-family: 'Noto Sans Arabic', var(--font-sans, system-ui), sans-serif; text-align: right; }
 [dir="rtl"] .header { direction: rtl; }
 [dir="rtl"] .logo-globe { margin-right: 0; margin-left: 8px; }
-[dir="rtl"] .sidebar { border-right: none; border-left: 1px solid var(--border-subtle, rgba(255,255,255,0.08)); }
+[dir="rtl"] .sidebar { border-right: none; border-left: 1px solid var(--border-subtle, rgba(var(--ink),0.08)); }
 [dir="rtl"] .notif-badge { right: auto; left: -8px; }
 [dir="rtl"] .notif-dropdown { right: auto; left: 0; }
 [dir="rtl"] .toast-container { right: auto; left: 16px; }
-[dir="rtl"] .toast { border-left: none; border-right: 4px solid var(--accent-cyan, #00f5ff); text-align: right; }
+[dir="rtl"] .toast { border-left: none; border-right: 4px solid var(--accent-cyan, var(--accent)); text-align: right; }
 [dir="rtl"] .toolbar-right { margin-left: 0; margin-right: auto; }
 [dir="rtl"] .sort-arrow { margin-left: 0; margin-right: 4px; }
 [dir="rtl"] table th, [dir="rtl"] table td { text-align: right; }
@@ -1002,6 +1019,7 @@ body { background: var(--bg-dark); color: var(--text-primary); font-family: var(
         <div class="header-right">
             <span id="userDisplay"></span>
             <a href="admin.html" class="settings-btn active" title="Settings">&#9881;</a>
+            <button id="themeToggle" class="glyph-theme-toggle" title="Toggle light/dark theme" aria-label="Toggle light/dark theme" onclick="(function(){var h=document.documentElement,n=h.getAttribute('data-theme')==='light'?'dark':'light';h.setAttribute('data-theme',n);try{localStorage.setItem('glyph_theme',n);}catch(e){}})()"></button>
             <button id="langToggle" class="glyph-lang-toggle" onclick="(function(){var l=localStorage.getItem('glyph_lang')||'en';localStorage.setItem('glyph_lang',l==='ar'?'en':'ar');location.reload();})()" style="min-width:48px;height:32px;padding:0 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.04);color:var(--text-dim,#e0e0e0);cursor:pointer;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:4px;transition:all 0.2s;"></button>
             <script>(function(){var b=document.getElementById('langToggle');var ar=localStorage.getItem('glyph_lang')==='ar';b.innerHTML='<span aria-hidden="true" style="opacity:.7">🌐</span>'+(ar?'EN':'AR');b.setAttribute('aria-label',ar?'Switch to English':'Switch to Arabic');b.title=ar?'التبديل إلى الإنجليزية':'Switch to Arabic (العربية)';})();</script>
             <button id="logoutBtn" data-i18n="nav.signout">Logout</button>

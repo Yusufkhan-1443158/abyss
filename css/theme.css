@@ -9,6 +9,17 @@
 
 /* ── Design Tokens ── */
 :root {
+    color-scheme: dark;
+
+    /* Channel triplets — used as rgba(var(--ink), a) so alpha-tinted colors
+       flip with the theme. Dark: white ink on near-black panels. */
+    --ink: 255, 255, 255;
+    --panel-rgb: 15, 15, 25;
+    --panel2-rgb: 20, 20, 35;
+    --deep-rgb: 7, 7, 11;
+    --accent-rgb: 0, 245, 255;
+    --text-bright: #ffffff;
+
     /* Backgrounds */
     --bg-dark: #0a0a0f;
     --bg-card: rgba(15, 15, 25, 0.9);
@@ -18,6 +29,7 @@
 
     /* Accents */
     --accent-cyan: #00f5ff;
+    --accent2: #00c8d4;
     --accent-purple: #a855f7;
     --accent-orange: #f59e0b;
     --accent-green: #22c55e;
@@ -114,23 +126,23 @@ body[dir="rtl"] {
     background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.15);
+    background: rgba(var(--ink), 0.15);
     border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.25);
+    background: rgba(var(--ink), 0.25);
 }
 
 /* Firefox scrollbar */
 * {
     scrollbar-width: thin;
-    scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+    scrollbar-color: rgba(var(--ink), 0.15) transparent;
 }
 
 /* ── Selection ── */
 ::selection {
-    background: rgba(0, 245, 255, 0.25);
-    color: #fff;
+    background: rgba(var(--accent-rgb), 0.25);
+    color: var(--text-bright);
 }
 
 /* ── Typography ── */
@@ -146,7 +158,7 @@ a {
     transition: color var(--transition-fast);
 }
 a:hover {
-    color: #fff;
+    color: var(--text-bright);
 }
 
 /* ── Utility ── */
@@ -171,7 +183,54 @@ a:hover {
     border-width: 0;
 }
 
-/* Abyss is dark-only (near-black canvas / neon-cyan / orbital depth glow). The
-   former [data-theme="light"] token set was removed — nothing toggles it and it
-   was unreachable dead code. Reintroduce a light theme here if a working
-   day/night toggle is ever added back. */
+/* ── Light theme ──
+   Toggled via the day/night switch (persists in localStorage `glyph_theme`,
+   applied as [data-theme="light"] on <html> by the per-page boot snippet). */
+:root[data-theme="light"] {
+    color-scheme: light;
+
+    --ink: 15, 23, 42;
+    --panel-rgb: 255, 255, 255;
+    --panel2-rgb: 241, 245, 250;
+    --deep-rgb: 236, 240, 247;
+    --accent-rgb: 2, 138, 158;
+    --text-bright: #0b1526;
+
+    /* Backgrounds */
+    --bg-dark: #eef1f6;
+    --bg-card: rgba(255, 255, 255, 0.92);
+    --bg-card-hover: rgba(255, 255, 255, 0.98);
+    --bg-input: rgba(15, 23, 42, 0.05);
+    --bg-overlay: rgba(15, 23, 42, 0.4);
+
+    /* Accents — cyan darkened for contrast on light surfaces */
+    --accent-cyan: #028a9e;
+    --accent2: #02707f;
+
+    /* Text */
+    --text-primary: rgba(15, 23, 42, 0.92);
+    --text-secondary: rgba(15, 23, 42, 0.62);
+    --text-muted: rgba(15, 23, 42, 0.38);
+
+    /* Borders */
+    --border-subtle: rgba(15, 23, 42, 0.10);
+    --border-hover: rgba(15, 23, 42, 0.20);
+
+    /* Shadows */
+    --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.08);
+    --shadow-md: 0 4px 12px rgba(15, 23, 42, 0.10);
+    --shadow-lg: 0 8px 32px rgba(15, 23, 42, 0.14);
+}
+
+/* Day/night toggle icon — CSS-driven so pages need no icon-sync JS
+   (chrome styling comes from the page or abyss-theme.css) */
+.glyph-theme-toggle::before { content: '☀'; }
+:root[data-theme="light"] .glyph-theme-toggle::before { content: '☾'; }
+
+:root[data-theme="light"] ::selection {
+    background: rgba(2, 138, 158, 0.22);
+    color: #0b1526;
+}
+:root[data-theme="light"] a:hover {
+    color: #0b1526;
+}

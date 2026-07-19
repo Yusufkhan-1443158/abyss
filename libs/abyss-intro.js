@@ -23,24 +23,24 @@
       background:radial-gradient(120% 90% at 50% 42%, #0c1422 0%, #070a11 55%, #04060b 100%);
       opacity:1}
     .abyss-intro::before{content:'';position:absolute;inset:-50%;
-      background-image:linear-gradient(rgba(0,245,255,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(0,245,255,.05) 1px,transparent 1px);
+      background-image:linear-gradient(rgba(var(--accent-rgb,0,245,255),.05) 1px,transparent 1px),linear-gradient(90deg,rgba(var(--accent-rgb,0,245,255),.05) 1px,transparent 1px);
       background-size:54px 54px;-webkit-mask-image:radial-gradient(circle at 50% 42%,#000 0%,transparent 62%);
       mask-image:radial-gradient(circle at 50% 42%,#000 0%,transparent 62%);opacity:.5}
+    :root[data-theme="light"] .abyss-intro{
+      background:radial-gradient(120% 90% at 50% 42%, #f7fafc 0%, #eef1f6 55%, #e4eaf2 100%)}
     .abyss-intro.done{opacity:0;transition:opacity .45s ease}
     .abyss-intro-stage{position:relative;display:flex;flex-direction:column;align-items:center;gap:18px;
       will-change:transform,opacity;transform:scale(.92);opacity:0}
-    .abyss-intro-mark{position:relative;filter:drop-shadow(0 0 26px rgba(0,245,255,.35))}
+    .abyss-intro-mark{position:relative;color:var(--accent,#00f5ff);filter:drop-shadow(0 0 26px rgba(var(--accent-rgb,0,245,255),.35))}
+    :root[data-theme="light"] .abyss-intro-mark{filter:drop-shadow(0 0 22px rgba(var(--accent-rgb,2,138,158),.25))}
     .abyss-intro-mark svg{width:168px;height:168px}
     /* sonar rings emanate from the sounding origin (top-centre of the mark) */
     .abyss-intro-rings{position:absolute;left:50%;top:33px;transform:translate(-50%,-50%);pointer-events:none}
     .abyss-intro-rings span{position:absolute;left:0;top:0;width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;
-      border:1.5px solid rgba(0,245,255,.6);opacity:0}
-    .abyss-intro-word{font-family:var(--font-ui,'Host Grotesk','Outfit',sans-serif);text-align:center;opacity:0;
-      transform:translateY(8px)}
-    .abyss-intro-word .n{font-weight:800;letter-spacing:.04em;font-size:30px;
-      background:linear-gradient(92deg,#eafcff 28%,#00f5ff);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
-    .abyss-intro-word .b{display:block;margin-top:4px;font-weight:500;letter-spacing:.42em;text-transform:uppercase;
-      font-size:11px;color:rgba(180,230,245,.55)}
+      border:1.5px solid rgba(var(--accent-rgb,0,245,255),.6);opacity:0}
+    .abyss-intro-word{text-align:center;opacity:0;transform:translateY(8px);color:#eafcff}
+    :root[data-theme="light"] .abyss-intro-word{color:#0b1526}
+    .abyss-intro-word svg{display:block}
 
     /* --- play timeline (triggered by .playing) --- */
     .abyss-intro.playing{animation:ai-bg 3s cubic-bezier(.16,1,.3,1) forwards}
@@ -83,6 +83,8 @@
   function build() {
     var markSvg = (global.AbyssLogo && AbyssLogo.mark) ? AbyssLogo.mark(168)
       : '<svg viewBox="0 0 56 56" width="168" height="168"></svg>';
+    var wordSvg = (global.AbyssLogo && AbyssLogo.wordmark) ? AbyssLogo.wordmark(46)
+      : '<span style="font-weight:800;letter-spacing:.2em">ORBION MARITIME</span>';
     var ov = document.createElement('div');
     ov.id = 'abyss-intro'; ov.className = 'abyss-intro'; ov.setAttribute('aria-hidden', 'true');
     ov.innerHTML =
@@ -90,7 +92,7 @@
         '<div class="abyss-intro-mark">' + markSvg +
           '<div class="abyss-intro-rings"><span></span><span></span><span></span></div>' +
         '</div>' +
-        '<div class="abyss-intro-word"><span class="n">Abyss</span><span class="b">by Orbion</span></div>' +
+        '<div class="abyss-intro-word">' + wordSvg + '</div>' +
       '</div>';
     return ov;
   }

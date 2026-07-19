@@ -17,11 +17,27 @@
 
   // ======================== THEME INIT (runs immediately) ========================
   (function initTheme() {
-    // Dark-only platform: force dark and clear any stale stored/auto-light theme
-    // (app pages are dark-only; light produced a light topbar over a dark body).
-    document.documentElement.setAttribute('data-theme', 'dark');
-    try { localStorage.removeItem('glyph_theme'); } catch (e) {}
+    // Dark by default; honor a stored light preference (glyph_theme key).
+    var t = null;
+    try { t = localStorage.getItem('glyph_theme'); } catch (e) {}
+    document.documentElement.setAttribute('data-theme', t === 'light' ? 'light' : 'dark');
   })();
+
+  // Shared theme API — pages and the topbar toggle both go through this.
+  window.AbyssTheme = {
+    get: function () {
+      return document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+    },
+    set: function (t) {
+      t = t === 'light' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', t);
+      try { localStorage.setItem('glyph_theme', t); } catch (e) {}
+      try { document.dispatchEvent(new CustomEvent('abyss-theme-change', { detail: { theme: t } })); } catch (e) {}
+    },
+    toggle: function () {
+      window.AbyssTheme.set(window.AbyssTheme.get() === 'light' ? 'dark' : 'light');
+    }
+  };
 
   // ======================== LANGUAGE INIT (runs immediately) ========================
   (function initLang() {
@@ -201,20 +217,14 @@
     const topbar = el('div', { id: 'glyph-topbar', 'class': 'glyph-topbar' });
     topbar.innerHTML = `
       <a class="glyph-topbar-left" href="master-home.html">
-        <svg class="glyph-logo-img" width="26" height="26" viewBox="0 0 56 56" fill="none" style="width:26px;height:26px" aria-label="Abyss">
-          <circle cx="28" cy="12" r="2.4" fill="var(--accent,#00f5ff)"/>
-          <g stroke="var(--accent,#00f5ff)" stroke-width="2.4" stroke-linecap="round" fill="none">
-            <path d="M20 18 Q28 23 36 18"/><path d="M14 24 Q28 31 42 24"/>
-            <path d="M9 30 Q28 39 47 30"/><path d="M6 36 Q28 45 50 36"/>
-          </g>
-        </svg>
-        <span class="glyph-logo-text">Abyss</span>
+        <span class="glyph-topbar-logo" id="glyph-topbar-logo" aria-label="Orbion Maritime"></span>
         <div class="glyph-classification-badge" id="glyph-classification-badge">UNCLASSIFIED</div>
       </a>
       <div class="glyph-app-dock" id="glyph-app-dock">
         ${appsHtml}
       </div>
       <div class="glyph-topbar-right">
+        <button class="glyph-theme-toggle" id="glyph-theme-toggle" title="Toggle light/dark theme" aria-label="Toggle light/dark theme"></button>
         <button class="glyph-lang-toggle" id="glyph-lang-toggle" title="${localStorage.getItem('glyph_lang') === 'ar' ? 'التبديل إلى الإنجليزية' : 'Switch to Arabic (العربية)'}" aria-label="${localStorage.getItem('glyph_lang') === 'ar' ? 'Switch to English' : 'Switch to Arabic'}"><span aria-hidden="true" style="font-size:13px;opacity:.7">🌐</span>&nbsp;${localStorage.getItem('glyph_lang') === 'ar' ? 'EN' : 'AR'}</button>
         <div class="glyph-user-info">
           <div class="glyph-user-avatar">${initials}</div>
@@ -227,6 +237,24 @@
     var dockBar = topbar.querySelector('.glyph-app-dock');
 
     document.body.insertBefore(topbar, document.body.firstChild);
+
+    // Brand: render the Orbion Maritime lockup from the shared logo lib
+    // (libs/abyss-logo.js is the single source of truth for the app logo).
+    (function renderTopbarLogo() {
+      var slot = document.getElementById('glyph-topbar-logo');
+      if (!slot) return;
+      function paint() {
+        if (window.AbyssLogo) slot.innerHTML = window.AbyssLogo.lockup({ size: 28 });
+      }
+      if (window.AbyssLogo) { paint(); return; }
+      var s = document.querySelector('script[src*="abyss-logo.js"]');
+      if (!s) {
+        s = document.createElement('script');
+        s.src = '/libs/abyss-logo.js';
+        document.head.appendChild(s);
+      }
+      s.addEventListener('load', paint);
+    })();
 
     // Dock magnification effect
     initAppDockMagnification(dockBar);
@@ -243,6 +271,14 @@
       localStorage.removeItem('intel_globe_user');
       window.location.href = 'login.html';
     });
+
+    // Theme (day/night) toggle handler
+    var themeBtn = document.getElementById('glyph-theme-toggle');
+    if (themeBtn) {
+      themeBtn.addEventListener('click', function () {
+        window.AbyssTheme.toggle();
+      });
+    }
 
     // Language toggle handler
     var langBtn = document.getElementById('glyph-lang-toggle');

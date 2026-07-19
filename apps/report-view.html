@@ -7,21 +7,20 @@
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="stylesheet" href="/css/theme.css">
 <style>
-  :root { color-scheme: dark; }
   body { margin: 0; min-height: 100vh; overflow: auto;
          background: var(--bg-dark); color: var(--text-primary);
          font-family: var(--font-primary); }
   .topbar { position: sticky; top: 0; z-index: 10; display: flex; align-items: center;
             gap: 16px; padding: 12px 22px; backdrop-filter: blur(14px);
-            background: linear-gradient(180deg, rgba(7,7,11,.92), rgba(7,7,11,.55));
+            background: linear-gradient(180deg, rgba(var(--deep-rgb),.92), rgba(var(--deep-rgb),.55));
             border-bottom: 1px solid var(--border-subtle); }
-  /* Light-theme topbar rule removed — Abyss is dark-only. */
+  :root[data-theme="light"] .btn-primary { color: #f4fbfd; }
   .topbar .spacer { flex: 1; }
   .btn { font: inherit; font-size: 13px; cursor: pointer; border-radius: 8px; padding: 8px 14px;
          border: 1px solid var(--border-subtle); background: var(--bg-input); color: var(--text-primary);
          transition: all .18s var(--ease-out); text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
   .btn:hover { border-color: var(--accent-cyan); color: var(--accent-cyan); }
-  .btn-primary { background: linear-gradient(92deg, var(--accent-cyan), #00c8d4); color: #03121a; font-weight: 700; border: none; }
+  .btn-primary { background: linear-gradient(92deg, var(--accent-cyan), var(--accent2)); color: #03121a; font-weight: 700; border: none; }
   .wrap { max-width: 940px; margin: 0 auto; padding: 28px 22px 80px; }
   .section { margin: 22px 0; padding: 22px 24px; border-radius: 16px;
              background: var(--bg-card); border: 1px solid var(--border-subtle);
@@ -29,7 +28,7 @@
   .section h2 { font-size: 13px; letter-spacing: .14em; text-transform: uppercase;
                 color: var(--accent-cyan); margin: 0 0 14px; font-weight: 700; }
   .cover { text-align: left; background:
-             radial-gradient(900px 360px at 80% -40%, rgba(0,200,255,.10), transparent 70%), var(--bg-card); }
+             radial-gradient(900px 360px at 80% -40%, rgba(var(--accent-rgb),.10), transparent 70%), var(--bg-card); }
   .cover .code { font-family: var(--font-mono); font-size: 13px; color: var(--text-secondary); letter-spacing: .18em; }
   .cover h1 { font-size: clamp(26px, 4vw, 40px); margin: 8px 0 6px; line-height: 1.05;
               background: linear-gradient(92deg, var(--text-primary) 35%, var(--accent-cyan));
@@ -72,6 +71,7 @@
   <span id="brand"></span>
   <span class="spacer"></span>
   <a class="btn" href="reports-browse.html">← Reports</a>
+  <button class="btn glyph-theme-toggle" id="themeToggle" onclick="abyssToggleTheme()" title="Toggle light/dark theme" aria-label="Toggle light/dark theme"></button>
   <button class="btn" id="langToggle" onclick="abyssToggleLang()" style="gap:4px" title="Switch language"><span aria-hidden="true" style="opacity:.7">🌐</span> <span id="langCode">AR</span></button>
   <button class="btn btn-primary" onclick="window.print()">⤓ Export PDF</button>
   <button class="btn" id="signout" onclick="abyssSignOut()" title="Sign out" aria-label="Sign out">Sign Out</button>
@@ -80,9 +80,14 @@
 
 <script src="/libs/abyss-logo.js"></script>
 <script>
-// Theme (shared key with the rest of Abyss)
-(function(){ document.documentElement.setAttribute('data-theme','dark'); try{localStorage.removeItem('glyph_theme');}catch(e){} })();
-// Day/night toggle removed — Abyss is dark-only.
+// Theme (shared key with the rest of Abyss) — dark by default, light if stored
+(function(){ var t; try{ t = localStorage.getItem('glyph_theme'); }catch(e){}
+  document.documentElement.setAttribute('data-theme', t === 'light' ? 'light' : 'dark'); })();
+function abyssToggleTheme(){
+  var h = document.documentElement, n = h.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+  h.setAttribute('data-theme', n);
+  try{ localStorage.setItem('glyph_theme', n); }catch(e){}
+}
 document.getElementById('brand').innerHTML = AbyssLogo.lockup({ size: 30, href: 'master-home.html' });
 
 // Language toggle (shared glyph_lang key). Reloads to apply dir/lang; report
