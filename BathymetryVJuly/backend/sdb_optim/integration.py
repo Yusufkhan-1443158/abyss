@@ -1,17 +1,17 @@
-# INTEGRATION FACADE for the sdb_optim optimization package.
+# INTEGRATION FACADE — orchestrator wiring for the sdb_optim optimization package.
 #
-# This module is the single seam where the four optimization module groups
+# This module is the single seam where the four delivered optimization tracks
 # (T1 physics-informed architecture, T2 feature engineering/fusion, T3
 # validation/calibration, T4 HPC IO) are composed against the LIVE pipeline
 # primitives in `backend/sdb_cnn_baseline.py`, `backend/unet_sdb.py`,
 # `backend/icesat2_bathy.py` and `backend/very_hr_engine.py`.
 #
-# The module groups never edit pipeline files directly; they ship drop-in
-# primitives, and this facade wires them in by COMPOSITION rather than
-# mutation, so the production fast path and any in-flight ablation that
-# depend on the existing files keep running unchanged. Opt in to the
-# optimized behaviour by calling these factories from a training/eval
-# driver; default production stays as-is.
+# Per OPTIMIZE_ORCHESTRATOR.md, the individual tracks never edit pipeline files;
+# they ship drop-in primitives and document their integration point. The
+# orchestrator wires them here, by COMPOSITION rather than mutation, so the
+# production fast path and any in-flight ablation that depend on the existing
+# files keep running unchanged. Opt in to the optimized behaviour by calling
+# these factories from a training/eval driver; default production stays as-is.
 #
 # Every symbol referenced in WIRING below is asserted importable by
 # tests/test_integration.py, so the documented wiring can never silently drift
@@ -73,8 +73,8 @@ WIRING: Tuple[Tuple[str, str, str], ...] = (
 
 
 def recommended_config() -> Dict[str, Any]:
-    """Central, citable defaults for enabling the optimized path. All
-    regularisers default low so the optimized path stays a
+    """Central, citable defaults the orchestrator recommends when enabling the
+    optimized path. All regularisers default low so the optimized path stays a
     near-no-op perturbation of the canonical A0 model (mussafah 0.9237 m) until
     a driver deliberately raises them in an ablation.
 

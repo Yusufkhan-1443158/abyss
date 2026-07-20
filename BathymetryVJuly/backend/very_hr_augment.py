@@ -36,9 +36,6 @@ W_SLIDERULE = 5.0      # ICESat-2 ATL03 bathymetric photons via SlideRule
 W_IBOATING = 2.0
 W_GEBCO = 1.0
 SLIDERULE_MIN_DEPTH_M = 5.0  # exclude SlideRule for very-shallow bands (refraction noise)
-# ATL24 class_ph: 40 = bathymetry, 41 = sea surface (harvest_r2_atl24.py CORRECTION,
-# 2026-07-03). Shared constant so this and harvest_r2_atl24.py cannot drift again.
-ATL24_CLASS_BATHY = 40
 
 
 def band_index(depth: np.ndarray, band_w: float = 2.0) -> np.ndarray:
@@ -104,7 +101,8 @@ def fetch_iboating_points(bbox: List[float],
             from backend.iboating import _multi_zoom_capture, _pixels_to_geo
         except ImportError:
             from iboating import _multi_zoom_capture, _pixels_to_geo  # type: ignore
-        # _multi_zoom_capture → [(path, b64, w, h, z), ...]
+        # _multi_zoom_capture → [(path, b64, w, h, z, geo_bbox), ...] where
+        # geo_bbox is the TRUE rendered Mapbox-GL bounds of the screenshot.
         captures = _multi_zoom_capture(bbox, zooms=(zoom, max(12, zoom - 2)))
         if not captures:
             L.warning("i-Boating capture returned nothing")
@@ -112,7 +110,7 @@ def fetch_iboating_points(bbox: List[float],
         L.info(f"i-Boating: {len(captures)} chart capture(s) ready")
 
         all_sounds: List[Dict] = []
-        for path, b64, img_w, img_h, z in captures:
+        for path, b64, img_w, img_h, z, geo_bbox in captures:
             tier_label = "?"; pts = None; err = None
 
             # Tier A — Groq vision (fast, multimodal Llama-4)
@@ -123,7 +121,7 @@ def fetch_iboating_points(bbox: List[float],
                     except ImportError:
                         from iboating_groq import extract_depths_from_chart_groq  # type: ignore
                     pts, err = extract_depths_from_chart_groq(
-                        b64, bbox, img_w, img_h,
+                        b64, geo_bbox, img_w, img_h,
                         min_confidence=float(min_confidence))
                     tier_label = "Groq"
                 except Exception as ex:
@@ -138,7 +136,7 @@ def fetch_iboating_points(bbox: List[float],
                         from backend.iboating import _extract_depths_from_chart
                     except ImportError:
                         from iboating import _extract_depths_from_chart  # type: ignore
-                    res = _extract_depths_from_chart(b64, bbox, img_w, img_h)
+                    res = _extract_depths_from_chart(b64, geo_bbox, img_w, img_h)
                     if isinstance(res, tuple):
                         pts, err = res
                     else:
@@ -149,7 +147,7 @@ def fetch_iboating_points(bbox: List[float],
                     err = str(ex)
 
             if pts:
-                geo = _pixels_to_geo(pts, bbox, img_w, img_h)
+                geo = _pixels_to_geo(pts, geo_bbox, img_w, img_h)
                 L.info(f"  z{z}: {len(geo)} pts via {tier_label}")
                 all_sounds.extend(geo)
             else:
@@ -346,7 +344,7 @@ def fetch_atl24_points(bbox: List[float],
     that orchestration.  Reading the standard product directly is the robust,
     honest path and yields identical photons.
 
-    Keeps class==40 (bathymetry) photons, drops ``low_confidence_flag`` and
+    Keeps class==41 (bathymetry) photons, drops ``low_confidence_flag`` and
     ``sensor_depth_exceeded``, applies an optional ``min_confidence`` cut.
     Returns ``{lats, lons, depths, sigma_tvu}`` or ``None`` on failure.
     Cached on disk per (bbox, dates, filters).
@@ -357,8 +355,7 @@ def fetch_atl24_points(bbox: List[float],
     import hashlib
     import json
     key = hashlib.md5(json.dumps([bbox, start_date, end_date,
-                                   int(max_granules), float(min_confidence),
-                                   "v2class40"],
+                                   int(max_granules), float(min_confidence)],
                                   sort_keys=True).encode()).hexdigest()[:12]
     cache_path = cache_dir / f"atl24_{key}.npz"
     if cache_path.exists():
@@ -460,7 +457,7 @@ def fetch_atl24_points(bbox: List[float],
                         if "class_ph" not in g:
                             continue
                         cls = g["class_ph"][:]
-                        bathy = cls == ATL24_CLASS_BATHY
+                        bathy = cls == 41
                         if not bathy.any():
                             continue
                         lat = g["lat_ph"][bathy].astype(np.float64)

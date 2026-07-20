@@ -49,7 +49,7 @@ ROOT = Path(__file__).resolve().parent.parent  # backend/ -> repo root (cache/ l
 DEFAULT_CACHE_DIR = ROOT / "cache" / "osm_land"
 DEFAULT_WATER_CACHE_DIR = ROOT / "cache" / "osm_water"
 
-# ── OSMCoastline global LAND-POLYGONS ──────────────────────────────
+# ── OSMCoastline global LAND-POLYGONS (MASKMLE R6) ──────────────────────────────
 # Globally-complete, side-of-line-resolved (OSM left-hand-land already applied) land
 # polygons regenerated ~weekly by the OSMCoastline tool from the current OSM planet.
 # Coverage-INDEPENDENT: a crisp coast exists for EVERY coastline on Earth, not just
@@ -167,8 +167,8 @@ def fetch_osm_land(bbox, cache_dir=None, tags=None, timeout=180):
     Fetch OSM land features (buildings, port/industrial landuse, breakwaters/piers/quays,
     natural=beach/coastline, islands) covering `bbox` = [west, south, east, north] (EPSG:4326).
 
-    Returns ``(gdf_or_None, prov)`` where ``prov`` is a provenance dict
-    carrying, always:
+    Returns ``(gdf_or_None, prov)`` where ``prov`` is a provenance dict (MASKMLE R5 items
+    5.3/5.4) carrying, always:
       source      — one of "osmnx" (fresh live non-empty), "osmnx-empty" (reachable, nothing
                     mapped — TRUSTWORTHY), "fetch-error" (transport/DNS/timeout — UNTRUSTWORTHY),
                     "stale-cache ({age}d, {n} feat)" (a re-served GOOD live cache), or
@@ -429,7 +429,7 @@ def osm_water_for(bbox, out_shape, cache_dir=None, tags=None, line_buffer_m: flo
     return water, info
 
 
-# ── OSMCoastline global land-polygons ──────────────────────────
+# ── OSMCoastline global land-polygons (MASKMLE R6) ──────────────────────────
 
 def _bbox_in_region(bbox):
     """Return the region key whose box fully contains `bbox`, else None."""
@@ -475,7 +475,7 @@ def _coastline_source_path(bbox):
 
 
 def coastline_land_for(bbox, out_shape, source_path=None):
-    """Rasterize the globally-complete OSMCoastline land polygons over
+    """MASKMLE R6 — rasterize the globally-complete OSMCoastline LAND-POLYGONS over
     `bbox` = [w, s, e, n] (EPSG:4326) to a boolean (H, W) LAND mask at `out_shape`.
 
     Reads the cached split shapefile (or a pre-clipped regional GPKG) with a `bbox=`

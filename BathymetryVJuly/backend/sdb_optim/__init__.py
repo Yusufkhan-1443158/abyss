@@ -1,8 +1,9 @@
 """
-sdb_optim — drop-in SDB optimization subpackage.
+sdb_optim — drop-in SDB optimization subpackage (orchestrated build, 2026-06-16).
 
-Four independent module groups. Imports are lazy/guarded so a partially-built
-package never breaks `import backend.sdb_optim`.
+Four independently-owned tracks, each a separate module set. Imports are lazy/guarded
+so a partially-built package never breaks `import backend.sdb_optim`. This file is
+ORCHESTRATOR-OWNED — track agents must NOT edit it.
 
   T1 physics-informed architecture : physics_loss, attention_unet_v2, spatial_cv
   T2 feature engineering / fusion   : feature_engineering, tidal_correction
@@ -10,7 +11,7 @@ package never breaks `import backend.sdb_optim`.
   T4 HPC / IO / structured logging  : cog_chunker, parallel_infer, structured_logging,
                                       subsystem_interface
 
-  integration facade                : integration  (composes T1-T4 against the live
+  ORCHESTRATOR integration facade   : integration  (composes T1-T4 against the live
                                       pipeline primitives by composition, not mutation)
 """
 __all__ = [

@@ -1153,6 +1153,11 @@ def make_water_mask(bbox, H, W, s2=None):
                     from scipy.ndimage import zoom as ndizoom
                     ndwi_local = ndizoom(ndwi_local, (H/ndwi_local.shape[0], W/ndwi_local.shape[1]), order=1)
                 sat_land = sat_land & ~(ndwi_local > 0.15)
+                # Inland-water rescue: the ~1 km global_land_mask DB is a
+                # COASTLINE dataset — lakes/reservoirs/rivers are "land" in it,
+                # which erased every inland ROI. Imagery evidence wins: any
+                # pixel the scene itself shows as water (NDWI) stays water.
+                water = water | (ndwi_local > 0.15)
             # NIR is strongly absorbed by water → high NIR = land
             if nirf is not None:
                 nir_norm = nirf / max(np.percentile(nirf, 99), 1.0)
@@ -2095,6 +2100,152 @@ def depth_to_raster_png(depth, bbox, water_mask=None, max_depth=None, min_depth=
     L.info(f"Raster: {W}x{H}px, {len(b64)//1024}KB, depth={min_depth:.1f}-{max_depth:.1f}m, land={int(is_land.sum())}px")
     return b64, [[s, w], [n, e]], max_depth
 
+
+# ══════════════════════════════════════════════════════════════════════════
+# RESULT STORE + σ-QA + /api/recolor  (headline user asks: many-image MLE by
+# default, drop far-σ pixels, interactive colorbar re-render without recompute)
+# ══════════════════════════════════════════════════════════════════════════
+import threading as _threading
+from collections import OrderedDict as _OrderedDict
+_RECOLOR_STORE = _OrderedDict()   # result_id -> {depth, bbox, water_mask, auto_min, auto_max}
+_RECOLOR_LOCK = _threading.Lock()
+_RECOLOR_CAP = 20                 # in-memory LRU; expires on process restart
+
+
+def _store_recolor_result(depth, bbox, water_mask=None):
+    """Cache a depth grid keyed by a short result_id so /api/recolor can
+    re-stretch the SAME grid to a user min/max without recomputing bathymetry.
+    Returns (result_id, auto_min_p2, auto_max_p98)."""
+    import uuid as _uuid
+    depth = np.asarray(depth, dtype=np.float32)
+    valid = np.isfinite(depth) & (depth > 0.1)
+    if int(valid.sum()) > 10:
+        auto_min = float(np.percentile(depth[valid], 2))
+        auto_max = float(np.percentile(depth[valid], 98))
+    else:
+        auto_min, auto_max = 0.0, float(MAX_DEPTH_M)
+    rid = _uuid.uuid4().hex[:12]
+    with _RECOLOR_LOCK:
+        _RECOLOR_STORE[rid] = {
+            'depth': depth,
+            'bbox': list(bbox),
+            'water_mask': (np.asarray(water_mask, dtype=bool)
+                           if water_mask is not None else None),
+            'auto_min': auto_min, 'auto_max': auto_max,
+        }
+        while len(_RECOLOR_STORE) > _RECOLOR_CAP:
+            _RECOLOR_STORE.popitem(last=False)
+    return rid, auto_min, auto_max
+
+
+def _apply_sigma_qa(depth, sigma, sigma_max_m=None, sigma_reject_k=3.0):
+    """PRO uncertainty QA — 'remove the ones with sigma very far'.
+
+    Mask (→NaN) every depth pixel whose posterior σ exceeds a threshold:
+      • explicit hard cap ``sigma_max_m`` if given, else
+      • robust ``median(σ) + k·MAD(σ)`` (k = ``sigma_reject_k``, MAD scaled 1.4826).
+    Returns (depth_masked, stats) where stats matches the published contract.
+    Honesty: this only DROPS low-confidence pixels; it never recomputes/shrinks
+    the reported validation RMSE."""
+    depth = np.array(depth, dtype=np.float32, copy=True)
+    sigma = np.asarray(sigma, dtype=np.float32)
+    valid = np.isfinite(depth) & np.isfinite(sigma) & (depth > 0)
+    stats = {'sigma_p50': None, 'sigma_p90': None, 'sigma_p95': None,
+             'sigma_max_used': None, 'pixels_masked_highsigma': 0,
+             'frac_retained': 1.0, 'n_valid_before': int(valid.sum())}
+    sv = sigma[valid]
+    if sv.size < 10:
+        return depth, stats
+    p50 = float(np.percentile(sv, 50)); p90 = float(np.percentile(sv, 90))
+    p95 = float(np.percentile(sv, 95))
+    if sigma_max_m is not None:
+        thr = float(sigma_max_m)
+    else:
+        med = float(np.median(sv))
+        mad = float(np.median(np.abs(sv - med))) * 1.4826
+        thr = med + float(sigma_reject_k) * mad
+    high = valid & (sigma > thr)
+    n_before = int(valid.sum()); n_masked = int(high.sum())
+    depth[high] = np.nan
+    stats.update({
+        'sigma_p50': round(p50, 3), 'sigma_p90': round(p90, 3),
+        'sigma_p95': round(p95, 3), 'sigma_max_used': round(thr, 3),
+        'pixels_masked_highsigma': n_masked,
+        'frac_retained': round((n_before - n_masked) / max(n_before, 1), 4),
+        'n_valid_before': n_before,
+    })
+    return depth, stats
+
+
+@app.route('/api/recolor', methods=['POST'])
+def api_recolor():
+    """Re-render a stored depth grid to a user-chosen min/max colorbar WITHOUT
+    recomputing bathymetry. Body: {result_id, min_depth?, max_depth?}."""
+    try:
+        data = req.get_json(force=True, silent=True) or {}
+        rid = data.get('result_id')
+        entry = None
+        with _RECOLOR_LOCK:
+            entry = _RECOLOR_STORE.get(rid)
+            if entry is not None:
+                _RECOLOR_STORE.move_to_end(rid)
+        if entry is None:
+            return jsonify({'error': f'result_id not found (expired or invalid): {rid}'}), 404
+        depth = entry['depth']; bbox = entry['bbox']; wm = entry['water_mask']
+        auto_min = entry['auto_min']; auto_max = entry['auto_max']
+        min_d = data.get('min_depth'); max_d = data.get('max_depth')
+        try:
+            min_d = float(min_d) if min_d is not None else float(auto_min)
+        except (TypeError, ValueError):
+            min_d = float(auto_min)
+        try:
+            max_d = float(max_d) if max_d is not None else float(auto_max)
+        except (TypeError, ValueError):
+            max_d = float(auto_max)
+        if max_d - min_d < 0.1:
+            max_d = min_d + 0.1
+        b64, bounds, rmax = depth_to_raster_png(
+            depth, bbox, water_mask=wm, max_depth=max_d, min_depth=min_d)
+        return jsonify({
+            'result_id': rid,
+            'raster_png': b64,
+            'raster_bounds': bounds,
+            'raster_max_depth': round(max_d, 3),
+            'raster_min_depth': round(min_d, 3),
+            'auto_min_depth': round(float(auto_min), 3),
+            'auto_max_depth': round(float(auto_max), 3),
+        })
+    except Exception as ex:
+        L.exception('recolor failed')
+        return jsonify({'error': str(ex)}), 500
+
+
+def s2_to_rgb_png(s2, bbox):
+    """Render the Sentinel-2 (or Mapbox pseudo-S2) composite actually fed to
+    the depth estimator as a true-colour PNG map overlay, so the user can see
+    the imagery behind every depth map. Bands are the *processed* DN grids
+    (glint/deep-water corrected) — a per-band 2–98 percentile stretch keeps
+    them viewable regardless of scaling. Returns (b64, [[s,w],[n,e]])."""
+    from PIL import Image
+    w, s, e, n = bbox
+    chans = []
+    for k in ('red', 'green', 'blue'):
+        band = s2[k].astype(np.float32)
+        v = band[np.isfinite(band) & (band > 0)]
+        if v.size < 100:
+            raise ValueError(f"S2 preview: band {k} empty")
+        p2, p98 = np.percentile(v, 2), np.percentile(v, 98)
+        if p98 - p2 < 1e-6:
+            raise ValueError(f"S2 preview: band {k} degenerate")
+        chans.append(np.clip((band - p2) / (p98 - p2) * 255, 0, 255).astype(np.uint8))
+    rgb = np.stack(chans, axis=-1)
+    img = Image.fromarray(rgb, 'RGB')
+    buf = io.BytesIO()
+    img.save(buf, format='PNG', optimize=True)
+    b64 = base64.b64encode(buf.getvalue()).decode()
+    L.info(f"S2 preview: {rgb.shape[1]}x{rgb.shape[0]}px, {len(b64)//1024}KB")
+    return b64, [[s, w], [n, e]]
+
 def generate_contours(depth, bbox, levels=None):
     """Generate bathymetric contour lines (isobaths) from depth grid.
     Returns list of contour objects with coordinates for SVG rendering."""
@@ -2896,10 +3047,11 @@ def api_bulk_iboating():
         for zoom in zooms:
             try:
                 # Screenshot i-Boating at this zoom
-                _, img_b64, iw, ih = _capture_iboating(bbox, zoom=zoom, wait_sec=10)
+                _, img_b64, iw, ih, chart_bbox = _capture_iboating(bbox, zoom=zoom, wait_sec=10)
 
-                # Extract soundings with Gemini
-                actual_bbox = bbox  # i-Boating is centered, close enough
+                # Extract soundings with Gemini — georeference on the TRUE
+                # rendered Mapbox-GL bounds, not the requested bbox
+                actual_bbox = chart_bbox
                 raw_pts, cerr = _gemini_extract_soundings(img_b64, actual_bbox, iw, ih)
 
                 if not raw_pts or len(raw_pts) == 0:
@@ -3297,6 +3449,66 @@ def api_extract():
         L.info(f"=== EXTRACT mode={mode} ref={ref_source} method={depth_method} area={area:.0f}km² observed={n_observed} fast={fast_cnn} ===")
         out={'points':[],'interpolated_points':[],'stats':{},'bbox':bbox_dict,'sources_used':[],'ml_stats':{},'tracks':[],'sea_profiles':[],'bath_profiles':[]}
 
+        # ═══ HIGH-ACCURACY MANY-IMAGE MLE TIER (user ask #1) ═══
+        # The main "Extract" button becomes the most-accurate run by sending
+        # params.accuracy="high" (or params.n_scenes). Routes to the calibrated
+        # many-scene inverse-variance MLE stack (_run_s2_mle, up to 12 S2 images,
+        # ICESat-2 + i-Boating + GEBCO calibration, physical-QC scene screening),
+        # with PRO σ-QA (drop far-σ pixels) + interactive-recolor result_id.
+        _acc = str(p.get('accuracy', data.get('accuracy', ''))).lower()
+        _nsc_req = p.get('n_scenes', data.get('n_scenes'))
+        if LS_AVAILABLE and (_acc in ('high', 'mle', 'max', 'accurate', 'best')
+                             or _nsc_req is not None):
+            try:
+                _nsc = int(_nsc_req) if _nsc_req is not None else 10
+            except (TypeError, ValueError):
+                _nsc = 10
+            _nsc = max(2, min(12, _nsc))
+            try:
+                _srk = float(p.get('sigma_reject_k', data.get('sigma_reject_k', 3.0)))
+            except (TypeError, ValueError):
+                _srk = 3.0
+            _smx = p.get('sigma_max_m', data.get('sigma_max_m'))
+            try:
+                _smx = float(_smx) if _smx is not None else None
+            except (TypeError, ValueError):
+                _smx = None
+            try:
+                _yr = int(str(sd)[:4])
+            except (TypeError, ValueError):
+                _yr = 2024
+            L.info(f"EXTRACT high-accuracy tier → MLE year={_yr} n_scenes={_nsc} "
+                   f"sigma_reject_k={_srk} sigma_max_m={_smx}")
+            try:
+                _r = _run_s2_mle(bbox, year=_yr, n_scenes=_nsc,
+                                 max_cloud=int(p.get('max_cloud', 20)),
+                                 user_pts=user_pts,
+                                 fetch_sliderule=bool(p.get('use_sliderule', True)),
+                                 sigma_reject_k=_srk, sigma_max_m=_smx)
+                out['stats'] = _r.get('stats', {})
+                out['ml_stats'] = _r.get('ml_stats', {})
+                out['interpolated_points'] = _r.get('interpolated_points', [])
+                out['contours'] = _r.get('contours', [])
+                out['contour_levels'] = _r.get('contour_levels', [])
+                out['raster_png'] = _r.get('depth_png_b64')
+                out['raster_bounds'] = _r.get('raster_bounds')
+                out['raster_max_depth'] = _r.get('raster_max_depth')
+                out['raster_min_depth'] = _r.get('raster_min_depth')
+                out['raster_auto_min'] = _r.get('raster_auto_min')
+                out['raster_auto_max'] = _r.get('raster_auto_max')
+                out['result_id'] = _r.get('result_id')
+                out['uncertainty_png_b64'] = _r.get('uncertainty_png_b64')
+                out['downloads'] = _r.get('downloads', [])
+                out['stability'] = _r.get('stability')
+                out['accuracy_tier'] = 'high'
+                out['sources_used'].append(
+                    f"MLE-tier({_r.get('scenes_kept','?')} scenes, σ-QA)")
+                return jsonify(_json_safe(out))
+            except Exception as _mex:
+                L.warning(f"EXTRACT high-accuracy MLE failed ({_mex}); "
+                          f"falling back to standard pipeline")
+                out['sources_used'].append(f"MLE-tier-fallback({str(_mex)[:60]})")
+
         # 1. Reference depths — FUSION: gather ALL available sources
         rl,rlo,rd,rw=[],[],[],[]  # rw = per-point weights
 
@@ -3347,10 +3559,15 @@ def api_extract():
         else:
             L.info(f"Skipping GEBCO — RAG has {n_rag} high-quality pts")
 
-        # ── Source B: ICESat-2 altimeter via SlideRule (always when fusion) ──
+        # ── Source B: ICESat-2 altimeter via SlideRule ──
+        # ALWAYS attempted (any region, any mode) — refraction-corrected ATL03
+        # bathymetric photons are the best globally-available calibration
+        # (weight 5.0) and turn the Stumpf/Lyzenga fit from chart-dependent
+        # into truly worldwide. Opt out with params.use_sliderule=false.
         icesat=[]
         sliderule_bathy=[]  # passed to Lyzenga+SlideRule SDB as high-weight calibration
-        if ref_source in('icesat2','fusion','all') or mode in('icesat2','fusion'):
+        use_sliderule = str(p.get('use_sliderule', '1')).lower() not in ('0', 'false', 'no')
+        if use_sliderule or ref_source in('icesat2','fusion','all') or mode in('icesat2','fusion'):
             try:
                 icesat,msg=run_sliderule(bbox,sd,ed)
                 if icesat:
@@ -3395,9 +3612,12 @@ def api_extract():
                 L.info("Chart AI: professional digitisation pipeline starting...")
                 chart_all_pts = []
 
-                # Step 1: Capture i-Boating chart (zoom 14 for detail)
+                # Step 1: Capture i-Boating chart (zoom 14 for detail).
+                # chart_bbox = TRUE rendered Mapbox-GL bounds of the screenshot
+                # — every pixel→lat/lon below must use it, NOT the ROI bbox
+                # (the old assumption drifted soundings by up to ~1 km).
                 try:
-                    fpath, img_b64, iw, ih = _capture_iboating(bbox, zoom=14, wait_sec=10)
+                    fpath, img_b64, iw, ih, chart_bbox = _capture_iboating(bbox, zoom=14, wait_sec=10)
                     L.info(f"Chart AI: captured i-Boating z14 ({iw}x{ih})")
 
                     # Step 2: Colour rasterisation → depth grid
@@ -3411,7 +3631,7 @@ def api_extract():
                             contours = _extract_isobath_contours(colour_depth, water_mask)
                             if contours:
                                 ch_h, ch_w = colour_depth.shape
-                                contour_geo = _contours_to_geo_points(contours, bbox, ch_h, ch_w)
+                                contour_geo = _contours_to_geo_points(contours, chart_bbox, ch_h, ch_w)
                                 # Subsample contours (keep max ~300 pts)
                                 if len(contour_geo) > 300:
                                     step = max(1, len(contour_geo) // 300)
@@ -3425,7 +3645,7 @@ def api_extract():
                         ch_h, ch_w = colour_depth.shape
                         step_r = max(1, ch_h // 25)  # ~25x25 = 625 samples
                         step_c = max(1, ch_w // 25)
-                        w_b, s_b, e_b, n_b = bbox
+                        w_b, s_b, e_b, n_b = chart_bbox
                         colour_samples = 0
                         for rr in range(0, ch_h, step_r):
                             for cc in range(0, ch_w, step_c):
@@ -3443,14 +3663,14 @@ def api_extract():
                         L.info(f"Chart AI: {colour_samples} colour grid samples")
 
                     # Step 5: Gemini Vision sounding extraction
-                    raw_pts, cerr = _extract_depths_from_chart(img_b64, bbox, iw, ih)
+                    raw_pts, cerr = _extract_depths_from_chart(img_b64, chart_bbox, iw, ih)
                     if raw_pts and len(raw_pts) > 0:
                         # Cross-validate against colour raster
                         if colour_depth is not None:
                             raw_pts = _reject_outliers(raw_pts, colour_depth, colour_conf, iw, ih)
                         geo_soundings = _pixels_to_geo(
                             [p for p in raw_pts if p.get('confidence', 0) > 0],
-                            bbox, iw, ih)
+                            chart_bbox, iw, ih)
                         chart_all_pts.extend(geo_soundings)
                         L.info(f"Chart AI: {len(geo_soundings)} Gemini verified soundings")
 
@@ -3474,8 +3694,14 @@ def api_extract():
                                     'type': 'sounding', 'confidence': p.get('confidence', 0.6),
                                 })
 
-                # Add chart points to reference data
+                # Add chart points to reference data. The screenshot's true
+                # bounds are wider than the ROI (viewport aspect), so first
+                # clip to the ROI with a small margin.
                 if chart_all_pts:
+                    _mw = 0.1 * (bbox[2] - bbox[0]); _mh = 0.1 * (bbox[3] - bbox[1])
+                    chart_all_pts = [p for p in chart_all_pts
+                                     if bbox[0]-_mw <= p['lon'] <= bbox[2]+_mw
+                                     and bbox[1]-_mh <= p['lat'] <= bbox[3]+_mh]
                     try:
                         from global_land_mask import globe
                         chart_all_pts = [p for p in chart_all_pts if not globe.is_land(p['lat'], p['lon'])]
@@ -3490,7 +3716,7 @@ def api_extract():
                     L.info(f"Chart AI: total {n_chart_total} professional depth points")
         except Exception as cx:
             L.warning(f"Chart AI pipeline: {cx}")
-            import traceback; L.debug(traceback.format_exc())
+            L.debug(traceback.format_exc())
 
         # ── Source C: Observed in-situ survey data (highest quality) ──
         # Subsample if >2000 — CNN doesn't need 40k pts on 500px grid
@@ -3617,7 +3843,14 @@ def api_extract():
                 s2 = fetch_mapbox_s2(bbox, zoom=mb_zoom)
                 out['sources_used'].append(f"Mapbox({s2['width']}x{s2['height']} ~{s2.get('resolution_m','')}m)")
             else:
-                s2=fetch_s2(bbox,sd,ed,res=res,cloud=p.get('max_cloud',20))
+                try:
+                    s2=fetch_s2(bbox,sd,ed,res=res,cloud=p.get('max_cloud',20))
+                except Exception as shx:
+                    # Sentinel-Hub/CDSE creds expired → same GEE fallback the
+                    # other S2 endpoints already use (returns identical dict)
+                    L.warning(f"fetch_s2 failed ({shx}); falling back to GEE")
+                    s2=fetch_s2_gee(bbox,sd,ed,res=res,cloud=max(int(p.get('max_cloud',20)),30))
+                    out['sources_used'].append("S2-GEE-fallback")
                 out['sources_used'].append(f"S2({s2['width']}x{s2['height']}@{res}m)")
                 if s2.get('glint_corrected'):out['sources_used'].append("GlintCorrected(Hedley2005)")
                 if s2.get('deep_water_corrected'):out['sources_used'].append("DeepWaterCorrected(Lyzenga1978)")
@@ -4062,8 +4295,26 @@ def api_extract():
             out['raster_png'] = raster_b64
             out['raster_bounds'] = raster_bounds
             out['raster_max_depth'] = raster_max
+            try:
+                _rid, _amn, _amx = _store_recolor_result(depth, bbox, water_mask=global_water)
+                out['result_id'] = _rid
+                out['raster_min_depth'] = round(_amn, 3)
+                out['raster_auto_min'] = round(_amn, 3)
+                out['raster_auto_max'] = round(_amx, 3)
+            except Exception:
+                pass
         except Exception as rx:
             L.warning(f"Raster PNG failed: {rx}")
+
+        # Sentinel-2 true-colour preview of the imagery the estimate used
+        # (skipped for the parallel-tiled path whose s2 dict is zero-filled)
+        try:
+            s2_b64, s2_bounds = s2_to_rgb_png(s2, bbox)
+            out['s2_rgb_png'] = s2_b64
+            out['s2_rgb_bounds'] = s2_bounds
+            out['s2_window'] = {'start': sd, 'end': ed, 'source': img_source}
+        except Exception as sx:
+            L.warning(f"S2 preview PNG skipped: {sx}")
 
         # Auto GeoTIFF (properly georeferenced)
         try:
@@ -4175,26 +4426,77 @@ def hr_water_mask(scl, ndwi, mndwi, nir_dn, swir_dn):
     return water
 
 
+def _fetch_s2_single_gee(bbox, sd, ed, res=10, cloud=35):
+    """GEE fallback for _fetch_s2_single: least-cloudy single S2 L2A scene with
+    the SAME 7-band output (coastal, red, green, blue, nir, swir, scl) so the
+    MLE stack works when Sentinel-Hub creds are unavailable (401). Pulls
+    B1,B2,B3,B4,B8,B11,SCL; SCL kept raw (class band, never scaled)."""
+    if not _init_gee():
+        raise RuntimeError("GEE not initialised (missing credentials or SDK)")
+    import ee
+    w, s, e, n = bbox
+    region = ee.Geometry.Rectangle([w, s, e, n])
+    col = (ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED")
+           .filterDate(sd, ed)
+           .filterBounds(region)
+           .filter(ee.Filter.lt("CLOUDY_PIXEL_PERCENTAGE", int(cloud))))
+    if col.size().getInfo() == 0:
+        raise RuntimeError(f"GEE single: no S2 scenes {sd}→{ed} cloud<{cloud}")
+    img = (col.sort("CLOUDY_PIXEL_PERCENTAGE").first()
+              .select(["B1", "B2", "B3", "B4", "B8", "B11", "SCL"]).clip(region))
+    url = img.getDownloadURL({"region": region, "scale": int(res),
+                              "format": "GEO_TIFF", "crs": "EPSG:4326"})
+    r = requests.get(url, timeout=300)
+    if not r.ok:
+        raise RuntimeError(f"GEE single download {r.status_code}: {r.text[:150]}")
+    a = tifffile.imread(io.BytesIO(r.content))
+    if a.ndim == 3 and a.shape[2] == 7:
+        coastal, blue, green, red, nir, swir, scl = [a[:, :, i] for i in range(7)]
+    elif a.ndim == 3 and a.shape[0] == 7:
+        coastal, blue, green, red, nir, swir, scl = [a[i] for i in range(7)]
+    else:
+        raise RuntimeError(f"GEE single TIFF shape {a.shape}")
+    gf = green.astype(float); nf = nir.astype(float); sf_ = swir.astype(float)
+    ndwi = (gf - nf) / (gf + nf + 1e-6)
+    mndwi = (gf - sf_) / (gf + sf_ + 1e-6)
+    water_mask = hr_water_mask(scl, ndwi, mndwi, nir, swir)
+    L.info(f"GEE single: {blue.shape[1]}x{blue.shape[0]} @{res}m ({sd}/{ed})")
+    return {"coastal": coastal, "red": red, "green": green, "blue": blue,
+            "nir": nir, "swir": swir, "ndwi": ndwi, "mndwi": mndwi,
+            "water_mask": water_mask, "scl": scl,
+            "width": blue.shape[1], "height": blue.shape[0],
+            "date_range": f"{sd}/{ed}"}
+
+
 def _fetch_s2_single(bbox, sd, ed, res=10, cloud=25):
-    """Fetch a single S2 scene (no multi-orbit median) at given resolution."""
+    """Fetch a single S2 scene (no multi-orbit median) at given resolution.
+    Falls back to GEE (same 7-band dict) if Sentinel-Hub fails (e.g. 401)."""
     w,s,e,n=bbox
     cl=np.cos(np.radians((n+s)/2))
     wp=max(32,min(2500,int(abs(e-w)*111000*cl/res)))
     hp=max(32,min(2500,int(abs(n-s)*111000/res)))
-    tok=sh_token()
+    try:
+        tok=sh_token()
+    except Exception as ex:
+        L.warning(f"S2 single: sh_token failed ({ex}); GEE fallback")
+        return _fetch_s2_single_gee(bbox, sd, ed, res=res, cloud=max(cloud, 35))
     body={"input":{"bounds":{"bbox":[w,s,e,n],"properties":{"crs":"http://www.opengis.net/def/crs/EPSG/0/4326"}},
           "data":[{"type":"sentinel-2-l2a","dataFilter":{"maxCloudCoverage":cloud,
           "timeRange":{"from":f"{sd}T00:00:00Z","to":f"{ed}T23:59:59Z"}},
           "mosaickingOrder":"leastCC"}]},
           "output":{"width":wp,"height":hp,"responses":[{"identifier":"default","format":{"type":"image/tiff"}}]},
           "evalscript":EVALSCRIPT_SINGLE}
+    r=None
     for attempt in range(3):
         r=requests.post(SH_PROC,headers={"Authorization":f"Bearer {tok}","Content-Type":"application/json"},json=body,timeout=120)
         if r.ok:break
         if r.status_code==429:
             TM.sleep(2*(attempt+1)); tok=sh_token(); continue
-        raise RuntimeError(f"S2 single {r.status_code}: {r.text[:200]}")
-    if not r.ok:raise RuntimeError(f"S2 single {r.status_code}")
+        # Auth/other hard error → GEE fallback rather than aborting the MLE run
+        L.warning(f"S2 single SH {r.status_code}; GEE fallback")
+        return _fetch_s2_single_gee(bbox, sd, ed, res=res, cloud=max(cloud, 35))
+    if r is None or not r.ok:
+        return _fetch_s2_single_gee(bbox, sd, ed, res=res, cloud=max(cloud, 35))
     img=tifffile.imread(io.BytesIO(r.content))
     if img.ndim==3 and img.shape[0]==7:
         coastal,red,green,blue,nir,swir,scl=img[0],img[1],img[2],img[3],img[4],img[5],img[6]
@@ -4921,6 +5223,14 @@ def api_quick_analyse():
             out['raster_png'] = raster_b64
             out['raster_bounds'] = raster_bounds
             out['raster_max_depth'] = raster_max
+            try:
+                _rid, _amn, _amx = _store_recolor_result(depth, bbox, water_mask=water_out)
+                out['result_id'] = _rid
+                out['raster_min_depth'] = round(_amn, 3)
+                out['raster_auto_min'] = round(_amn, 3)
+                out['raster_auto_max'] = round(_amx, 3)
+            except Exception:
+                pass
         except Exception as rx:
             L.warning(f"Quick raster: {rx}")
         try:
@@ -7618,52 +7928,6 @@ _KNOWN_SITES = {
     },
 }
 
-# TRAIN-R4: predefined-region metadata sourced from the versioned registry
-# (backend/models/registry/v<CURRENT>/model_card.json), not by re-parsing
-# validation/*.xyz at request time. Falls back to the raw-file count if the
-# registry has no entry for a region (e.g. library_region sites).
-_REGISTRY_DIR = Path(__file__).resolve().parent / "models" / "registry"
-_registry_card_cache = {}
-
-
-def _registry_current_card():
-    ptr = _REGISTRY_DIR / "CURRENT"
-    if not ptr.exists():
-        return None
-    version = ptr.read_text().strip()
-    if version in _registry_card_cache:
-        return _registry_card_cache[version]
-    card_path = _REGISTRY_DIR / version / "model_card.json"
-    if not card_path.exists():
-        return None
-    try:
-        with open(card_path) as fh:
-            card = json.load(fh)
-        _registry_card_cache[version] = card
-        return card
-    except Exception as ex:
-        L.warning(f"registry: failed to load {card_path}: {ex}")
-        return None
-
-
-def _registry_region_meta(site_key):
-    """Returns {'n_points', 'bbox', 'sources'} aggregated from the CURRENT
-    registry's training_data_summary for `site_key`, or None if absent."""
-    card = _registry_current_card()
-    if not card:
-        return None
-    sources = [s for s in card.get("training_data_summary", {}).get("sources", [])
-              if s.get("region") == site_key]
-    if not sources:
-        return None
-    n_points = sum(int(s.get("n_points", 0)) for s in sources)
-    ws = [s["bbox"][0] for s in sources]; ss = [s["bbox"][1] for s in sources]
-    es = [s["bbox"][2] for s in sources]; ns = [s["bbox"][3] for s in sources]
-    return {"n_points": n_points,
-           "bbox": {"west": min(ws), "south": min(ss), "east": max(es), "north": max(ns)},
-           "sources": [s.get("kind") for s in sources]}
-
-
 def _seed_reference_library(bbox, zooms=(13, 14), min_pts=30):
     """Silently populate the training store with reference-depth soundings for
     this bbox by extracting depths from published nautical charts via Gemini Vision.
@@ -7695,18 +7959,19 @@ def _seed_reference_library(bbox, zooms=(13, 14), min_pts=30):
     w, s, e, n = bbox
     for zoom in zooms:
         try:
-            _, img_b64, iw, ih = _capture_iboating(bbox, zoom=zoom, wait_sec=10)
-            raw_pts, _err = _gemini_extract_soundings(img_b64, bbox, iw, ih)
+            _, img_b64, iw, ih, chart_bbox = _capture_iboating(bbox, zoom=zoom, wait_sec=10)
+            raw_pts, _err = _gemini_extract_soundings(img_b64, chart_bbox, iw, ih)
             if not raw_pts:
                 continue
+            cw_, cs_, ce_, cn_ = chart_bbox  # TRUE rendered bounds
             pts_lat, pts_lon, pts_depth = [], [], []
             for p in raw_pts:
                 d = float(p.get('depth', 0))
                 if d <= 0 or d > MAX_DEPTH_M:
                     continue
                 px, py = p.get('x', 0), p.get('y', 0)
-                lon = w + (px / max(iw, 1)) * (e - w)
-                lat = n - (py / max(ih, 1)) * (n - s)
+                lon = cw_ + (px / max(iw, 1)) * (ce_ - cw_)
+                lat = cn_ - (py / max(ih, 1)) * (cn_ - cs_)
                 if -90 <= lat <= 90 and -180 <= lon <= 180:
                     pts_lat.append(lat); pts_lon.append(lon); pts_depth.append(min(d, MAX_DEPTH_M))
             try:
@@ -7788,30 +8053,25 @@ def api_load_observed():
         # bbox) for the sidebar card — no point cloud is loaded or returned.
         if data.get('meta_only'):
             n_pts = 0
-            reg_meta = _registry_region_meta(site_key)
-            registry_sourced = reg_meta is not None
-            if registry_sourced:
-                n_pts = reg_meta['n_points']
-            else:
-                for fname in site.get('files', []) or []:
-                    for base in search_bases:
-                        fp = os.path.join(base, fname)
-                        if os.path.exists(fp):
-                            try:
-                                with open(fp) as fh:
-                                    n_pts += sum(1 for ln in fh if ln.strip())
-                            except Exception as ex:
-                                L.warning(f"meta_only count failed for {fname}: {ex}")
-                            break
-                if not site.get('files') and site.get('library_region') and _get_store:
-                    try:
-                        bb = site.get('bbox')
-                        if bb:
-                            n_pts = _get_store().query_bbox(
-                                [bb['west'], bb['south'], bb['east'], bb['north']],
-                                buffer_km=2, max_points=100000)['count']
-                    except Exception as ex:
-                        L.warning(f"meta_only library count failed for {site_key}: {ex}")
+            for fname in site.get('files', []) or []:
+                for base in search_bases:
+                    fp = os.path.join(base, fname)
+                    if os.path.exists(fp):
+                        try:
+                            with open(fp) as fh:
+                                n_pts += sum(1 for ln in fh if ln.strip())
+                        except Exception as ex:
+                            L.warning(f"meta_only count failed for {fname}: {ex}")
+                        break
+            if not site.get('files') and site.get('library_region') and _get_store:
+                try:
+                    bb = site.get('bbox')
+                    if bb:
+                        n_pts = _get_store().query_bbox(
+                            [bb['west'], bb['south'], bb['east'], bb['north']],
+                            buffer_km=2, max_points=100000)['count']
+                except Exception as ex:
+                    L.warning(f"meta_only library count failed for {site_key}: {ex}")
             crs_desc = (f'EPSG:{site["epsg"]} → WGS84'
                         if site.get('files') else
                         f'EPSG:{site.get("epsg", 4326)} (WGS84)')
@@ -7824,7 +8084,6 @@ def api_load_observed():
                 'horizontal_datum': site.get('horizontal_datum', 'WGS84'),
                 'units': site.get('units', 'metres'),
                 'depth_cap_m': MAX_DEPTH_M,
-                'metadata_source': 'registry' if registry_sourced else 'raw_file_parse',
             })
 
         for fname in site.get('files', []) or []:
@@ -8575,12 +8834,265 @@ def _apply_hedley_deglint(s2, water):
     return s2o
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# AI_METHOD_LOG R1/R2/R3 — deep per-pixel σ for the multi-scene MLE
+#   Behind env flags, ALL default OFF:
+#     MLE_DEEP_SIGMA     (master gate; OFF → byte-identical scalar-σ MLE)
+#     MLE_DEEP_PER_SCENE (OFF → train deep ONCE/request & broadcast σ-shape;
+#                         1 → true per-scene deep fit)
+#     MLE_DEEP_CALIB     (default ON when MLE_DEEP_SIGMA=1; temperature-k)
+#     MLE_DEEP_MARGIN=0.05, MLE_DEEP_WCAP=0.5, SPATIAL_TRAIN_BUFFER_M=500(gate)
+# The linear ridge is the guaranteed floor: the deep candidate is convex-blended
+# into a scene ONLY where it beats linear on a ≥500 m spatial-block held-out set
+# (Kendall & Gal 2017; Guo 2017; Caballero & Stumpf 2020).
+# ══════════════════════════════════════════════════════════════════════════════
+def _deep_scene_sigma(s2, bbox, water, linear_depth,
+                      tr_lat, tr_lon, tr_truth,
+                      test_lat, test_lon, test_truth,
+                      scalar_sigma):
+    """Train the Attention U-Net on spatial-train refs, emit a per-pixel σ field
+    + a never-worse-than-linear convex-blended depth, temperature-calibrated to
+    95 % coverage. Returns dict {sigma_px,(H,W) depth_blend,(H,W) gate:{...}} or
+    None (feature off / not enough held-out truth / CNN failed) → scalar path.
+
+    Leakage-safe gate: CNN trains on refs ≥ SPATIAL_TRAIN_BUFFER_M (default 500 m
+    here) from ANY held-out gate point; both linear and CNN are scored at the SAME
+    held-out coords. The linear floor is scored optimistically (it may share spatial
+    autocorrelation with its own train pts) so the gate is CONSERVATIVE for adopting
+    the CNN — we only blend where the CNN beats an already-favourably-scored linear."""
+    import numpy as _np
+    w_, s_, e_, n_ = bbox
+    H, W = linear_depth.shape
+
+    def _rc(la, lo):
+        r = max(0, min(H - 1, int((n_ - la) / (n_ - s_ + 1e-10) * H)))
+        c = max(0, min(W - 1, int((lo - w_) / (e_ - w_ + 1e-10) * W)))
+        return r, c
+
+    # Pool ALL available in-situ (linear-train + linear-held-out) and carve a
+    # CONTIGUOUS spatial-block held-out set (KMeans, ≥500 m inter-fold buffer).
+    # A scattered random held-out set collapses on a dense field (every train pt
+    # sits within 500 m of some test pt); a contiguous block is the honest,
+    # tractable gate. See CLAUDE.md honesty contract / AI_METHOD_LOG R2/R4.
+    a_lat = _np.concatenate([_np.asarray(tr_lat, float), _np.asarray(test_lat, float)])
+    a_lon = _np.concatenate([_np.asarray(tr_lon, float), _np.asarray(test_lon, float)])
+    a_dep = _np.concatenate([_np.asarray(tr_truth, float), _np.asarray(test_truth, float)])
+    if len(a_dep) < 40:
+        L.info(f"MLE-deep: only {len(a_dep)} in-situ pts → no honest block gate, scalar σ kept")
+        return None
+    buf = float(os.environ.get("SPATIAL_TRAIN_BUFFER_M", "500"))
+    try:
+        try:
+            from backend.sdb_cnn_baseline import make_spatial_block_centers as _mkblk
+        except ImportError:
+            from sdb_cnn_baseline import make_spatial_block_centers as _mkblk  # type: ignore
+        _nb = int(os.environ.get("MLE_DEEP_NBLOCKS", "10"))
+        _seed = int(os.environ.get("MLE_DEEP_SEED", "42"))
+        tr_mask, te_mask = _mkblk(a_lat, a_lon, n_blocks=min(_nb, max(3, len(a_dep)//8)),
+                                  test_frac=0.25, buffer_m=buf, seed=_seed)
+    except Exception as _bx:
+        L.info(f"MLE-deep: spatial-block carve failed ({_bx}) → scalar σ kept")
+        return None
+    cl, clo, cd = a_lat[tr_mask], a_lon[tr_mask], a_dep[tr_mask]
+    test_lat, test_lon, test_truth = a_lat[te_mask], a_lon[te_mask], a_dep[te_mask]
+    if len(cd) < 30 or len(test_truth) < 5:
+        L.info(f"MLE-deep: block carve gave {len(cd)} train / {len(test_truth)} "
+               f"held-out (buf={buf:.0f} m) → scalar σ kept")
+        return None
+
+    # ── Train the Attention U-Net (CPU budget: 1 model, 6 MC passes) ──
+    try:
+        try:
+            from backend import cnn_engine as _cnn
+        except ImportError:
+            import cnn_engine as _cnn  # type: ignore
+        _ep = int(os.environ.get("MLE_DEEP_EPOCHS", "60"))
+        _mp = int(os.environ.get("MLE_DEEP_MAXPATCH", "160"))
+        res, err = _cnn.cnn_train_and_predict(
+            s2, {"lats": cl, "lons": clo, "depths": cd}, list(bbox),
+            n_ensemble=1, mc_passes=6, epochs=min(_ep, 80),
+            max_patches=min(_mp, 192), use_cache=True)
+        if err or res is None:
+            L.info(f"MLE-deep: CNN failed ({err}) → scalar σ kept")
+            return None
+    except Exception as _ex:
+        L.info(f"MLE-deep: CNN raised ({_ex}) → scalar σ kept")
+        return None
+
+    depth_cnn = _np.asarray(res["depth"], _np.float32)
+    sigma_cnn = _np.asarray(res["uncertainty"], _np.float32)
+
+    # ── Score linear & CNN at the SAME held-out coords ──
+    pl, pc, tt = [], [], []
+    for la, lo, dt in zip(test_lat, test_lon, test_truth):
+        r, c = _rc(la, lo)
+        vl = linear_depth[r, c]; vc = depth_cnn[r, c]
+        if _np.isfinite(vl) and _np.isfinite(vc):
+            pl.append(float(vl)); pc.append(float(vc)); tt.append(float(dt))
+    if len(tt) < 5:
+        L.info("MLE-deep: <5 co-located held-out preds → scalar σ kept")
+        return None
+    pl = _np.asarray(pl); pc = _np.asarray(pc); tt = _np.asarray(tt)
+    rmse_lin = float(_np.sqrt(_np.mean((pl - tt) ** 2)))
+    rmse_cnn = float(_np.sqrt(_np.mean((pc - tt) ** 2)))
+
+    # ── Gate + convex inverse-variance blend (never worse than linear) ──
+    # AI_METHOD_LOG R5 (round 2): DEPTH-STRATIFIED gate. Instead of ONE global
+    # w_cnn per scene, score CNN-vs-linear held-out RMSE PER DEPTH BAND
+    # (0-2/2-5/5-10/10+ m) and assign a per-pixel blend weight w_cnn(band) by
+    # the pixel's LINEAR-depth band (legitimate at inference). SAME never-worse
+    # rule applied band-by-band → overall floor preserved. MLE_DEEP_STRATIFIED
+    # (default 1 when master on; 0 = round-1 global behaviour).
+    margin = float(os.environ.get("MLE_DEEP_MARGIN", "0.05"))
+    w_cap = float(os.environ.get("MLE_DEEP_WCAP", "0.5"))
+    stratified = os.environ.get("MLE_DEEP_STRATIFIED", "1") == "1"
+    _bands = [(0.0, 2.0), (2.0, 5.0), (5.0, 10.0), (10.0, float("inf"))]
+
+    def _band_key(lo, hi):
+        return f"{int(lo)}-{'inf' if hi == float('inf') else int(hi)}m"
+
+    per_band = {}
+    # per-pixel maps assembled below
+    w_map = _np.zeros((H, W), dtype=_np.float32)          # CNN blend weight
+    sig_lin_map = _np.full((H, W), rmse_lin, dtype=_np.float32)   # σ floor (reject)
+    sig_fold_map = _np.zeros((H, W), dtype=_np.float32)  # gate residual folded when adopted
+
+    if stratified:
+        # Bin the held-out preds by their LINEAR estimate (pl) — the SAME
+        # band-assignment function used per-pixel at inference. Guarantees the
+        # gate is scored on exactly the population each band weight governs.
+        band_minn = int(os.environ.get("MLE_DEEP_BAND_MINN", "12"))
+        band_w = [0.0] * len(_bands)
+        band_rl = [None] * len(_bands)
+        band_rc = [None] * len(_bands)
+        for _bi, (lo, hi) in enumerate(_bands):
+            sel = _np.array([lo <= v < hi for v in pl], dtype=bool)
+            n_b = int(sel.sum())
+            key = _band_key(lo, hi)
+            if n_b < 3:
+                per_band[key] = {"rmse_lin": None, "rmse_cnn": None,
+                                 "w_cnn": 0.0, "n": n_b}
+                continue
+            rl = float(_np.sqrt(_np.mean((pl[sel] - tt[sel]) ** 2)))
+            rc = float(_np.sqrt(_np.mean((pc[sel] - tt[sel]) ** 2)))
+            # Never-worse rule PLUS a statistical-power guard: a band must hold
+            # ≥ MLE_DEEP_BAND_MINN held-out pts before the CNN may be adopted
+            # (a 3-point band beating linear is noise, not skill).
+            if n_b >= band_minn and rc <= rl * (1.0 - margin) and rc > 0:
+                wb = float(_np.clip(rl ** 2 / (rl ** 2 + rc ** 2), 0.0, w_cap))
+            else:
+                wb = 0.0
+            band_w[_bi] = wb; band_rl[_bi] = rl; band_rc[_bi] = rc
+            per_band[key] = {"rmse_lin": round(rl, 3), "rmse_cnn": round(rc, 3),
+                             "w_cnn": round(wb, 4), "n": n_b}
+        # scalar summary: >0 iff ANY band adopted → drives _run_s2_mle's
+        # _ref_g election / never-worse strip (all-reject ⇒ 0 ⇒ scalar path).
+        w_cnn = float(max(band_w)) if band_w else 0.0
+        # per-pixel weight + σ-floor maps assigned by the LINEAR depth band.
+        for _bi, (lo, hi) in enumerate(_bands):
+            bm = _np.isfinite(linear_depth) & (linear_depth >= lo) & (linear_depth < hi)
+            if band_rl[_bi] is not None:
+                sig_lin_map[bm] = band_rl[_bi]
+            if band_w[_bi] > 0:
+                w_map[bm] = band_w[_bi]
+                if band_rc[_bi] is not None:
+                    sig_fold_map[bm] = band_rc[_bi]
+    else:
+        # round-1 GLOBAL behaviour (MLE_DEEP_STRATIFIED=0).
+        if rmse_cnn <= rmse_lin * (1.0 - margin) and rmse_cnn > 0:
+            w_cnn = float(_np.clip(rmse_lin ** 2 / (rmse_lin ** 2 + rmse_cnn ** 2), 0.0, w_cap))
+        else:
+            w_cnn = 0.0
+        w_map[:] = w_cnn
+        if w_cnn > 0:
+            sig_fold_map[:] = rmse_cnn   # round-1 folded the global CNN RMSE
+
+    # convex blend (per-pixel weight); depth untouched where w_map==0
+    depth_blend = linear_depth.astype(_np.float32).copy()
+    if w_cnn > 0:
+        both = _np.isfinite(linear_depth) & _np.isfinite(depth_cnn)
+        _wm = w_map[both]
+        depth_blend[both] = ((1.0 - _wm) * linear_depth[both]
+                             + _wm * depth_cnn[both]).astype(_np.float32)
+
+    # ── Per-pixel σ that feeds the MLE ──
+    if w_cnn > 0:
+        _sig_cnn = _np.where(_np.isfinite(sigma_cnn), sigma_cnn, sig_lin_map)
+        sigma_px = _np.where(w_map > 0,
+                             _np.sqrt(_sig_cnn ** 2 + sig_fold_map ** 2),
+                             sig_lin_map).astype(_np.float32)
+    else:
+        sigma_px = sig_lin_map.astype(_np.float32)
+    sigma_px = _np.where(water, sigma_px, _np.nan).astype(_np.float32)
+    sigma_px = _np.clip(sigma_px, 0.5, 5.0)
+
+    # ── R3: temperature-k so held-out coverage@95 hits 0.95 ──
+    k = 1.0
+    cov_before = cov_after = None
+    if os.environ.get("MLE_DEEP_CALIB", "1") == "1":
+        z_pred = depth_blend if w_cnn > 0 else linear_depth
+        sr, tvals = [], []
+        for la, lo, dt in zip(test_lat, test_lon, test_truth):
+            r, c = _rc(la, lo)
+            sp = sigma_px[r, c]; zp = z_pred[r, c]
+            if _np.isfinite(sp) and sp > 0 and _np.isfinite(zp):
+                sr.append((zp - dt) / sp)
+            tvals.append(dt)
+        sr = _np.asarray(sr)
+        if len(sr) >= 5:
+            cov_before = float(_np.mean(_np.abs(sr) <= 1.96))
+            ks = _np.linspace(0.3, 3.0, 271)
+            covs = _np.array([_np.mean(_np.abs(sr) / kk <= 1.96) for kk in ks])
+            k = float(ks[int(_np.argmin(_np.abs(covs - 0.95)))])
+            sigma_px = _np.clip(sigma_px * k, 0.5, 5.0)
+            cov_after = float(_np.mean(_np.abs(sr) / k <= 1.96))
+
+    # ── Diagnostics: Spearman(σ,|err|), median/spatial-std σ ──
+    rho = None
+    try:
+        from scipy.stats import spearmanr as _sp
+        s_at, e_at = [], []
+        for la, lo, dt in zip(test_lat, test_lon, test_truth):
+            r, c = _rc(la, lo)
+            sp = sigma_px[r, c]; zp = (depth_blend if w_cnn > 0 else linear_depth)[r, c]
+            if _np.isfinite(sp) and _np.isfinite(zp):
+                s_at.append(float(sp)); e_at.append(abs(float(zp) - float(dt)))
+        if len(s_at) >= 5 and _np.std(s_at) > 0:
+            rho = float(_sp(s_at, e_at).correlation)
+    except Exception:
+        rho = None
+
+    wpx = _np.isfinite(sigma_px)
+    gate = {
+        "w_cnn": round(w_cnn, 4),
+        "stratified": bool(stratified),
+        "per_band": per_band,
+        "rmse_lin": round(rmse_lin, 3), "rmse_cnn": round(rmse_cnn, 3),
+        "n_gate": int(len(tt)), "n_train_deep": int(len(cd)),
+        "buffer_m": buf, "temperature_k": round(k, 3),
+        "coverage95_before": (round(cov_before, 3) if cov_before is not None else None),
+        "coverage95": (round(cov_after, 3) if cov_after is not None else None),
+        "spearman_sigma_abserr": (round(rho, 3) if rho is not None else None),
+        "sigma_px_median": round(float(_np.nanmedian(sigma_px)), 3) if wpx.any() else None,
+        "sigma_px_spatial_std": round(float(_np.nanstd(sigma_px[wpx])), 3) if wpx.any() else None,
+        "cnn_r2_random_holdout": res.get("r2"),
+    }
+    L.info(f"MLE-deep: RMSE_lin={rmse_lin:.3f} RMSE_cnn={rmse_cnn:.3f} w_cnn={w_cnn:.3f} "
+           f"k={k:.2f} cov95={gate['coverage95']} ρ(σ,|e|)={gate['spearman_sigma_abserr']} "
+           f"σ_med={gate['sigma_px_median']} σ_std={gate['sigma_px_spatial_std']} "
+           f"(n_gate={len(tt)}, n_train_deep={len(cd)})")
+    return {"sigma_px": sigma_px,
+            "depth_blend": (depth_blend if w_cnn > 0 else None),
+            "gate": gate}
+
+
 def _run_s2_lyzenga_fast(bbox, sd, ed, user_pts=None,
                          max_cloud=20, fetch_sliderule=False,
                          include_geotiff=False,
                          res_override=None,
                          _internal_return_grid=False,
-                         _emit_mask_preview=None):
+                         _emit_mask_preview=None,
+                         _deep_train=False):
     """Single-shot Sentinel-2 → Lyzenga+Stumpf+SlideRule depth grid.
 
     res_override: user-selected output resolution in metres (10/20/50/100).
@@ -9681,10 +10193,41 @@ def _run_s2_lyzenga_fast(bbox, sd, ed, user_pts=None,
             L.info(f"S2-fast: EMIT_SIGMA failed ({_sx}); no sigma grid")
             sigma_grid = None
 
+    # ── AI_METHOD_LOG R1/R2/R3: deep per-pixel σ + never-worse blend ──
+    # Runs ONLY for the MLE per-scene path (_internal_return_grid) when the
+    # master flag is set AND this scene was elected to train the deep head
+    # (_deep_train). Emits sigma_px/depth_blend/deep_gate on the response;
+    # NEVER mutates `depth` (flag-OFF path stays byte-identical). See
+    # _deep_scene_sigma for the leakage-safe gate.
+    deep_sigma_px = None
+    deep_depth_blend = None
+    deep_gate = None
+    if (os.environ.get("MLE_DEEP_SIGMA", "0") == "1"
+            and _internal_return_grid and _deep_train):
+        try:
+            if ('tr_lat' in dir() and len(tr_lat) >= 10
+                    and len(insitu_test_lats) >= 5):
+                _dd = _deep_scene_sigma(
+                    s2, bbox, water, depth,
+                    tr_lat, tr_lon, tr_truth,
+                    insitu_test_lats, insitu_test_lons, insitu_test_deps,
+                    scalar_sigma=None)
+                if _dd is not None:
+                    deep_sigma_px = _dd.get("sigma_px")
+                    deep_depth_blend = _dd.get("depth_blend")
+                    deep_gate = _dd.get("gate")
+            else:
+                L.info("MLE-deep: insufficient train/held-out refs in this scene "
+                       "→ scalar σ kept")
+        except Exception as _dex:
+            L.info(f"MLE-deep: skipped ({_dex}) → scalar σ kept")
+
     # Apply the homogeneous water mask to the final raster (no patchiness)
     depth = np.where(water, depth, np.nan)
     if sigma_grid is not None:
         sigma_grid = np.where(water, sigma_grid, np.nan).astype(np.float32)
+    if deep_depth_blend is not None:
+        deep_depth_blend = np.where(water, deep_depth_blend, np.nan).astype(np.float32)
 
     # 5. Metrics on held-out reference pts.
     # Includes the 20 % in-situ XYZ test split + any caller-supplied
@@ -9939,11 +10482,16 @@ def _run_s2_lyzenga_fast(bbox, sd, ed, user_pts=None,
         response['depth_grid_pre_calib'] = depth_pre_calib
         # IHO req #1/#2: honest per-pixel σ grid (None unless EMIT_SIGMA=1).
         response['sigma_grid'] = sigma_grid
- # hand the raw S2 band dict + TRUE acquisition
+        # AI_METHOD_LOG R1/R2/R3: deep per-pixel σ + never-worse blend (None
+        # unless MLE_DEEP_SIGMA=1 and this scene trained the deep head).
+        response['deep_sigma_px'] = deep_sigma_px
+        response['deep_depth_blend'] = deep_depth_blend
+        response['deep_gate'] = deep_gate
+        # MASKMLE 1.2a/1.3: hand the raw S2 band dict + TRUE acquisition
         # timestamps up to the MLE stability path (per-scene tide + QC).
         response['_s2'] = s2
         response['acquisition_datetimes'] = s2.get('acquisition_datetimes')
- # hand the SAME reference set production calibrated on up to
+        # MASKMLE 3.2: hand the SAME reference set production calibrated on up to
         # the shared-calibration-field mode so Stage B can be fit ONCE on the
         # kept-scene composite (rl/rlo/rd = reference lat/lon/depth; identical
         # across scenes for a fixed bbox).
@@ -9956,7 +10504,7 @@ def _run_s2_lyzenga_fast(bbox, sd, ed, user_pts=None,
 
 
 # ══════════════════════════════════════════════════════════════
-# (item 1.2 / 1.3) — per-scene EOT20 tide + physical QC
+# MASKMLE R1 (item 1.2 / 1.3) — per-scene EOT20 tide + physical QC
 # ══════════════════════════════════════════════════════════════
 _EOT20_DIR = Path(__file__).resolve().parent.parent / "cache"   # holds EOT20/ symlink
 
@@ -10075,12 +10623,13 @@ def build_tide_correction(bbox, acquisition_utc=None, depth_grid=None, water_mas
 
 
 def mle_tide_correction_summary(tide_info):
-    """The MLE composite-level `result.tide_correction` — a pure summary of
-    the existing per-scene `stability.tide` diagnostic, never a second
-    independent computation and never a second correction on top of it
-    (audit only, never double-correct). `tide_info['applied']` mirrors
-    `MLE_TIDE_CORRECT` (default OFF — per-scene MLE tide correction is
-    disabled; only the diagnostic survives)."""
+    """ADPorts F3: the MLE composite-level `result.tide_correction` — a pure
+    SUMMARY of the EXISTING per-scene `stability.tide` diagnostic (MASKMLE
+    1.2/1.2c), never a second independent computation and never a second
+    correction on top of it (the coordinator's binding caveat: audit, don't
+    double-correct). `tide_info['applied']` mirrors `MLE_TIDE_CORRECT`
+    (default OFF per the MASKMLE R1/R3 kill-list — tide correction for
+    per-scene MLE stability was KILLED; only the diagnostic survives)."""
     if not tide_info:
         return _tide_correction_fallback()
     applied = bool(tide_info.get("applied"))
@@ -10091,8 +10640,8 @@ def mle_tide_correction_summary(tide_info):
         return _tide_correction_fallback(
             note="Uncorrected — instantaneous sea level at acquisition; per-scene EOT20 tide is "
                  "computed and reported per-scene (stability.tide, stability.per_scene[].tide_m) "
-                 "as a DIAGNOSTIC only (MLE_TIDE_CORRECT default OFF for the default "
-                 "regime). No tidal reduction applied to the composite.")
+                 "as a DIAGNOSTIC only (MLE_TIDE_CORRECT default OFF — killed for the default "
+                 "regime, MASKMLE R1/R3). No tidal reduction applied to the composite.")
     return {
         "applied": True, "height_m": round(h_ref, 4), "source": "EOT20",
         "acquisition_utc": None,  # composite spans 5 scenes — no single timestamp
@@ -10130,7 +10679,7 @@ def _gee_window_timestamps(bbox, sd, ed, cloud=30):
 
 
 def _scene_physical_qc(s2, deep_mask, water_mask):
-    """Diagnostic-only per-scene physical QC (no screening):
+    """MASKMLE 1.3 diagnostic-only per-scene physical QC (NO screening):
       glint_proxy_nir = median NIR reflectance over deep water (sun-glint /
                         residual-cloud proxy; water is NIR-black so a high value
                         flags glint or haze).
@@ -10138,14 +10687,13 @@ def _scene_physical_qc(s2, deep_mask, water_mask):
                         the water mask: T = A_T·ρw / (1 − ρw/C), A_T=228.1 FNU,
                         C=0.1641, ρw = red reflectance (πLw/Ed proxy; S2 SR
                         reflectance used directly).
-      turbidity_fnu_deep = same Dogliotti FNU but ρw sampled ONLY on a FIXED
-                        deep-quartile pixel set. Because the pixel set is
-                        common across scenes, bottom albedo is common-mode
-                        and the scene-to-scene FNU *anomaly* is a real
-                        water-column + atmosphere signal even where the
-                        "deep" quartile is still optically shallow (a
-                        whole-mask FNU computation was bottom-contaminated
-                        on banks, e.g. bu_tinah July "214 FNU").
+      turbidity_fnu_deep = same Dogliotti FNU but ρw sampled ONLY on the FIXED
+                        deep-quartile pixel set (MASKMLE 2.3a). Because the pixel
+                        set is common across scenes, bottom albedo is common-mode
+                        and the scene-to-scene FNU *anomaly* is a real water-column
+                        + atmosphere signal even where the "deep" quartile is still
+                        optically shallow (the R1 whole-mask FNU was bottom-
+                        contaminated on banks, e.g. bu_tinah July "214 FNU").
     Returns dict of finite floats (or None where no valid px)."""
     out = {"glint_proxy_nir": None, "turbidity_fnu": None,
            "turbidity_fnu_deep": None, "deep_px": 0, "water_px": 0}
@@ -10197,7 +10745,7 @@ def _scene_physical_qc(s2, deep_mask, water_mask):
 # ══════════════════════════════════════════════════════════════
 def _compute_s2_depth_grid(bbox, sd, ed, user_pts=None,
                            max_cloud=20, fetch_sliderule=False,
-                           emit_mask_preview=False):
+                           emit_mask_preview=False, _deep_train=False):
     """Run the inner part of the fast S2 pipeline (Lyzenga + UAE +
     bias correction) and return the RAW numerical depth grid plus the
     water mask + per-scene metrics. No PNG / GeoTIFF rendering.
@@ -10212,6 +10760,7 @@ def _compute_s2_depth_grid(bbox, sd, ed, user_pts=None,
         include_geotiff=False,
         _internal_return_grid=True,   # see _run_s2_lyzenga_fast tail
         _emit_mask_preview=emit_mask_preview,
+        _deep_train=_deep_train,
     )
     return out  # has depth_grid + water_mask added
 
@@ -10253,7 +10802,7 @@ def _residual_idw_field(bbox, H, W, tr_lat, tr_lon, residuals):
 
 
 def _mle_shared_calibrate(grids, bbox, h_ref):
-    """Shared-calibration-field package (ONE lever).
+    """MASKMLE 3.2 — shared-calibration-field package (ONE lever).
 
     Stage A stays PER-SCENE (each ``pre_calib`` = post-blend un-calibrated
     Lyzenga+Stumpf+ensemble surface — the radiometric inversion must adapt to
@@ -10408,7 +10957,8 @@ def _write_grid_geotiff(grid, bbox, path, band_desc, nodata=-9999.0):
 
 
 def _run_s2_mle(bbox, year=2024, n_scenes=5, max_cloud=20,
-                user_pts=None, fetch_sliderule=False):
+                user_pts=None, fetch_sliderule=False,
+                sigma_reject_k=3.0, sigma_max_m=None):
     """Multi-scene MLE bathymetry over a full calendar year.
 
     Picks ``n_scenes`` evenly-spaced ±15 d windows (one per
@@ -10432,20 +10982,29 @@ def _run_s2_mle(bbox, year=2024, n_scenes=5, max_cloud=20,
                for i in range(n)]
     pad = 15
 
- # shared-calibration-field mode (default OFF, one-shot lever).
+    # MASKMLE 3.2: shared-calibration-field mode (default OFF, one-shot lever).
     shared_cal = os.environ.get("MLE_SHARED_CAL", "0") == "1"
+    # AI_METHOD_LOG R1/R2: deep per-pixel σ. MLE_DEEP_PER_SCENE=1 → train the
+    # Attention U-Net on EVERY scene; default (0) → train ONCE (first scene that
+    # produces a deep fit) and broadcast that σ-SHAPE to the other scenes scaled
+    # by each scene's scalar RMSE (CPU budget ≈ one CNN train/request).
+    deep_on = os.environ.get("MLE_DEEP_SIGMA", "0") == "1"
+    deep_per_scene = os.environ.get("MLE_DEEP_PER_SCENE", "0") == "1"
+    _deep_done = False   # broadcast-mode: have we trained the deep head yet?
     grids = []  # list of dicts { 'depth':np.ndarray, 'water':np.ndarray,
                 #                 'sigma':float, 'date':str, 'metrics':dict }
     mle_mask_meta = None       # 3.U2: representative product mask meta for the UI
     for _i, c in enumerate(centres):
         sd = (c - timedelta(days=pad)).strftime('%Y-%m-%d')
         ed = (c + timedelta(days=pad)).strftime('%Y-%m-%d')
+        _train_deep_here = deep_on and (deep_per_scene or not _deep_done)
         try:
             res = _compute_s2_depth_grid(
                 bbox, sd, ed, user_pts=user_pts,
                 max_cloud=max_cloud, fetch_sliderule=fetch_sliderule,
                 # 3.U2: emit ONE mask-QA preview (first scene) for the MLE product.
-                emit_mask_preview=(mle_mask_meta is None))
+                emit_mask_preview=(mle_mask_meta is None),
+                _deep_train=_train_deep_here)
         except Exception as ex:
             L.info(f"MLE: {c.date()} skipped ({ex})")
             continue
@@ -10465,14 +11024,20 @@ def _run_s2_mle(bbox, year=2024, n_scenes=5, max_cloud=20,
             'date': c.strftime('%Y-%m-%d'), 'window': [sd, ed],
             'metrics': m,
             'mean_depth': (res.get('stats') or {}).get('mean_depth'),
- # raw S2 bands + TRUE acquisition timestamps
+            # MASKMLE 1.2a/1.3: raw S2 bands + TRUE acquisition timestamps
             's2': res.get('_s2'),
             'acquisition_datetimes': res.get('acquisition_datetimes'),
- # Stage-A (pre-calibration, post-blend) surface + the
+            # MASKMLE 3.2: Stage-A (pre-calibration, post-blend) surface + the
             # SAME reference set for the shared-calibration-field mode.
             'pre_calib': res.get('depth_grid_pre_calib'),
             'calib_refs': res.get('_calib_refs'),
+            # AI_METHOD_LOG R1/R2/R3: deep per-pixel σ + never-worse blend.
+            'sigma_px': res.get('deep_sigma_px'),
+            'depth_blend': res.get('deep_depth_blend'),
+            'deep_gate': res.get('deep_gate'),
         })
+        if res.get('deep_sigma_px') is not None:
+            _deep_done = True
         L.info(f"MLE: {c.date()} σ={sigma:.2f} m  mean depth "
                f"{(res.get('stats') or {}).get('mean_depth')} m")
 
@@ -10491,6 +11056,13 @@ def _run_s2_mle(bbox, year=2024, n_scenes=5, max_cloud=20,
                 g['pre_calib'] = np.asarray(g['pre_calib'])[:H, :W]
             except Exception:
                 g['pre_calib'] = None
+        # AI_METHOD_LOG: crop deep σ / blended depth to the common shape.
+        for _dk in ('sigma_px', 'depth_blend'):
+            if g.get(_dk) is not None:
+                try:
+                    g[_dk] = np.asarray(g[_dk])[:H, :W]
+                except Exception:
+                    g[_dk] = None
         s2 = g.get('s2')
         if s2:
             for _k in ('nir', 'red', 'green', 'blue'):
@@ -10502,7 +11074,7 @@ def _run_s2_mle(bbox, year=2024, n_scenes=5, max_cloud=20,
                         pass
 
     # ══════════════════════════════════════════════════════════════════════
- # best-N-of-M scene screening by INDEPENDENT physical QC.
+    # MASKMLE 2.3: best-N-of-M scene screening by INDEPENDENT physical QC.
     # Two pre-registered, independent gates ONLY (NO agreement/σ/bias selection —
     # that would be circular and is charter-forbidden):
     #   (1) GLINT gate (absolute, physical): drop if glint_proxy_nir > 0.030
@@ -10516,7 +11088,7 @@ def _run_s2_mle(bbox, year=2024, n_scenes=5, max_cloud=20,
     # MLE_SCENE_SCREEN (default OFF). The fixed deep set is the deepest quartile of
     # the ALL-candidate composite. Fusion of survivors is UNCHANGED (single var).
     # ══════════════════════════════════════════════════════════════════════
- # screening WIN locked in: default ON for the MLE path
+    # MASKMLE 3.3 — screening WIN locked in: default ON for the MLE path
     # (khalifa composite RMSE 2.2272→2.1614 m, round0 σ 0.372→0.306,
     # bu_tinah 0.183→0.146). Thresholds FROZEN (glint_max 0.030 absolute,
     # turbidity = median+3×1.4826×MAD on the fixed deep set), keep-≥3 fallback.
@@ -10592,7 +11164,7 @@ def _run_s2_mle(bbox, year=2024, n_scenes=5, max_cloud=20,
                f"FNU_deep>{turb_thr})")
 
     # ══════════════════════════════════════════════════════════════════════
- # TRUE per-scene acquisition timestamps → EOT20 tide height.
+    # MASKMLE 1.2: TRUE per-scene acquisition timestamps → EOT20 tide height.
     # Diagnostic ALWAYS computed & reported (datum honesty, charter). Physical
     # correction z_i' = z_i − (h_i − h_ref) applied ONLY when MLE_TIDE_CORRECT=1
     # (env knob default OFF), with h_ref = scene-set MEDIAN tide, α_apply = 1.0
@@ -10644,12 +11216,12 @@ def _run_s2_mle(bbox, year=2024, n_scenes=5, max_cloud=20,
                f"MLE_TIDE_CORRECT={int(tide_correct)})")
 
     # ══════════════════════════════════════════════════════════════════════
-    # Shared-calibration-field (MLE_SHARED_CAL, default OFF). Fit
+    # MASKMLE 3.2: shared-calibration-field (MLE_SHARED_CAL, default OFF). Fit
     # Stage B ONCE on the tide-corrected kept-scene composite, apply identically
-    # to every scene, removing per-scene calibration-field jitter. Tide term is
+    # to every scene → kills per-scene calibration-field jitter. Tide term is
     # MANDATORY here (regime-scoped: under a shared field nothing absorbs the
-    # inter-scene tide spread — the per-scene regime instead lets isotonic
-    # absorb it, α≈0.04). Runs BEFORE any inter-scene statistic.
+    # inter-scene tide spread; the R1 kill was for the PER-SCENE regime where
+    # isotonic already absorbed α≈0.04). Runs BEFORE any inter-scene statistic.
     # ══════════════════════════════════════════════════════════════════════
     shared_cal_info = {"applied": False, "reason": ("disabled"
                        if not shared_cal else None)}
@@ -10667,17 +11239,92 @@ def _run_s2_mle(bbox, year=2024, n_scenes=5, max_cloud=20,
             L.exception("MLE shared-cal failed")
             shared_cal_info = {"applied": False, "reason": f"error: {_scx}"}
 
-    # ── Per-pixel inverse-variance MLE ──
+    # ── AI_METHOD_LOG R1/R2: deep per-pixel σ (broadcast-shape mode) ──
+    # Default MLE_DEEP_PER_SCENE=0 trains the deep head on ONE scene; broadcast
+    # its σ-SHAPE (down-weighting map) to the other scenes, scaled by each
+    # scene's scalar RMSE, ONLY IF that scene's gate actually adopted the CNN
+    # (w_cnn>0). If the gate rejected the CNN, no scene gets sigma_px → the MLE
+    # is byte-identical to the scalar path (never-worse floor holds).
+    ai_sigma_stats = None
+    # A scene that TRAINED the deep head (gate present) — surfaces the honest
+    # diagnostic even when the gate REJECTS the CNN (adopted=False).
+    _trained_g = next((g for g in grids if g.get('deep_gate')), None)
+    # A scene the gate ADOPTED (w_cnn>0) — governs the σ-shape broadcast.
+    _ref_g = next((g for g in grids
+                   if g.get('sigma_px') is not None
+                   and (g.get('deep_gate') or {}).get('w_cnn', 0) > 0), None)
+    if _ref_g is None:
+        # gate rejected the CNN on every trained scene → strip any broadcastable
+        # σ so the fusion stays on the exact scalar path (never-worse floor).
+        for g in grids:
+            g['sigma_px'] = None
+            g['depth_blend'] = None
+    elif not deep_per_scene:
+        _ref_sig = _ref_g['sigma_px'].astype(np.float64)
+        _ref_scalar = float(_ref_g['sigma'])
+        for g in grids:
+            if g.get('sigma_px') is None:
+                try:
+                    scale = float(g['sigma']) / max(_ref_scalar, 1e-6)
+                    g['sigma_px'] = np.clip(_ref_sig * scale, 0.5, 5.0).astype(np.float32)
+                except Exception:
+                    g['sigma_px'] = None
+    if _trained_g is not None:
+        _gates = [g.get('deep_gate') for g in grids if g.get('deep_gate')]
+        _dg = _trained_g.get('deep_gate') or {}
+        ai_sigma_stats = {
+            "enabled": True,
+            "adopted": bool(_ref_g is not None),
+            "per_scene": deep_per_scene,
+            "stratified": _dg.get('stratified'),
+            "per_band": _dg.get('per_band'),
+            "gate": ("depth-stratified ≥500m block, per-band inverse-var convex blend"
+                     if _dg.get('stratified')
+                     else "spatial-block ≥500m (KMeans), inverse-var convex blend"),
+            "coverage95": _dg.get('coverage95'),
+            "coverage95_before": _dg.get('coverage95_before'),
+            "temperature_k": _dg.get('temperature_k'),
+            "spearman_sigma_abserr": _dg.get('spearman_sigma_abserr'),
+            "n_gate": _dg.get('n_gate'),
+            "n_train_deep": _dg.get('n_train_deep'),
+            "sigma_px_median": _dg.get('sigma_px_median'),
+            "sigma_px_spatial_std": _dg.get('sigma_px_spatial_std'),
+            "cnn_r2_random_holdout": _dg.get('cnn_r2_random_holdout'),
+            "w_cnn_scenes": [round((g.get('deep_gate') or {}).get('w_cnn', 0.0), 4)
+                             for g in _gates],
+            "rmse_lin_scenes": [(g or {}).get('rmse_lin') for g in _gates],
+            "rmse_cnn_scenes": [(g or {}).get('rmse_cnn') for g in _gates],
+            "scenes_blended": int(sum(1 for g in grids
+                                      if g.get('depth_blend') is not None)),
+        }
+
+    # ── Per-pixel inverse-variance MLE (per-pixel σ when deep is active) ──
     num = np.zeros((H, W), dtype=np.float64)
     den = np.zeros((H, W), dtype=np.float64)
     valid_count = np.zeros((H, W), dtype=np.int8)
     for g in grids:
-        di = g['depth']; wi = g['water']
+        di = g.get('depth_blend') if g.get('depth_blend') is not None else g['depth']
+        wi = g['water']
         ok = wi & np.isfinite(di) & (di > 0)
-        s2_inv = 1.0 / (g['sigma'] ** 2)
-        num[ok] += di[ok] * s2_inv
-        den[ok] += s2_inv
-        valid_count[ok] += 1
+        spx = g.get('sigma_px')
+        if spx is not None:
+            sig = np.clip(np.asarray(spx, dtype=np.float64), 0.5, 5.0)
+            good = ok & np.isfinite(sig) & (sig > 0)
+            inv = 1.0 / (sig[good] ** 2)
+            num[good] += di[good] * inv
+            den[good] += inv
+            valid_count[good] += 1
+            # pixels with valid depth but no finite σ → fall back to scalar σ
+            fb = ok & ~(np.isfinite(sig) & (sig > 0))
+            s2_inv = 1.0 / (g['sigma'] ** 2)
+            num[fb] += di[fb] * s2_inv
+            den[fb] += s2_inv
+            valid_count[fb] += 1
+        else:
+            s2_inv = 1.0 / (g['sigma'] ** 2)
+            num[ok] += di[ok] * s2_inv
+            den[ok] += s2_inv
+            valid_count[ok] += 1
     finite = den > 0
     z_mle = np.full((H, W), np.nan, dtype=np.float32)
     z_mle[finite] = (num[finite] / den[finite]).astype(np.float32)
@@ -10766,7 +11413,7 @@ def _run_s2_mle(bbox, year=2024, n_scenes=5, max_cloud=20,
         med_inter_mad = (float(np.nanmedian(across_mad[multi]))
                          if multi.any() else float('nan'))
 
- # ── Consistency gate (relative × mult with a physical floor) ──
+        # ── Consistency gate (MASKMLE 2.2: relative × mult with a physical floor) ──
         # thresh = max(SIGMA_MULT × median_σ, SIGMA_FLOOR_M). The floor stops the
         # dimensionless 2×median from flagging sub-noise 9-cm wiggles as "unstable"
         # on very-stable shallow banks (bu_tinah median σ ≈ 0.047 m → 2×median =
@@ -10850,12 +11497,12 @@ def _run_s2_mle(bbox, year=2024, n_scenes=5, max_cloud=20,
                 'outlier': outlier,
                 'outlier_reason': outlier_reason,
                 'geotiff_url': f"/downloads/{stab_id}_scene_{g['date']}.tif",
- # TRUE timestamps + EOT20 tide (always reported)
+                # MASKMLE 1.2a/1.2b — TRUE timestamps + EOT20 tide (always reported)
                 'acquisition_datetimes': g.get('acquisition_datetimes'),
                 'n_acquisitions': int(g.get('n_acq', 0)),
                 'tide_m': (round(g['tide_m'], 4) if g.get('tide_m') is not None else None),
                 'tide_shift_applied_m': g.get('tide_shift_applied_m'),
- # physical QC
+                # MASKMLE 1.3 — physical QC
                 'glint_proxy_nir': qc.get('glint_proxy_nir'),
                 'turbidity_fnu': qc.get('turbidity_fnu'),
             }
@@ -10964,11 +11611,11 @@ def _run_s2_mle(bbox, year=2024, n_scenes=5, max_cloud=20,
             'internal_consistency_max_err_m': round(max_recon_err, 6),
             'per_scene': scene_table,
             'pairwise_median_abs_diff': pair_absdiff,
- # per-scene EOT20 tide diagnostic + correction state
+            # MASKMLE 1.2 — per-scene EOT20 tide diagnostic + correction state
             'tide': tide_info,
- # best-N-of-M physical-QC scene screening
+            # MASKMLE 2.3 — best-N-of-M physical-QC scene screening
             'screening': screening,
- # shared-calibration-field package state + α diagnostic
+            # MASKMLE 3.2 — shared-calibration-field package state + α diagnostic
             'shared_cal': shared_cal_info,
         }
         with open(dl_dir / jn, 'w') as fh:
@@ -10988,9 +11635,31 @@ def _run_s2_mle(bbox, year=2024, n_scenes=5, max_cloud=20,
         L.exception(f"MLE stability report failed ({_ex})")
         stability = {'error': str(_ex)}
 
-    # ── Render PNGs ──
-    raster_b64, raster_bounds, _ = depth_to_raster_png(z_mle, bbox,
-                                                       water_mask=union_water)
+    # ══════════════════════════════════════════════════════════════════════
+    # PRO σ-QA — "remove the ones with sigma very far" (user headline ask).
+    # Mask (→NaN) composite pixels whose posterior σ (inverse-variance MLE σ,
+    # inflated in quadrature by inter-scene instability above) is an outlier:
+    # hard cap ``sigma_max_m`` if given, else robust median+k·MAD (k=sigma_reject_k).
+    # Reported honestly in ml_stats.uncertainty; validation RMSE is NOT re-shrunk.
+    # ══════════════════════════════════════════════════════════════════════
+    z_mle, uq = _apply_sigma_qa(z_mle, sigma_mle,
+                                sigma_max_m=sigma_max_m,
+                                sigma_reject_k=float(sigma_reject_k))
+    # scenes dropped by the physical-QC screening (glint/turbidity) above
+    uq['scenes_rejected'] = int((screening.get('n_candidates') or len(grids)) - len(grids))
+    uq['sigma_reject_k'] = float(sigma_reject_k)
+    L.info(f"MLE σ-QA: σ_max_used={uq['sigma_max_used']} m, masked "
+           f"{uq['pixels_masked_highsigma']} px, retained {uq['frac_retained']}, "
+           f"scenes_rejected={uq['scenes_rejected']}")
+
+    # ── Result store for interactive /api/recolor + seed min/max ──
+    _rid, _auto_min, _auto_max = _store_recolor_result(z_mle, bbox, water_mask=union_water)
+
+    # ── Render PNGs (explicit min/max so the returned raster matches the
+    #    reported raster_min/max the UI seeds its colorbar inputs from) ──
+    raster_b64, raster_bounds, _ = depth_to_raster_png(
+        z_mle, bbox, water_mask=union_water,
+        max_depth=_auto_max, min_depth=_auto_min)
     # Uncertainty PNG — yellow→red colour ramp on σ in [0, 3] m
     uncert_b64 = None
     try:
@@ -11070,7 +11739,18 @@ def _run_s2_mle(bbox, year=2024, n_scenes=5, max_cloud=20,
             'mean_sigma_m': bathy_stats['mean_sigma'],
             'sources': [], 'importance': {},
             'r2': None, 'rmse': None,
+            # PRO σ-QA report (user ask #2)
+            'uncertainty': uq,
+            # AI_METHOD_LOG R1/R3: learned per-pixel σ diagnostics (None unless
+            # MLE_DEEP_SIGMA=1 AND the ≥500 m spatial-block gate adopted the CNN).
+            'ai_sigma': ai_sigma_stats,
         },
+        # Interactive colorbar recolor (user ask #3): id + auto-seed min/max
+        'result_id': _rid,
+        'raster_min_depth': round(float(_auto_min), 3),
+        'raster_max_depth': round(float(_auto_max), 3),
+        'raster_auto_min': round(float(_auto_min), 3),
+        'raster_auto_max': round(float(_auto_max), 3),
         'augmentation': {
             'mle_scenes': [{'date': g['date'], 'sigma_m': round(g['sigma'], 2),
                             'mean_depth_m': g.get('mean_depth')}
@@ -11139,8 +11819,9 @@ def _run_s2_mle(bbox, year=2024, n_scenes=5, max_cloud=20,
 def api_very_hr_mle():
     """Multi-scene MLE bathymetry over a calendar year.
 
-    Body: {bbox:{west,south,east,north}, year:2024, n_scenes:3|5|7,
-           max_cloud:20, user_points:[]}
+    Body: {bbox:{west,south,east,north}, year:2024, n_scenes:2..12 (default 10),
+           max_cloud:20, user_points:[],
+           sigma_reject_k:3.0 (σ-QA strictness) | sigma_max_m:<hard cap m>}
     """
     if not LS_AVAILABLE:
         return jsonify({'error': 'Lyzenga module unavailable'}), 500
@@ -11154,14 +11835,29 @@ def api_very_hr_mle():
         if cap is not None:
             return cap
         year = int(data.get('year', 2024))
-        n_scenes = int(data.get('n_scenes', 5))
-        if n_scenes not in (3, 5, 7):
-            n_scenes = 5
+        # Ceiling raised to 12 (was restricted to {3,5,7}); default is the
+        # accurate many-image tier. _run_s2_mle re-clamps to [1,12] internally.
+        try:
+            n_scenes = int(data.get('n_scenes', 10))
+        except (TypeError, ValueError):
+            n_scenes = 10
+        n_scenes = max(2, min(12, n_scenes))
+        # PRO σ-QA controls (user ask #2)
+        try:
+            sigma_reject_k = float(data.get('sigma_reject_k', 3.0))
+        except (TypeError, ValueError):
+            sigma_reject_k = 3.0
+        _smx = data.get('sigma_max_m')
+        try:
+            sigma_max_m = float(_smx) if _smx is not None else None
+        except (TypeError, ValueError):
+            sigma_max_m = None
         result = _run_s2_mle(
             bbox, year=year, n_scenes=n_scenes,
             max_cloud=int(data.get('max_cloud', 20)),
             user_pts=data.get('user_points', []) or [],
             fetch_sliderule=bool(data.get('use_sliderule', False)),
+            sigma_reject_k=sigma_reject_k, sigma_max_m=sigma_max_m,
         )
         return jsonify(_json_safe(result))
     except Exception as ex:
@@ -11278,10 +11974,6 @@ def api_sdb_pro():
             user_pts=data.get('user_points', []) or [],
             max_cloud=int(data.get('max_cloud', 20)),
             fetch_sliderule=bool(data.get('use_sliderule', False)),
-            # Service-to-service callers (no proxy size limit) can ask for the
-            # georeferenced product inline instead of a second /geotiff run.
-            include_geotiff=bool(data.get('include_geotiff', False)),
-            res_override=data.get('resolution_m'),
         )
         return jsonify(_json_safe(result))
     except Exception as ex:
@@ -11366,9 +12058,6 @@ def api_very_hr_clustered():
                     max_cloud=int(data.get('max_cloud', 20)),
                     fetch_sliderule=bool(data.get('aug_use_sliderule', False)),
                     res_override=user_res,
-                    # Service-to-service callers ingest the depth product
-                    # directly from this response (no proxy size limit).
-                    include_geotiff=bool(data.get('include_geotiff', False)),
                 )
                 fast['imagery_source'] = imagery_source
                 fast['site'] = site_key
@@ -13822,7 +14511,7 @@ def fetch_s2_gee(bbox, sd, ed, res=20, cloud=25):
     if n_scn == 0:
         raise RuntimeError(f"GEE: no S2 scenes for {sd}→{ed} cloud<{cloud}")
     L.info(f"GEE S2: {n_scn} scenes in window @cloud<{cloud}")
- # capture TRUE acquisition timestamps of the contributing
+    # MASKMLE 1.2a: capture TRUE acquisition timestamps of the contributing
     # images (system:time_start, ms UTC) so the MLE path can compute a real
     # per-scene EOT20 tide height. For a median composite EVERY cloud-filtered
     # scene contributes; for the raw top-N median only the N least-cloudy do.
@@ -13954,7 +14643,7 @@ def fetch_s2_gee(bbox, sd, ed, res=20, cloud=25):
                f"nir={float(np.median(nir_f[_wm])):.4f}  (S2_GEE_RAW={int(_gee_raw)})")
     L.info(f"GEE S2 done: {blue_dn.shape[1]}x{blue_dn.shape[0]}px  "
            f"deep-water pixels={int(np.sum(deep_water))}")
- # convert contributing timestamps to ISO-UTC. For the raw
+    # MASKMLE 1.2a: convert contributing timestamps to ISO-UTC. For the raw
     # top-N median only the N least-cloudy scenes actually contribute.
     acq_dt = None
     if _acq_ms:

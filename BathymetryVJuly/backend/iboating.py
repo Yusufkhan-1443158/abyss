@@ -27,10 +27,42 @@ SCREENSHOT_DIR.mkdir(parents=True, exist_ok=True)
 # 1. HEADLESS SCREENSHOT of i-Boating
 # ══════════════════════════════════════════════════════════════
 
+# i-Boating runs Mapbox GL JS (512-px tiles, NOT Leaflet). The Map instance is
+# closed-over by the app, so we hook mapboxgl.Map.prototype.fire from an init
+# script to capture it — the ONLY reliable way to read the true rendered
+# bounds. (Proven in run_iboating_subgrid.py::capture_tile; the old
+# viewport-math / "centered is close enough" georeferencing drifted ~1 km.)
+_MAPBOXGL_HOOK = """
+(() => {
+    const tryHook = () => {
+        if (!window.mapboxgl || !window.mapboxgl.Map) return false;
+        const proto = window.mapboxgl.Map.prototype;
+        if (proto.__hooked) return true;
+        const origFire = proto.fire;
+        proto.fire = function() {
+            if (!window.__mapboxMap) window.__mapboxMap = this;
+            return origFire.apply(this, arguments);
+        };
+        proto.__hooked = true;
+        return true;
+    };
+    if (!tryHook()) {
+        const t = setInterval(() => { if (tryHook()) clearInterval(t); }, 30);
+        setTimeout(() => clearInterval(t), 30000);
+    }
+})();
+"""
+
+
 def _capture_iboating(bbox, zoom=14, wait_sec=12, viewport=(1920, 1080)):
     """
-    Open i-Boating in headless Chromium, wait for tiles, screenshot.
-    Returns (screenshot_path, img_b64, width, height).
+    Open i-Boating in headless Chromium, jump to the ROI centre, screenshot,
+    and read the TRUE rendered bounds from Mapbox GL itself.
+
+    Returns (screenshot_path, img_b64, width, height, geo_bbox) where
+    geo_bbox = [w, s, e, n] of the pixels actually in the screenshot — use it
+    (never the requested bbox) for every pixel→lat/lon conversion. Falls back
+    to the requested bbox (logged) only if the Map instance can't be captured.
     """
     w, s, e, n = bbox
     lat_c = (n + s) / 2
@@ -64,6 +96,7 @@ def _capture_iboating(bbox, zoom=14, wait_sec=12, viewport=(1920, 1080)):
             viewport={"width": viewport[0], "height": viewport[1]},
             device_scale_factor=2,  # 2x for crisp depth numbers
         )
+        ctx.add_init_script(_MAPBOXGL_HOOK)
         page = ctx.new_page()
         page.goto(url, timeout=60000, wait_until="domcontentloaded")
         time.sleep(3)
@@ -82,35 +115,93 @@ def _capture_iboating(bbox, zoom=14, wait_sec=12, viewport=(1920, 1080)):
         except Exception:
             pass
 
-        time.sleep(max(4, wait_sec - 8))
-
-        # Fit bbox
+        # Wait for the hook to capture the Map, then force-jump to the ROI
+        # centre (the URL fragment only sets the initial view).
+        try:
+            page.wait_for_function(
+                "() => window.__mapboxMap "
+                "&& typeof window.__mapboxMap.getBounds === 'function'",
+                timeout=20000,
+            )
+        except Exception:
+            pass
         try:
             page.evaluate(f"""() => {{
-                if (window.map && window.map.fitBounds) {{
-                    window.map.fitBounds([[{s},{w}],[{n},{e}]]);
+                const m = window.__mapboxMap;
+                if (m && typeof m.jumpTo === 'function') {{
+                    m.jumpTo({{center: [{lon_c}, {lat_c}], zoom: {zoom},
+                               bearing: 0, pitch: 0}});
                 }}
             }}""")
-            time.sleep(3)
         except Exception:
             pass
 
-        time.sleep(3)
+        time.sleep(max(4, wait_sec - 8))
+        try:
+            page.wait_for_function(
+                "() => { const m = window.__mapboxMap; "
+                "return m && typeof m.areTilesLoaded === 'function' "
+                "&& m.areTilesLoaded() && !m.isMoving() && !m.isZooming(); }",
+                timeout=15000,
+            )
+        except Exception:
+            pass
+
+        # ── Single source of truth: Mapbox GL .getBounds() ──
+        mb = None
+        for _attempt in range(3):
+            try:
+                mb = page.evaluate("""() => {
+                    const m = window.__mapboxMap;
+                    if (!m || typeof m.getBounds !== 'function') return null;
+                    let b; try { b = m.getBounds(); } catch (e) { return null; }
+                    if (!b) return null;
+                    return {sw_lat: b.getSouth(), sw_lon: b.getWest(),
+                            ne_lat: b.getNorth(), ne_lon: b.getEast(),
+                            z: m.getZoom()};
+                }""")
+            except Exception:
+                mb = None
+            if mb:
+                break
+            time.sleep(1.0)
 
         ts = int(time.time())
         fname = f"iboating_{lat_c:.4f}_{lon_c:.4f}_z{zoom}_{ts}.png"
         fpath = SCREENSHOT_DIR / fname
-        page.screenshot(path=str(fpath), full_page=False)
 
-        buf = page.screenshot(full_page=False)
+        # Screenshot the Mapbox canvas only (clips UI overlays) — its pixels
+        # correspond 1:1 to getBounds(). Fall back to the full viewport.
+        buf = None
+        try:
+            buf = page.locator("canvas.mapboxgl-canvas").first.screenshot(
+                path=str(fpath), timeout=30000)
+        except Exception:
+            buf = None
+        if buf is None:
+            page.screenshot(path=str(fpath), full_page=False)
+            buf = page.screenshot(full_page=False)
+
         img_b64 = base64.b64encode(buf).decode()
-        actual_w = viewport[0] * 2
-        actual_h = viewport[1] * 2
-
         browser.close()
 
-    L.info(f"i-Boating: screenshot saved to {fpath} ({actual_w}x{actual_h})")
-    return str(fpath), img_b64, actual_w, actual_h
+    # True pixel dimensions of what we actually captured
+    try:
+        _im = Image.open(io.BytesIO(base64.b64decode(img_b64)))
+        actual_w, actual_h = _im.size
+    except Exception:
+        actual_w, actual_h = viewport[0] * 2, viewport[1] * 2
+
+    if mb:
+        geo_bbox = [mb["sw_lon"], mb["sw_lat"], mb["ne_lon"], mb["ne_lat"]]
+        L.info(f"i-Boating: {fpath} ({actual_w}x{actual_h}) "
+               f"bbox[mapbox.getBounds]={[round(v,5) for v in geo_bbox]} z={mb.get('z')}")
+    else:
+        geo_bbox = [w, s, e, n]
+        L.warning(f"i-Boating: {fpath} ({actual_w}x{actual_h}) "
+                  f"bbox[requested-FALLBACK] — Map instance not captured, "
+                  f"georeferencing may drift")
+    return str(fpath), img_b64, actual_w, actual_h, geo_bbox
 
 
 def _multi_zoom_capture(bbox, zooms=(12, 14), wait_sec=10):
@@ -124,8 +215,8 @@ def _multi_zoom_capture(bbox, zooms=(12, 14), wait_sec=10):
     for z in zooms:
         try:
             vp = (1920, 1080) if z <= 13 else (1920, 1080)
-            path, b64, w, h = _capture_iboating(bbox, zoom=z, wait_sec=wait_sec, viewport=vp)
-            captures.append((path, b64, w, h, z))
+            path, b64, w, h, geo_bbox = _capture_iboating(bbox, zoom=z, wait_sec=wait_sec, viewport=vp)
+            captures.append((path, b64, w, h, z, geo_bbox))
             L.info(f"Multi-zoom: captured z{z} ({w}x{h})")
         except Exception as ex:
             L.warning(f"Multi-zoom: z{z} failed: {ex}")
@@ -718,7 +809,7 @@ def run_iboating_pipeline(bbox, s2_data, zoom=14, train_ratio=0.8):
     # ── Step 1: Screenshot ──
     L.info("=== i-Boating Pipeline START (Professional) ===")
     try:
-        fpath, img_b64, img_w, img_h = _capture_iboating(bbox, zoom)
+        fpath, img_b64, img_w, img_h, chart_bbox = _capture_iboating(bbox, zoom)
         result["screenshot_path"] = fpath
         result["sources_used"].append(f"i-Boating screenshot z{zoom}")
     except Exception as ex:
@@ -755,7 +846,7 @@ def run_iboating_pipeline(bbox, s2_data, zoom=14, train_ratio=0.8):
         try:
             contours = _extract_isobath_contours(colour_depth, water_mask)
             ch, cw = colour_depth.shape
-            contour_pts_geo = _contours_to_geo_points(contours, bbox, ch, cw)
+            contour_pts_geo = _contours_to_geo_points(contours, chart_bbox, ch, cw)
             n_contour = len(contour_pts_geo)
             if n_contour > 0:
                 result["sources_used"].append(f"Isobaths({n_contour} pts from {len(contours)} contours)")
@@ -770,7 +861,7 @@ def run_iboating_pipeline(bbox, s2_data, zoom=14, train_ratio=0.8):
 
     # ── Step 3: Gemini extracts verified soundings ──
     L.info("Extracting verified depth soundings via Gemini...")
-    raw_pts, err = _extract_depths_from_chart(img_b64, bbox, img_w, img_h)
+    raw_pts, err = _extract_depths_from_chart(img_b64, chart_bbox, img_w, img_h)
     n_raw = len(raw_pts) if raw_pts else 0
 
     # ── Step 4: Cross-validate soundings against colour ──
@@ -802,7 +893,7 @@ def run_iboating_pipeline(bbox, s2_data, zoom=14, train_ratio=0.8):
     if raw_pts:
         geo_pts = _pixels_to_geo(
             [p for p in raw_pts if p.get("confidence", 0) > 0],
-            bbox, img_w, img_h
+            chart_bbox, img_w, img_h
         )
 
     # If we have too few sounding points, supplement with colour-raster samples
@@ -811,12 +902,13 @@ def run_iboating_pipeline(bbox, s2_data, zoom=14, train_ratio=0.8):
         fh, fw = fused_depth.shape
         step_r = max(1, fh // 15)
         step_c = max(1, fw // 15)
+        cb_w, cb_s, cb_e, cb_n = chart_bbox  # pixels ↔ TRUE rendered bounds
         for rr in range(0, fh, step_r):
             for cc in range(0, fw, step_c):
                 if not np.isfinite(fused_depth[rr, cc]):
                     continue
-                lat = n - (rr / fh) * (n - s)
-                lon = w + (cc / fw) * (e - w)
+                lat = cb_n - (rr / fh) * (cb_n - cb_s)
+                lon = cb_w + (cc / fw) * (cb_e - cb_w)
                 geo_pts.append({
                     "lat": round(lat, 6), "lon": round(lon, 6),
                     "depth": round(float(fused_depth[rr, cc]), 2),

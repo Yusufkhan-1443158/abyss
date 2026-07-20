@@ -3,12 +3,13 @@ coast_refine.py — MASK1M "CoastBA+": tide-aware dual-reference (Mapbox + Esri)
 block adjustment of the OSMCoastline MHW prior, with erf-PSF sub-pixel
 waterline localization, for a precise coastline REFINEMENT product.
 
-This module is OFFLINE / CLI (`python -m backend.coast_refine ...`); the only
-serve-time hook is `refined_coastline_land_for()` in `backend/osm_land_mask.py`
-(MASK-7) which reads the small GPKG this module writes.
+Spec: MASK1M_SPEC.md (panel-adopted CoastBA design, 2026-07-09). This module
+is OFFLINE / CLI (`python -m backend.coast_refine ...`); the only serve-time
+hook is `refined_coastline_land_for()` in `backend/osm_land_mask.py` (MASK-7,
+Milestone B) which reads the small GPKG this module writes.
 
-Binding constraints (known dead ends, do not re-attempt): NO full
-`refine_water_mask()` re-segmentation on served certified
+Binding constraints inherited from MASKMLE_LOOP_LOG.md's kill-list (do not
+reopen): NO full `refine_water_mask()` re-segmentation on served certified
 rasters (additive veto only, see MASK-8); NO 3-component GMM; NO shared-cal
 tide package; NO feature-COUNT floor; NO stability-metric tuning; NO
 per-scene MLE tide correction. This module never touches

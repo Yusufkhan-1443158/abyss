@@ -199,8 +199,10 @@ def run_core_engine(engine: str, bbox, start_date: str, end_date: str,
         endpoint = "/api/very-hr-clustered"
     elif engine == CORE_ENGINE_MLE:
         year = int((end_date or "2024")[:4])
-        ns = int(n_scenes or 5)
-        ns = min((3, 5, 7), key=lambda k: abs(k - ns))  # platform accepts 3/5/7
+        ns = int(n_scenes or 0)
+        # Platform accepts 2..12; <2 (single-scene UI default) means "use the
+        # platform's accurate many-image tier" = 10.
+        ns = 10 if ns < 2 else min(12, ns)
         body = {"bbox": bd, "year": year, "n_scenes": ns,
                 "max_cloud": int(max_cloud)}
         r = _post("/api/very-hr-mle", body, _TIMEOUT_MLE)

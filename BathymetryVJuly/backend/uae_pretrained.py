@@ -163,14 +163,11 @@ class UAEModel:
 # ────────────────────────────────────────────────────────────────────
 def fit_uae_model(features: np.ndarray, depths: np.ndarray,
                   n_clusters: int = 6, rf_n_estimators: int = 120,
-                  rf_max_depth: int = 14, seed: int = 42,
-                  sample_weight: np.ndarray = None) -> UAEModel:
+                  rf_max_depth: int = 14, seed: int = 42) -> UAEModel:
     """Fit StandardScaler → KMeans → per-cluster RandomForest.
 
     features: (n, N_FEATURES) float32
     depths:   (n,)            float32, in metres, > 0
-    sample_weight: (n,) float32, optional — source-quality weighting
-    (TRAIN-R2/R8: ATL24 > in-situ XYZ > i-Boating OCR).
     """
     from sklearn.cluster import KMeans
     from sklearn.ensemble import RandomForestRegressor
@@ -182,7 +179,6 @@ def fit_uae_model(features: np.ndarray, depths: np.ndarray,
     finite = np.all(np.isfinite(features), axis=1) & np.isfinite(depths) & (depths > 0)
     X = features[finite]
     y = depths[finite].astype(np.float32)
-    sw = sample_weight[finite].astype(np.float32) if sample_weight is not None else None
     if len(y) < n_clusters * 50:
         raise RuntimeError(f"Too few training points: {len(y)}")
     L.info(f"UAE training: {len(y):,} pts, {n_clusters} clusters, "
@@ -202,12 +198,11 @@ def fit_uae_model(features: np.ndarray, depths: np.ndarray,
             L.warning(f"  cluster {c}: only {int(m.sum())} pts — skip")
             continue
         Xc, yc = Xs[m], y[m]
-        swc = sw[m] if sw is not None else None
         rf = RandomForestRegressor(
             n_estimators=rf_n_estimators, max_depth=rf_max_depth,
             min_samples_leaf=4, n_jobs=-1, random_state=seed,
         )
-        rf.fit(Xc, yc, sample_weight=swc)
+        rf.fit(Xc, yc)
         pred = rf.predict(Xc)
         r2 = float(r2_score(yc, pred))
         rmse = float(np.sqrt(mean_squared_error(yc, pred)))
@@ -250,14 +245,11 @@ def fit_uae_model(features: np.ndarray, depths: np.ndarray,
 
 
 def save_model(model: UAEModel, path: Path = DEFAULT_MODEL_PATH) -> Path:
-    # gzip-compressed pickle — sklearn tree pickles compress ~3-4x (TRAIN-R2
-    # pkl bloat concern, coordinator-flagged 49.7 MB baseline).
-    import gzip
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    with gzip.open(path, "wb", compresslevel=6) as fh:
+    with open(path, "wb") as fh:
         pickle.dump(model, fh, protocol=pickle.HIGHEST_PROTOCOL)
-    L.info(f"UAE model saved to {path} ({path.stat().st_size / 1024:.0f} KB, gzip)")
+    L.info(f"UAE model saved to {path} ({path.stat().st_size / 1024:.0f} KB)")
     return path
 
 
@@ -275,11 +267,7 @@ def load_model(path: Path = DEFAULT_MODEL_PATH,
     if _CACHED_MODEL is not None and _CACHED_PATH == path and not force_reload:
         return _CACHED_MODEL
     try:
-        import gzip
         with open(path, "rb") as fh:
-            magic = fh.read(2)
-        opener = gzip.open if magic == b"\x1f\x8b" else open
-        with opener(path, "rb") as fh:
             model = pickle.load(fh)
         if not isinstance(model, UAEModel):
             L.warning(f"UAE model at {path} is not a UAEModel instance")

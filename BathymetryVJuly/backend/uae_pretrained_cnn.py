@@ -317,65 +317,6 @@ def fit_uae_cnn(features: np.ndarray, depths: np.ndarray,
                        cluster_nets=cluster_nets, meta=meta)
 
 
-def fit_uae_cnn_warmstart(prior_model: UAECNNModel, features: np.ndarray,
-                          depths: np.ndarray, source_weights: Optional[np.ndarray] = None,
-                          n_epochs: int = 40, lr: float = 2e-4,
-                          device: str = 'cpu') -> UAECNNModel:
-    """TRAIN-R6 — cross-version warm-start retrain (persisted to disk, unlike
-    UAECNNModel.fine_tune which is a per-request in-memory nudge, reset every
-    call). Reuses prior_model.scaler/kmeans UNCHANGED (refitting KMeans would
-    silently renumber clusters and break version continuity)."""
-    if not TORCH_AVAILABLE:
-        raise RuntimeError("PyTorch not available")
-    X = np.asarray(features, dtype=np.float32)
-    y = np.asarray(depths, dtype=np.float32)
-    w = (np.ones_like(y) if source_weights is None
-         else np.asarray(source_weights, dtype=np.float32))
-    finite = np.all(np.isfinite(X), axis=1) & np.isfinite(y) & (y > 0)
-    X, y, w = X[finite], y[finite], w[finite]
-
-    Xs = prior_model.scaler.transform(X)
-    # Guard against pathological single-pixel feature outliers (band-ratio
-    # near-zero-denominator spikes seen in practice, e.g. scaled values in
-    # the millions) that would otherwise blow up gradients on a warm-started
-    # net at low LR — clip to a generous but bounded range.
-    Xs = np.clip(Xs, -10.0, 10.0)
-    clusters = prior_model.kmeans.predict(Xs)
-    prior_model._rebuild_nets()
-
-    new_cluster_nets = dict(prior_model.cluster_nets)
-    per_cluster_metrics = dict(prior_model.meta.get("per_cluster", {}))
-    for c, prior_net in prior_model._live.items():
-        m = clusters == c
-        if int(m.sum()) < 30:
-            continue
-        net, info = _train_one(prior_net, Xs[m], y[m], w[m],
-                               epochs=n_epochs, lr=lr, device=device, seed=42 + c)
-        new_cluster_nets[c] = {
-            'state_dict': {k: v.cpu() for k, v in net.state_dict().items()},
-            'in_dim': Xs.shape[1],
-        }
-        per_cluster_metrics[c] = {
-            "n": int(m.sum()),
-            "depth_range_m": [float(y[m].min()), float(y[m].max())],
-            "depth_mean_m": float(y[m].mean()),
-            "val_rmse_m": round(info['val_rmse'], 3),
-            "val_bias_m": round(info['val_bias'], 3),
-            "val_r2": round(info['val_r2'], 4),
-            "train_rmse_m": round(info['train_rmse'], 3),
-            "epochs": info['epochs'],
-        }
-        L.info(f"  warmstart cluster {c}: n={int(m.sum()):,} "
-               f"val RMSE={info['val_rmse']:.2f}m R²={info['val_r2']:.3f}")
-
-    meta = dict(prior_model.meta)
-    meta["per_cluster"] = per_cluster_metrics
-    meta["warmstart_from"] = prior_model.meta.get("version")
-    meta["trained_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-    return UAECNNModel(scaler=prior_model.scaler, kmeans=prior_model.kmeans,
-                       cluster_nets=new_cluster_nets, meta=meta)
-
-
 def save_model(model: UAECNNModel, path: Path = DEFAULT_MODEL_PATH) -> Path:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)

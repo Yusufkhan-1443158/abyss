@@ -19,7 +19,7 @@ water-mass mixing, tidal circulation, and the S2 PSF (10 m GSD, MTF ~300 m 50 %-
 response).  A random per-pixel train/test split places test pixels inside the
 neighbourhood of training pixels, inflating R² and deflating RMSE by 0.3–1.3 m
 relative to a true out-of-area generalisation (empirically measured in the UAE SDB
-pipeline).
+pipeline, CLAUDE.md §"Critical gotchas").
 
 Spatial blocking assigns geographically contiguous groups of points to the same
 fold so that the minimum distance between any test point and any training point is

@@ -9,7 +9,7 @@
 #   error_distribution_plots(pred, truth, out_path=Path("results/error_plots"))
 #
 # The depth-band boundaries (0,2,5,10,inf) map to the IHO Order Special / 1a / 1b /
-# lower-order CATZOC zones used in the evaluation contract.
+# lower-order CATZOC zones used in the evaluation contract (see OPTIMIZE_ORCHESTRATOR.md).
 """
 Depth-stratified error metrics for Satellite-Derived Bathymetry validation.
 

@@ -6,7 +6,7 @@ INTEGRATION:
   - Wraps `backend/icesat2_bathy.process_granule` (ICESat-2 photon extraction)
     and the CNN predict loop in `backend/sdb_cnn_baseline.py` / `backend/unet_sdb.py`
     by providing the IO scaffolding (windowed reading, parallel dispatch, structured logs).
-  - Wired into the live pipeline via `backend/sdb_optim/integration.py`.
+  - The orchestrator wires this into the live pipeline after all tracks land.
 
 Usage (Python API)
 ------------------

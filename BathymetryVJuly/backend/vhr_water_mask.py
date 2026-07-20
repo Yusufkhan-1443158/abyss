@@ -66,13 +66,13 @@ def _osm_on() -> bool:
 
 
 def _blue_reclaim_on() -> bool:
- # Blue-water-index reclaim of GMM-"land" px . Default ON;
+    # Blue-water-index reclaim of GMM-"land" px (MASKMLE item 2.1). Default ON;
     # monotone (can only ADD water), OSM_land veto stays authoritative after it.
     return os.environ.get("VHR_BLUE_RECLAIM", "1") == "1"
 
 
 def _coastline_on() -> bool:
- # globally-complete OSMCoastline land-polygons as PRIMARY OSM_land
+    # MASKMLE R6 — globally-complete OSMCoastline land-polygons as PRIMARY OSM_land
     # source (crisp coast EVERYWHERE). Default ON; graceful fallback to feature-land
     # (osmnx) if the cached split file / regional GPKG is absent.
     return os.environ.get("VHR_OSM_COASTLINE", "1") == "1"
@@ -113,7 +113,7 @@ def _blue_reclaim_thresh() -> float:
 
 
 def _osm_recall_floor() -> float:
- # FROZEN OSM-land-recall floor for the coverage confidence gate.
+    # MASKMLE R5 item 5.1 — FROZEN OSM-land-recall floor for the coverage confidence gate.
     # Picked from the visible histogram GAP across the 13-ROI probe (see RESPONSE 5): the
     # developed/mapped coasts (khalifa, hudayriyat) sit high; the under-mapped coasts
     # (oualidia, dakhla) sit low, with a clean empty band between. FROZEN at 0.55 — this is
@@ -215,7 +215,7 @@ def segment_water_land(rgb, prior_water=None, min_object_frac=2e-4,
     prob[~valid] = 0.0
     water_flat = (prob >= 0.5)
 
- # ── Blue-water-index reclaim ───────────────────────────
+    # ── Blue-water-index reclaim (MASKMLE item 2.1) ───────────────────────────
     # The 2-component GMM over-masks bright shallow banks: forced into 2 endmembers
     # on a genuinely 1-class (all-blue) crop, it splits water into bright-bank vs
     # dark-channel and mislabels one. Reclaim GMM-"land" px that ARE physically
@@ -260,7 +260,7 @@ def segment_water_land(rgb, prior_water=None, min_object_frac=2e-4,
     prob = prob.reshape(H, W)
     prob[~water & (prob >= 0.5)] = 0.49
 
- # ── unambiguous-subtidal VHR mask (blue-water index ≥ 0.3) ────
+    # ── MASKMLE 3.1: unambiguous-subtidal VHR mask (blue-water index ≥ 0.3) ────
     # The frozen R2/R3 physical criterion: (B-R)/(B+R) ≥ 0.3 ⇔ ≳0.3-0.5 m of
     # standing water over carbonate sand (two-way red absorption). Aggregated to
     # the product grid this is the "subtidal_cell" denominator for
@@ -279,12 +279,12 @@ def segment_water_land(rgb, prior_water=None, min_object_frac=2e-4,
         "valid_frac": float(valid.mean()),
         "min_object_px": int(min_px), "fill_hole_px": int(hole_px),
         "n_fit_px": int(fit_idx.size),
- # blue-water reclaim audit trail
+        # MASKMLE 2.1 blue-water reclaim audit trail
         "blue_reclaim_on": _blue_reclaim_on(),
         "blue_reclaim_thresh": thr_bw,
         "reclaimed_px": int(reclaimed_px),
         "reclaim_frac": round(reclaim_frac, 5),
- # fraction of valid VHR px that are unambiguous-subtidal water
+        # MASKMLE 3.1: fraction of valid VHR px that are unambiguous-subtidal water
         "subtidal_frac_vhr": round(float(subtidal_vhr[valid.reshape(H, W)].mean())
                                    if valid.any() else 0.0, 5),
     }
@@ -417,7 +417,7 @@ def _frac_to_grid_geo(vhr_bool, out_H, out_W, src_bbox, dst_bbox):
 
 def _osm_coverage(ai_water, osm_land, osm_water, crop_bbox, land_info, water_info,
                   coastline_land=None, coastline_info=None):
-    """OSM-coverage confidence gate.
+    """MASKMLE R5 item 5.1 / R6 item 6.2 — OSM-coverage confidence gate.
 
     ``ai_water`` is the GMM+blue-reclaim water mask at VHR resolution BEFORE the OSM
     override (so AI-land = ~ai_water is what the imagery independently found).
@@ -477,7 +477,7 @@ def _osm_coverage(ai_water, osm_land, osm_water, crop_bbox, land_info, water_inf
 
     floor = _osm_recall_floor()
 
- # ── coastline-based coverage ────────────────────────
+    # ── MASKMLE R6 item 6.2: coastline-based coverage ────────────────────────
     # With the globally-complete OSMCoastline land-polygons unioned into `osm_land`,
     # the coast is authoritatively resolved EVERYWHERE the split file has a tile.
     # `coastline_available` = the cached file was read (source ok), even if 0 polys
@@ -555,12 +555,12 @@ def _cache_key(bbox, out_H, out_W, zoom, thresh):
     # v2: OSM-hybrid symmetric rule + georeferenced transfer (item 1.1) changes the
     # produced mask, so the tag busts pre-OSM cached water_frac npz files.
     osm_tag = "osm1" if _osm_on() else "osm0"
- # v3 : blue-water reclaim changes the produced mask → bust cache.
+    # v3 (MASKMLE 2.1): blue-water reclaim changes the produced mask → bust cache.
     bw_tag = "bw1" if _blue_reclaim_on() else "bw0"
- # v4 : subtidal-cell + osm_land_frac now persisted in the npz.
- # v5 : osm_coverage_class/recall now persisted in osm_json → bump so
+    # v4 (MASKMLE 3.1): subtidal-cell + osm_land_frac now persisted in the npz.
+    # v5 (MASKMLE 5.1): osm_coverage_class/recall now persisted in osm_json → bump so
     # pre-R5 caches (no coverage fields) recompute rather than emit a stale bare label.
- # v6 : OSMCoastline global land-polygons unioned into OSM_land →
+    # v6 (MASKMLE R6): OSMCoastline global land-polygons unioned into OSM_land →
     # changes the produced mask + coverage class → bust pre-R6 caches.
     # v7 (MASK1M): connected-component port-land veto + MASK-7 refined-coastline
     # union both change the produced mask (Khalifa port-land leak fix) → bust
@@ -612,7 +612,7 @@ def vhr_water_grid(bbox, out_H, out_W, prior_water=None,
                 meta["seg"] = {"reclaimed_px": int(z["reclaimed_px"]),
                                "reclaim_frac": float(z["reclaim_frac"])}
             water = wf >= thresh
- # subtidal cell mask (cached blue≥0.3 fraction, 0.5 majority)
+            # MASKMLE 3.1: subtidal cell mask (cached blue≥0.3 fraction, 0.5 majority)
             subtidal_cell = None
             if "subtidal_frac" in z.files:
                 subtidal_cell = z["subtidal_frac"].astype(np.float32) >= 0.5
@@ -688,7 +688,7 @@ def vhr_water_grid(bbox, out_H, out_W, prior_water=None,
             vhr_shape = vhr_water.shape
             feature_land, land_info = osm_land_for(crop_bbox, vhr_shape)
             osm_water, water_info = osm_water_for(crop_bbox, vhr_shape)
- # ── /6.2: globally-complete OSMCoastline land-polygons
+            # ── MASKMLE R6 item 6.1/6.2: globally-complete OSMCoastline land-polygons
             # as the PRIMARY authoritative land source (crisp coast EVERYWHERE, coverage-
             # independent). OSM_land = coastline_land ∪ feature_land — coastline snaps the
             # coarse outer edge; the feature polygons + ~1 m VHR GMM add sub-coastline
@@ -747,7 +747,7 @@ def vhr_water_grid(bbox, out_H, out_W, prior_water=None,
                 "osm_land_live": bool(land_info.get("live", False)),
                 "osm_water_live": bool(water_info.get("live", False)),
                 "osm_land_age_days": land_info.get("age_days"),
- # coastline provenance (datum ≈ MHW, few-metre, not LAT)
+                # MASKMLE R6 — coastline provenance (datum ≈ MHW, few-metre, not LAT)
                 "coastline_source": coast_info.get("source"),
                 "coastline_vintage": coast_info.get("vintage"),
                 "coastline_n_polys": coast_info.get("n_polys"),
@@ -786,7 +786,7 @@ def vhr_water_grid(bbox, out_H, out_W, prior_water=None,
     # from its own crop_bbox affine to the product bbox affine (average), NOT a
     # co-registered BOX resize that assumes crop_bbox == product bbox.
     water_frac = _frac_to_grid_geo(vhr_water, out_H, out_W, crop_bbox, bbox)
- # subtidal (blue≥0.3) VHR mask → product grid, same aggregation
+    # MASKMLE 3.1: subtidal (blue≥0.3) VHR mask → product grid, same aggregation
     # (Resampling.average) → 0.5 majority = subtidal_cell. This is the
     # retention_subtidal denominator component (S2-water ∧ subtidal_cell).
     subtidal_frac = _frac_to_grid_geo(subtidal_vhr, out_H, out_W, crop_bbox, bbox)
@@ -863,7 +863,7 @@ def refine_water_mask(bbox, s2_water, out_H, out_W, water_frac_thresh=None,
     seg = (res["meta"].get("seg") or {})
     osm_applied = bool(osm.get("osm_applied"))
     osm_source = osm.get("osm_source", "unavailable")
- # ── coverage-aware HONEST mask_source ────────────────
+    # ── MASKMLE R5 item 5.2: coverage-aware HONEST mask_source ────────────────
     # Never emit a bare, clean "VHR+OSM+S2" when the OSM evidence is thin. The
     # coverage class (5.1) drives the label + a low_confidence flag for the UI.
     cov_class = osm.get("osm_coverage_class")
@@ -882,7 +882,7 @@ def refine_water_mask(bbox, s2_water, out_H, out_W, water_frac_thresh=None,
     refined_applied = bool((osm.get("refined_coastline") or {}).get("applied"))
     coast_label = "OSM-coast(refined)" if refined_applied else "OSM-coast"
     if cov_class == "rich" and coverage_basis == "coastline":
- # the crisp-coast claim is now TRUE (globally-complete coastline).
+        # MASKMLE R6 — the crisp-coast claim is now TRUE (globally-complete coastline).
         vtxt = f", vintage {coast_vintage}" if coast_vintage else ""
         if coastline_present:
             mask_source = f"VHR+{coast_label}+S2 (datum≈MHW{vtxt})"
@@ -916,7 +916,7 @@ def refine_water_mask(bbox, s2_water, out_H, out_W, water_frac_thresh=None,
         infra_total = int((olg & s2_water).sum())          # OSM-land px S2 called water
         infra_remaining = int((olg & refined).sum())       # ... still water after mask
 
- # ── retention_subtidal + intertidal_excluded_frac ────────────
+    # ── MASKMLE 3.1: retention_subtidal + intertidal_excluded_frac ────────────
     # retention_subtidal uses ONLY the frozen 0.3 blue-index criterion: the
     # denominator is UNAMBIGUOUS-SUBTIDAL water (S2-water ∧ subtidal_cell) so the
     # drying/intertidal fringe (blue-index 0.2-0.3 ⇔ ≲0.3-0.5 m standing water,
@@ -939,7 +939,7 @@ def refine_water_mask(bbox, s2_water, out_H, out_W, water_frac_thresh=None,
     meta = {
         "mask_source": mask_source, "vhr_applied": True,
         "low_confidence": low_confidence,
- # 5.1/5.2 — OSM coverage confidence + provenance surfaced for the UI
+        # MASKMLE R5 5.1/5.2 — OSM coverage confidence + provenance surfaced for the UI
         "osm_coverage_class": cov_class,
         "coverage_basis": coverage_basis,
         "coastline_source": osm.get("coastline_source"),
@@ -974,7 +974,7 @@ def refine_water_mask(bbox, s2_water, out_H, out_W, water_frac_thresh=None,
         "infra_px_total": infra_total,
         "infra_px_remaining": infra_remaining,
         "retention_pct": round(100.0 * refined.sum() / max(int(s2_water.sum()), 1), 2),
- # Goal-1 acceptance metric + conservative-exclusion honesty
+        # MASKMLE 3.1 — Goal-1 acceptance metric + conservative-exclusion honesty
         "retention_subtidal_pct": retention_subtidal,
         "subtidal_denom_px": subtidal_denom,
         "subtidal_retained_px": subtidal_retained,
@@ -1011,7 +1011,7 @@ def refine_water_mask(bbox, s2_water, out_H, out_W, water_frac_thresh=None,
             "never LAT."
         ),
     })
- # ── .U2: mask-QA preview overlay (PNG + small GeoTIFF) ────────────
+    # ── MASKMLE 3.U2: mask-QA preview overlay (PNG + small GeoTIFF) ────────────
     # Colour-code water-kept / GMM-land / OSM-veto / blue-reclaimed / intertidal-
     # excluded so the user can visually QA the mask per ROI. Written into the
     # downloads store; paths surfaced in water_mask_meta for the UI.
