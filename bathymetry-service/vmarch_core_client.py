@@ -160,6 +160,8 @@ def _provenance_extra(engine: str, endpoint: str, r: dict,
             "metrics": metrics,
             "stats": r.get("stats"),
             "tide_correction": r.get("tide_correction"),
+            **({"datum_disclosure": r["datum_disclosure"]}
+               if r.get("datum_disclosure") else {}),
             "water_mask_meta": r.get("water_mask_meta"),
             "turbidity_pct": r.get("turbidity_pct"),
             "elapsed_s": r.get("elapsed_s"),

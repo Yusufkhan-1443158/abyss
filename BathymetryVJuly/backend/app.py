@@ -10642,16 +10642,97 @@ def mle_tide_correction_summary(tide_info):
                  "computed and reported per-scene (stability.tide, stability.per_scene[].tide_m) "
                  "as a DIAGNOSTIC only (MLE_TIDE_CORRECT default OFF — killed for the default "
                  "regime, MASKMLE R1/R3). No tidal reduction applied to the composite.")
+    _src = tide_info.get("source") or "EOT20"
     return {
-        "applied": True, "height_m": round(h_ref, 4), "source": "EOT20",
+        "applied": True, "height_m": round(h_ref, 4), "source": _src,
         "acquisition_utc": None,  # composite spans 5 scenes — no single timestamp
         "datum_before": "instantaneous",
-        "datum_after": "MSL (h_ref: scene-set median EOT20 tide, MLE_TIDE_CORRECT=1)",
+        "datum_after": (f"scene-set-relative (h_ref: median scene {_src} tide, "
+                        f"MLE_TIDE_CORRECT=1) — NOT absolute MSL/LAT"),
         "sigma_tide_m": sigma,
-        "note": (f"Per-scene depths aligned to the scene-set median EOT20 tide "
+        "note": (f"Per-scene depths aligned to the scene-set median {_src} tide "
                 f"(h_ref={h_ref:+.3f} m) before MLE fusion (MLE_TIDE_CORRECT=1); this is an "
-                f"inter-scene STABILITY alignment, not an independently-verified absolute MSL "
-                f"reduction. Residual sigma_tide {sigma:.2f} m."),
+                f"inter-scene STABILITY alignment to a scene-set-relative datum, not an "
+                f"independently-verified absolute MSL/LAT reduction. Residual sigma_tide "
+                f"{sigma:.2f} m."),
+    }
+
+
+# ── R3: separated-bias datum disclosure (IHO S-44 systematic/random split) ──
+# The MLE composite is referenced to a SCENE-SET-RELATIVE datum (median-scene
+# instantaneous surface), NOT absolute MSL/LAT. Any datum mismatch is a PURE
+# BIAS and must be reported SEPARATELY from the precision (RMSE) figure
+# (S-44 ed.6.1.0 §3). A constant datum shift cannot change RMSE/decile, so this
+# is DISCLOSURE not accuracy: it never touches the depth grid.
+_MLE_SIGMA_Z0_DEFAULT_M = None  # unknown-datum term: null until a published Z0 exists on disk
+
+
+def mle_datum_disclosure(depth_grid, bbox, tide_floor):
+    """Emit the honest vertical-reference disclosure for the MLE composite.
+
+    separated_bias_m       = median(model − in-situ GT) over any on-disk soundings
+                             in bbox (the labelled SYSTEMATIC term), else null.
+    model_rmse_about_bias_m = RMSE after removing that median (the SHAPE error) —
+                             invariant to any constant datum shift.
+    sigma_datum_m          = sqrt(sigma_tide² + sigma_Z0²); sigma_tide = R1 floor
+                             (0.15 m), sigma_Z0 = null until a published Z0 supplied.
+    MLE_DATUM (default 'relative'): when 'msl' AND MLE_LAT_Z0_M supplied, shifts
+    ONLY the reported bias offset/label — NEVER the depth shape or RMSE.
+    """
+    mode = (os.environ.get("MLE_DATUM", "relative") or "relative").strip().lower()
+    try:
+        z0 = float(os.environ["MLE_LAT_Z0_M"])
+    except Exception:
+        z0 = None
+    try:
+        sig_z0 = float(os.environ["MLE_SIGMA_Z0_M"])
+    except Exception:
+        sig_z0 = _MLE_SIGMA_Z0_DEFAULT_M
+    sig_tide = float(tide_floor)
+    sigma_datum = (math.sqrt(sig_tide ** 2 + sig_z0 ** 2) if sig_z0 else sig_tide)
+    sep_bias = None; rmse_about_bias = None; n_gt = 0
+    try:
+        glat, glon, gdep, _ = xyz_points_in_bbox(bbox)
+        if len(glat):
+            H, W = depth_grid.shape; w, s, e, n = bbox
+            rr = ((n - glat) / (n - s) * H).astype(int)
+            cc = ((glon - w) / (e - w) * W).astype(int)
+            ok = (rr >= 0) & (rr < H) & (cc >= 0) & (cc < W)
+            mod = np.full(len(glat), np.nan)
+            mod[ok] = depth_grid[rr[ok], cc[ok]]
+            resid = mod - gdep
+            fin = np.isfinite(resid) & (mod > 0)
+            if int(fin.sum()) >= 20:
+                n_gt = int(fin.sum())
+                sep_bias = float(np.median(resid[fin]))
+                rmse_about_bias = float(np.sqrt(np.mean((resid[fin] - sep_bias) ** 2)))
+    except Exception as _ex:
+        L.info(f"MLE datum disclosure GT-bias skipped ({_ex})")
+    # 'msl' is honoured ONLY as a bias-offset relabel (and ONLY if a Z0 is on disk);
+    # with no published Khalifa Z0 + no GT vertical datum we NEVER claim absolute LAT.
+    absolute_ok = (mode == "msl") and (z0 is not None)
+    label = ("scene-set-relative (median-scene instantaneous surface)"
+             if not absolute_ok else
+             f"MSL-referenced (h_ref=0, Z0={z0:+.3f} m applied) — provisional, NOT survey-verified LAT")
+    reported_bias = (None if sep_bias is None
+                     else round(sep_bias - (z0 if absolute_ok else 0.0), 4))
+    return {
+        "datum_label": label,
+        "datum_mode": mode,
+        "absolute_datum_available": bool(absolute_ok),
+        "separated_bias_m": (round(sep_bias, 4) if sep_bias is not None else None),
+        "reported_bias_m": reported_bias,
+        "model_rmse_about_bias_m": (round(rmse_about_bias, 4)
+                                    if rmse_about_bias is not None else None),
+        "n_gt_pairs": n_gt,
+        "sigma_tide_m": round(sig_tide, 4),
+        "sigma_Z0_m": (round(sig_z0, 4) if sig_z0 else None),
+        "sigma_datum_m": round(sigma_datum, 4),
+        "note": ("Absolute MSL/LAT NOT claimed — datum is scene-set-relative; supply the GT "
+                 "vertical datum + a published Z0 (MLE_LAT_Z0_M) to reference to LAT. "
+                 "separated_bias_m is a LABELLED systematic term (IHO S-44 ed.6.1.0 §3), NOT "
+                 "folded into RMSE/decile; a constant datum shift cannot change "
+                 "model_rmse_about_bias_m (proof that MLE_DATUM only relabels the bias)."),
     }
 
 
@@ -10924,7 +11005,7 @@ def _mle_shared_calibrate(grids, bbox, h_ref):
     info.update({
         "applied": True, "stage1": stage1, "n_ref_pairs": int(good.sum()),
         "n_scenes": len(usable), "tide_mandatory": True,
-        "sigma_tide_m": 0.20,
+        "sigma_tide_m": _TIDE_SIGMA_FLOOR_M,
         "datum": ("composite referenced to kept-scene median tide; per-scene "
                   "EOT20 tide removed"),
         "resid_field_median_m": round(float(np.median(resid_field)), 4),
@@ -11173,8 +11254,15 @@ def _run_s2_mle(bbox, year=2024, n_scenes=5, max_cloud=20,
     w_b, s_b, e_b, n_b = bbox
     lon_c = 0.5 * (w_b + e_b); lat_c = 0.5 * (s_b + n_b)
     tide_correct = os.environ.get("MLE_TIDE_CORRECT", "0") == "1"
+    # R1.2: σ_tide floor used in the fusion/inflation (env-overridable ONLY so the
+    # R1.3 harness can prove byte-identical OFF depth by toggling it to 0.0; the
+    # disclosure constant _TIDE_SIGMA_FLOOR_M stays 0.15 everywhere else).
+    _tide_floor = float(os.environ.get("MLE_TIDE_SIGMA_FLOOR_M", str(_TIDE_SIGMA_FLOOR_M)))
     tide_info = {"applied": False, "h_ref_m": None, "alpha_retained": None,
-                 "alpha_r": None, "sigma_tide_m": 0.20, "per_scene": []}
+                 "alpha_r": None, "sigma_tide_m": _tide_floor,
+                 "sigma_tide_folded": True, "source": None,
+                 "datum_note": "scene-set-relative (h_ref = median scene tide); NOT MSL/LAT",
+                 "per_scene": []}
     for g in grids:
         acq = g.get('acquisition_datetimes')
         if not acq:  # cache predates 1.2a or SH path — recover via GEE listing
@@ -11185,12 +11273,72 @@ def _run_s2_mle(bbox, year=2024, n_scenes=5, max_cloud=20,
             except Exception:
                 acq = None
         h_i = None
+        src = "none"
         if acq:
             th = _eot20_tide_heights(lon_c, lat_c, acq)
             if th is not None and np.isfinite(th).any():
-                h_i = float(np.nanmean(th))
+                h_i = float(np.nanmean(th)); src = "EOT20"
+        # R1.1: EOT20 is inert in this deployment (no model files on disk) → fall
+        # back to Open-Meteo Marine (no creds), averaged over the scene's TRUE
+        # acquisition datetimes (mirrors the fast-path build_tide_correction).
+        if h_i is None and acq:
+            try:
+                try:
+                    from backend.tide_correction import get_tide_height as _gth
+                except Exception:
+                    from tide_correction import get_tide_height as _gth  # type: ignore
+                from datetime import datetime as _dt
+                hs = []
+                for a in acq:
+                    try:
+                        d = _dt.fromisoformat(str(a).replace('Z', '+00:00'))
+                        h, _inf = _gth(lat_c, lon_c, d)
+                        if h is not None and np.isfinite(h):
+                            hs.append(float(h))
+                    except Exception:
+                        continue
+                if hs:
+                    h_i = float(np.mean(hs)); src = "open-meteo"
+            except Exception as _tex:
+                L.info(f"MLE tide: Open-Meteo fallback failed ({_tex})")
         g['tide_m'] = h_i
+        g['tide_source'] = src
         g['n_acq'] = (len(acq) if acq else 0)
+        # ── R2.1: per-scene significant wave height Hs (Open-Meteo Marine, no ──
+        # creds). Called for EACH true acquisition datetime in the scene window;
+        # store the composite representative Hs_mean and the roughest-acquisition
+        # Hs_max. Diagnostic only here (no depth/σ change unless MLE_WAVE_QC=1).
+        # Optional ERA5-CDS gold source is preferred only if creds are present.
+        hs_vals, hs_days, wsrc = [], [], "none"
+        if acq:
+            try:
+                try:
+                    from backend.tide_correction import get_wave_height as _gwh
+                except Exception:
+                    from tide_correction import get_wave_height as _gwh  # type: ignore
+                from datetime import datetime as _dt2
+                for a in acq:
+                    try:
+                        d = _dt2.fromisoformat(str(a).replace('Z', '+00:00'))
+                        hv, hinf = _gwh(lat_c, lon_c, d)
+                    except Exception:
+                        continue
+                    meth = (hinf or {}).get('method', '')
+                    if hv is not None and np.isfinite(hv) and meth not in (
+                            'unavailable', 'empty_series'):
+                        hs_vals.append(float(hv))
+                        _dm = (hinf or {}).get('day_max_wave_m')
+                        if _dm is not None and np.isfinite(_dm):
+                            hs_days.append(float(_dm))
+                        wsrc = "open-meteo"
+            except Exception as _wex:
+                L.info(f"MLE wave: Open-Meteo Hs fetch failed ({_wex})")
+        g['hs_mean_m'] = (float(np.mean(hs_vals)) if hs_vals else None)
+        g['hs_max_m'] = (float(np.max(hs_vals)) if hs_vals else None)
+        g['hs_day_max_m'] = (float(np.max(hs_days)) if hs_days else None)
+        g['hs_source'] = wsrc
+    _srcs = sorted({g.get('tide_source', 'none') for g in grids})
+    tide_info["source"] = ("+".join(s for s in _srcs if s != 'none') or "none")
     tides = [g['tide_m'] for g in grids if g.get('tide_m') is not None]
     h_ref = float(np.median(tides)) if tides else None
     tide_info["h_ref_m"] = (round(h_ref, 4) if h_ref is not None else None)
@@ -11213,7 +11361,66 @@ def _run_s2_mle(bbox, year=2024, n_scenes=5, max_cloud=20,
         L.info(f"MLE tide: diagnostic only (h_ref="
                f"{('%.3f' % h_ref) if h_ref is not None else 'NA'} m, "
                f"tides={[None if g.get('tide_m') is None else round(g['tide_m'],3) for g in grids]}, "
-               f"MLE_TIDE_CORRECT={int(tide_correct)})")
+               f"src={tide_info['source']}, MLE_TIDE_CORRECT={int(tide_correct)})")
+
+    # ── R1.2: per-scene σ_tide budget (correlated tide-model residual). ──
+    # Floor 0.15 m (DL-fusion memory / EOT20 residual). When a physical datum
+    # shift is applied (MLE_TIDE_CORRECT=1), inflate by a residual-model-error
+    # fraction f=0.1 of the applied |shift|. This σ enters the inverse-variance
+    # fusion WEIGHTS only when the correction is ON (so the OFF composite depth
+    # stays byte-identical — the uniform floor is folded into the *reported*
+    # composite σ post-σ-QA instead, see below).
+    _TIDE_RESID_FRAC = float(os.environ.get("MLE_TIDE_RESID_FRAC", "0.10"))
+    for g in grids:
+        st = float(_tide_floor)
+        sh = g.get('tide_shift_applied_m')
+        if tide_correct and sh is not None:
+            st = float(np.sqrt(_tide_floor ** 2 + (_TIDE_RESID_FRAC * abs(sh)) ** 2))
+        g['sigma_tide_m'] = st
+
+    # ── R2.2: per-scene σ_wave sea-state budget (hinge form). ──────────────
+    # σ_wave_i = k·max(0, Hs_mean_i − Hs0). Higher Hs → more glint/whitecap/
+    # path-length corruption of the optical SDB signal (Hedley 2005; Kay 2009;
+    # Caballero & Stumpf 2020), so a rough scene is DOWN-WEIGHTED (never dropped
+    # except by the conservative safety cap via the existing keep-≥3 floor).
+    # A SOFT σ-inflation prior only: enters the fusion WEIGHTS + reported σ ONLY
+    # when MLE_WAVE_QC=1 (default OFF → OFF path byte-identical, mirrors R1.2).
+    wave_qc = os.environ.get("MLE_WAVE_QC", "0") == "1"
+    _WAVE_K = float(os.environ.get("MLE_WAVE_K", "1.0"))
+    _WAVE_HS0 = float(os.environ.get("MLE_WAVE_HS0", "0.3"))
+    _HS_REJECT = float(os.environ.get("MLE_HS_REJECT", "2.5"))
+    for g in grids:
+        hm = g.get('hs_mean_m')
+        sw = (_WAVE_K * max(0.0, float(hm) - _WAVE_HS0)) if (hm is not None) else 0.0
+        g['sigma_wave_m'] = float(sw)
+    _hs_srcs = sorted({g.get('hs_source', 'none') for g in grids})
+    wave_info = {
+        "wave_qc_applied": bool(wave_qc),
+        "k": _WAVE_K, "hs0_m": _WAVE_HS0, "hs_reject_m": _HS_REJECT,
+        "source": ("+".join(s for s in _hs_srcs if s != 'none') or "none"),
+        "hs_rejected_dates": [],
+        "note": ("σ_wave = k·max(0, Hs_mean − Hs0) folded into fusion σ in "
+                 "quadrature (MLE_WAVE_QC=1); soft down-weight prior, NOT a "
+                 "second hard glint gate"),
+        "per_scene": [],
+    }
+    # Conservative safety reject cap — drops only demonstrably storm-rough scenes
+    # (Hs_mean > MLE_HS_REJECT, default 2.5 m, well above Gulf), and ONLY via the
+    # existing keep-≥3 floor so we never fall below 3 scenes. Rarely fires.
+    if wave_qc and _HS_REJECT > 0 and len(grids) > 3:
+        _rough = [g for g in grids if (g.get('hs_mean_m') is not None
+                                       and float(g['hs_mean_m']) > _HS_REJECT)]
+        # sort roughest-first; drop while we can stay ≥3
+        _rough.sort(key=lambda gg: float(gg['hs_mean_m']), reverse=True)
+        for g in _rough:
+            if len(grids) <= 3:
+                break
+            wave_info["hs_rejected_dates"].append(
+                {"date": g.get('date'), "hs_mean_m": round(float(g['hs_mean_m']), 3)})
+            grids.remove(g)
+        if wave_info["hs_rejected_dates"]:
+            L.info(f"MLE wave: HS_REJECT dropped {wave_info['hs_rejected_dates']} "
+                   f"(cap {_HS_REJECT} m, kept {len(grids)} scenes)")
 
     # ══════════════════════════════════════════════════════════════════════
     # MASKMLE 3.2: shared-calibration-field (MLE_SHARED_CAL, default OFF). Fit
@@ -11307,8 +11514,22 @@ def _run_s2_mle(bbox, year=2024, n_scenes=5, max_cloud=20,
         wi = g['water']
         ok = wi & np.isfinite(di) & (di > 0)
         spx = g.get('sigma_px')
+        # R1.2: fold σ_tide into the fusion WEIGHTS ONLY when tide correction is
+        # ON. When OFF, use the bare σ verbatim so the composite depth is
+        # byte-identical to the pre-R1.2 baseline (no sqrt round-trip either).
+        # R2.2: fold σ_wave into the fusion WEIGHTS ONLY when MLE_WAVE_QC=1 (same
+        # gating discipline as R1.2 σ_tide → OFF path byte-identical).
+        _sw = float(g.get('sigma_wave_m', 0.0)) if wave_qc else 0.0
+        if tide_correct:
+            _st = float(g.get('sigma_tide_m', _TIDE_SIGMA_FLOOR_M))
+            _sig_scalar = float(np.sqrt(g['sigma'] ** 2 + _st ** 2 + _sw ** 2))
+        else:
+            _st = 0.0
+            _sig_scalar = float(np.sqrt(g['sigma'] ** 2 + _sw ** 2)) if _sw else float(g['sigma'])
         if spx is not None:
             sig = np.clip(np.asarray(spx, dtype=np.float64), 0.5, 5.0)
+            if (tide_correct and _st) or _sw:
+                sig = np.sqrt(sig ** 2 + _st ** 2 + _sw ** 2)
             good = ok & np.isfinite(sig) & (sig > 0)
             inv = 1.0 / (sig[good] ** 2)
             num[good] += di[good] * inv
@@ -11316,12 +11537,12 @@ def _run_s2_mle(bbox, year=2024, n_scenes=5, max_cloud=20,
             valid_count[good] += 1
             # pixels with valid depth but no finite σ → fall back to scalar σ
             fb = ok & ~(np.isfinite(sig) & (sig > 0))
-            s2_inv = 1.0 / (g['sigma'] ** 2)
+            s2_inv = 1.0 / (_sig_scalar ** 2)
             num[fb] += di[fb] * s2_inv
             den[fb] += s2_inv
             valid_count[fb] += 1
         else:
-            s2_inv = 1.0 / (g['sigma'] ** 2)
+            s2_inv = 1.0 / (_sig_scalar ** 2)
             num[ok] += di[ok] * s2_inv
             den[ok] += s2_inv
             valid_count[ok] += 1
@@ -11501,7 +11722,16 @@ def _run_s2_mle(bbox, year=2024, n_scenes=5, max_cloud=20,
                 'acquisition_datetimes': g.get('acquisition_datetimes'),
                 'n_acquisitions': int(g.get('n_acq', 0)),
                 'tide_m': (round(g['tide_m'], 4) if g.get('tide_m') is not None else None),
+                'tide_source': g.get('tide_source'),
+                'sigma_tide_m': (round(g['sigma_tide_m'], 4)
+                                 if g.get('sigma_tide_m') is not None else None),
                 'tide_shift_applied_m': g.get('tide_shift_applied_m'),
+                # R2.1/R2.2 — per-scene significant wave height + σ_wave
+                'hs_mean_m': (round(g['hs_mean_m'], 3) if g.get('hs_mean_m') is not None else None),
+                'hs_max_m': (round(g['hs_max_m'], 3) if g.get('hs_max_m') is not None else None),
+                'hs_day_max_m': (round(g['hs_day_max_m'], 3) if g.get('hs_day_max_m') is not None else None),
+                'hs_source': g.get('hs_source'),
+                'sigma_wave_m': (round(g['sigma_wave_m'], 4) if g.get('sigma_wave_m') is not None else None),
                 # MASKMLE 1.3 — physical QC
                 'glint_proxy_nir': qc.get('glint_proxy_nir'),
                 'turbidity_fnu': qc.get('turbidity_fnu'),
@@ -11524,8 +11754,28 @@ def _run_s2_mle(bbox, year=2024, n_scenes=5, max_cloud=20,
                 tide_info["alpha_r"] = (round(rr, 4) if rr is not None else None)
         tide_info["per_scene"] = [
             {"date": g['date'], "n_acq": int(g.get('n_acq', 0)),
-             "tide_m": (round(g['tide_m'], 4) if g.get('tide_m') is not None else None)}
+             "tide_m": (round(g['tide_m'], 4) if g.get('tide_m') is not None else None),
+             "tide_source": g.get('tide_source'),
+             "sigma_tide_m": (round(g['sigma_tide_m'], 4)
+                              if g.get('sigma_tide_m') is not None else None),
+             "tide_shift_applied_m": g.get('tide_shift_applied_m')}
             for g in grids]
+        # R2.1: per-scene Hs diagnostic + R2.2 induced σ_wave / fusion weights.
+        _wq = [(float(g['sigma']) if not wave_qc
+                else float(np.sqrt(g['sigma'] ** 2
+                                   + float(g.get('sigma_tide_m', 0.0) if tide_correct else 0.0) ** 2
+                                   + float(g.get('sigma_wave_m', 0.0)) ** 2)))
+               for g in grids]
+        _wsum = sum(1.0 / (s ** 2) for s in _wq) or 1.0
+        wave_info["per_scene"] = [
+            {"date": g['date'], "n_acq": int(g.get('n_acq', 0)),
+             "hs_mean_m": (round(g['hs_mean_m'], 3) if g.get('hs_mean_m') is not None else None),
+             "hs_max_m": (round(g['hs_max_m'], 3) if g.get('hs_max_m') is not None else None),
+             "hs_day_max_m": (round(g['hs_day_max_m'], 3) if g.get('hs_day_max_m') is not None else None),
+             "hs_source": g.get('hs_source'),
+             "sigma_wave_m": round(float(g.get('sigma_wave_m', 0.0)), 4),
+             "rel_weight": round((1.0 / (_wq[i] ** 2)) / _wsum, 4)}
+            for i, g in enumerate(grids)]
         pair_absdiff = []
         for i in range(n_sc):
             for j in range(i + 1, n_sc):
@@ -11559,11 +11809,38 @@ def _run_s2_mle(bbox, year=2024, n_scenes=5, max_cloud=20,
 
         # (a) all per-scene depths in one compressed npz (+ dates, sigmas, bbox)
         npz_name = f"{stab_id}_scenes.npz"
+        # R1.3 harness support: also persist the UN-calibrated per-scene grids
+        # (pre_calib, NaN where absent) + per-scene tide + water masks so an
+        # offline tide-referencing re-test can operate in the reference-sparse
+        # (calibration-off) regime without a second server run.
+        _pre_stack = np.full((n_sc, H, W), np.nan, dtype=np.float32)
+        for i, g in enumerate(grids):
+            pc = g.get('pre_calib')
+            if pc is not None:
+                try:
+                    pcs = np.asarray(pc, dtype=np.float32)[:H, :W]
+                    wok = g['water'] & np.isfinite(pcs) & (pcs > 0)
+                    _pre_stack[i][wok] = pcs[wok]
+                except Exception:
+                    pass
+        _water_stack = np.stack([g['water'].astype(bool) for g in grids], axis=0)
         np.savez_compressed(
             dl_dir / npz_name,
             scenes=scene_stack.astype(np.float32),
+            scenes_pre_calib=_pre_stack,
+            water=_water_stack,
             dates=np.array([g['date'] for g in grids]),
             sigmas=np.array([g['sigma'] for g in grids], dtype=np.float32),
+            tide_m=np.array([(np.nan if g.get('tide_m') is None else g['tide_m'])
+                             for g in grids], dtype=np.float64),
+            tide_source=np.array([g.get('tide_source', 'none') for g in grids]),
+            hs_mean_m=np.array([(np.nan if g.get('hs_mean_m') is None else g['hs_mean_m'])
+                                for g in grids], dtype=np.float64),
+            hs_max_m=np.array([(np.nan if g.get('hs_max_m') is None else g['hs_max_m'])
+                               for g in grids], dtype=np.float64),
+            sigma_wave_m=np.array([float(g.get('sigma_wave_m', 0.0)) for g in grids],
+                                  dtype=np.float64),
+            hs_source=np.array([g.get('hs_source', 'none') for g in grids]),
             bbox=np.asarray(bbox, dtype=np.float64),
             across_std=across_std, across_mad=across_mad,
             stability_mask=stability_mask)
@@ -11613,6 +11890,8 @@ def _run_s2_mle(bbox, year=2024, n_scenes=5, max_cloud=20,
             'pairwise_median_abs_diff': pair_absdiff,
             # MASKMLE 1.2 — per-scene EOT20 tide diagnostic + correction state
             'tide': tide_info,
+            # R2 — per-scene Hs sea-state diagnostic + σ_wave QC state
+            'wave': wave_info,
             # MASKMLE 2.3 — best-N-of-M physical-QC scene screening
             'screening': screening,
             # MASKMLE 3.2 — shared-calibration-field package state + α diagnostic
@@ -11645,9 +11924,32 @@ def _run_s2_mle(bbox, year=2024, n_scenes=5, max_cloud=20,
     z_mle, uq = _apply_sigma_qa(z_mle, sigma_mle,
                                 sigma_max_m=sigma_max_m,
                                 sigma_reject_k=float(sigma_reject_k))
+    # R1.2 never-worse-σ floor: fold the σ_tide floor (0.15 m) into the REPORTED
+    # composite σ in quadrature. The correlated tide-model residual does NOT
+    # average down over scenes, so a fixed floor is the honest lower bound.
+    # Applied AFTER σ-QA (which masks on σ rank) so the masking decision — and
+    # therefore the composite DEPTH — is byte-identical when MLE_TIDE_CORRECT=0.
+    _sig_pre_floor_med = (float(np.nanmedian(sigma_mle))
+                          if np.any(np.isfinite(sigma_mle)) else None)
+    _fin_s = np.isfinite(sigma_mle)
+    sigma_mle[_fin_s] = np.sqrt(
+        sigma_mle[_fin_s] ** 2 + float(_tide_floor) ** 2).astype(np.float32)
+    _sig_post_floor_med = (float(np.nanmedian(sigma_mle))
+                           if np.any(np.isfinite(sigma_mle)) else None)
+    uq['sigma_tide_floor_m'] = float(_tide_floor)
+    uq['median_sigma_pre_tidefloor_m'] = (round(_sig_pre_floor_med, 4)
+                                          if _sig_pre_floor_med is not None else None)
+    uq['median_sigma_post_tidefloor_m'] = (round(_sig_post_floor_med, 4)
+                                           if _sig_post_floor_med is not None else None)
     # scenes dropped by the physical-QC screening (glint/turbidity) above
     uq['scenes_rejected'] = int((screening.get('n_candidates') or len(grids)) - len(grids))
     uq['sigma_reject_k'] = float(sigma_reject_k)
+    # R2.2 wave-QC disclosure (σ_wave is in the fusion weights only when ON)
+    uq['wave_qc_applied'] = bool(wave_qc)
+    uq['wave_k'] = _WAVE_K
+    uq['wave_hs0_m'] = _WAVE_HS0
+    uq['hs_reject_m'] = _HS_REJECT
+    uq['sigma_wave_scenes_m'] = [round(float(g.get('sigma_wave_m', 0.0)), 4) for g in grids]
     L.info(f"MLE σ-QA: σ_max_used={uq['sigma_max_used']} m, masked "
            f"{uq['pixels_masked_highsigma']} px, retained {uq['frac_retained']}, "
            f"scenes_rejected={uq['scenes_rejected']}")
@@ -11725,6 +12027,15 @@ def _run_s2_mle(bbox, year=2024, n_scenes=5, max_cloud=20,
         stab_downloads.append({'format': 'zip', 'label': 'Download all MLE artifacts (zip)',
                                'url': zip_url, 'name': f'{stab_id}_all.zip'})
 
+    # R3 (TIDE_WAVE_LOG) — honest vertical-reference disclosure. Pure read of
+    # z_mle vs any on-disk GT; NEVER mutates depth. Default MLE_DATUM='relative'
+    # → depth byte-identical; 'msl' relabels only the bias offset, never the shape.
+    try:
+        _datum_disc = mle_datum_disclosure(z_mle, bbox, _tide_floor)
+    except Exception as _dex:
+        L.info(f"MLE datum disclosure skipped ({_dex})")
+        _datum_disc = None
+
     result = {
         'method': f'Calibrated bathymetry (MLE · {len(grids)} scenes)',
         'bbox': bbox, 'resolution_m': 10,
@@ -11744,7 +12055,11 @@ def _run_s2_mle(bbox, year=2024, n_scenes=5, max_cloud=20,
             # AI_METHOD_LOG R1/R3: learned per-pixel σ diagnostics (None unless
             # MLE_DEEP_SIGMA=1 AND the ≥500 m spatial-block gate adopted the CNN).
             'ai_sigma': ai_sigma_stats,
+            # TIDE_WAVE_LOG R3: honest vertical-datum disclosure (scene-set-relative;
+            # separated bias vs shape-RMSE; no absolute MSL/LAT claim).
+            'datum_disclosure': _datum_disc,
         },
+        'datum_disclosure': _datum_disc,
         # Interactive colorbar recolor (user ask #3): id + auto-seed min/max
         'result_id': _rid,
         'raster_min_depth': round(float(_auto_min), 3),

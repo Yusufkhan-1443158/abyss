@@ -1,0 +1,308 @@
+{
+  "khalifa": {
+    "site": "khalifa_port",
+    "bbox": [
+      54.636,
+      24.785,
+      54.69,
+      24.84
+    ],
+    "has_gt": true,
+    "byte_identical_off": {
+      "max_abs_depth_diff_m": 0.0,
+      "finite_only": [
+        0,
+        0
+      ],
+      "identical": true,
+      "note": "WAVE_QC=1 with Hs0=100 (zero excess) == WAVE_QC=0 composite"
+    },
+    "wave_on_effect": {
+      "max_abs_depth_diff_vs_off_m": 0.00231170654296875,
+      "finite_only": [
+        0,
+        0
+      ],
+      "median_sigma_off_m": 1.1053,
+      "median_sigma_on_m": 1.1055,
+      "sigma_grows": true
+    },
+    "weights_off": {
+      "wave_qc_applied": false,
+      "source": "open-meteo",
+      "k": 1.0,
+      "hs0_m": 0.3,
+      "hs_rejected_dates": [],
+      "per_scene": [
+        {
+          "date": "2024-02-06",
+          "hs_mean_m": 0.33,
+          "hs_max_m": 0.62,
+          "sigma_wave_m": 0.0303,
+          "rel_weight": 0.192
+        },
+        {
+          "date": "2024-07-01",
+          "hs_mean_m": 0.371,
+          "hs_max_m": 1.004,
+          "sigma_wave_m": 0.0707,
+          "rel_weight": 0.2039
+        },
+        {
+          "date": "2024-09-12",
+          "hs_mean_m": 0.193,
+          "hs_max_m": 0.378,
+          "sigma_wave_m": 0.0,
+          "rel_weight": 0.3128
+        },
+        {
+          "date": "2024-11-24",
+          "hs_mean_m": 0.361,
+          "hs_max_m": 1.1,
+          "sigma_wave_m": 0.0615,
+          "rel_weight": 0.2913
+        }
+      ]
+    },
+    "weights_on": {
+      "wave_qc_applied": true,
+      "source": "open-meteo",
+      "k": 1.0,
+      "hs0_m": 0.3,
+      "hs_rejected_dates": [],
+      "per_scene": [
+        {
+          "date": "2024-02-06",
+          "hs_mean_m": 0.33,
+          "hs_max_m": 0.62,
+          "sigma_wave_m": 0.0303,
+          "rel_weight": 0.1921
+        },
+        {
+          "date": "2024-07-01",
+          "hs_mean_m": 0.371,
+          "hs_max_m": 1.004,
+          "sigma_wave_m": 0.0707,
+          "rel_weight": 0.2038
+        },
+        {
+          "date": "2024-09-12",
+          "hs_mean_m": 0.193,
+          "hs_max_m": 0.378,
+          "sigma_wave_m": 0.0,
+          "rel_weight": 0.3129
+        },
+        {
+          "date": "2024-11-24",
+          "hs_mean_m": 0.361,
+          "hs_max_m": 1.1,
+          "sigma_wave_m": 0.0615,
+          "rel_weight": 0.2911
+        }
+      ]
+    },
+    "hs_sanity": [
+      {
+        "scene": "2024-02-06",
+        "acq_utc": "2024-01-23T07:02:43Z",
+        "reported_hs_mean_m": 0.33,
+        "reported_hs_max_m": 0.62,
+        "openmeteo_pointcheck_hs_m": 0.28,
+        "openmeteo_day_max_hs_m": 0.36,
+        "source": "open-meteo/cmems"
+      },
+      {
+        "scene": "2024-07-01",
+        "acq_utc": "2024-06-16T07:02:50Z",
+        "reported_hs_mean_m": 0.371,
+        "reported_hs_max_m": 1.004,
+        "openmeteo_pointcheck_hs_m": 0.139,
+        "openmeteo_day_max_hs_m": 0.38,
+        "source": "open-meteo/cmems"
+      }
+    ],
+    "cross_scene_std_m": {
+      "median": 1.4146,
+      "p95": 2.5885,
+      "note": "std of retained per-scene stack; wave-QC re-weights the fusion, it does not alter per-scene depths, so std changes only if HS_REJECT drops a scene"
+    },
+    "chart_eval": {
+      "off": {
+        "tag": "WAVE_QC=0",
+        "n": 39441,
+        "rmse_m": 2.115,
+        "bias_m": 0.237,
+        "mae_m": 1.146,
+        "block_rmse_m": 1.714,
+        "n_blocks": 29,
+        "block_deg": 0.0055,
+        "decile_slope": 1.398,
+        "rmse_by_depth_m": {
+          "0-2": [
+            7.913,
+            43
+          ],
+          "2-5": [
+            7.321,
+            331
+          ],
+          "5-10": [
+            5.735,
+            3272
+          ],
+          "10+": [
+            1.162,
+            35795
+          ]
+        }
+      },
+      "on": {
+        "tag": "WAVE_QC=1",
+        "n": 39441,
+        "rmse_m": 2.115,
+        "bias_m": 0.237,
+        "mae_m": 1.146,
+        "block_rmse_m": 1.714,
+        "n_blocks": 29,
+        "block_deg": 0.0055,
+        "decile_slope": 1.398,
+        "rmse_by_depth_m": {
+          "0-2": [
+            7.913,
+            43
+          ],
+          "2-5": [
+            7.321,
+            331
+          ],
+          "5-10": [
+            5.735,
+            3272
+          ],
+          "10+": [
+            1.162,
+            35795
+          ]
+        }
+      }
+    },
+    "verdict": {
+      "chart_rmse_not_worse": true,
+      "rmse_delta_m": 0.0
+    }
+  },
+  "swell": {
+    "site": "fujairah_eastcoast",
+    "bbox": [
+      56.345,
+      25.1,
+      56.375,
+      25.13
+    ],
+    "has_gt": false,
+    "byte_identical_off": {
+      "max_abs_depth_diff_m": 0.0,
+      "finite_only": [
+        0,
+        0
+      ],
+      "identical": true,
+      "note": "WAVE_QC=1 with Hs0=100 (zero excess) == WAVE_QC=0 composite"
+    },
+    "wave_on_effect": {
+      "max_abs_depth_diff_vs_off_m": 0.01908707618713379,
+      "finite_only": [
+        0,
+        0
+      ],
+      "median_sigma_off_m": 0.355,
+      "median_sigma_on_m": 0.3553,
+      "sigma_grows": true
+    },
+    "weights_off": {
+      "wave_qc_applied": false,
+      "source": "open-meteo",
+      "k": 1.0,
+      "hs0_m": 0.3,
+      "hs_rejected_dates": [],
+      "per_scene": [
+        {
+          "date": "2024-02-06",
+          "hs_mean_m": 0.159,
+          "hs_max_m": 0.179,
+          "sigma_wave_m": 0.0,
+          "rel_weight": 0.4142
+        },
+        {
+          "date": "2024-09-12",
+          "hs_mean_m": 0.379,
+          "hs_max_m": 0.519,
+          "sigma_wave_m": 0.0795,
+          "rel_weight": 0.1715
+        },
+        {
+          "date": "2024-11-24",
+          "hs_mean_m": 0.274,
+          "hs_max_m": 0.665,
+          "sigma_wave_m": 0.0,
+          "rel_weight": 0.4142
+        }
+      ]
+    },
+    "weights_on": {
+      "wave_qc_applied": true,
+      "source": "open-meteo",
+      "k": 1.0,
+      "hs0_m": 0.3,
+      "hs_rejected_dates": [],
+      "per_scene": [
+        {
+          "date": "2024-02-06",
+          "hs_mean_m": 0.159,
+          "hs_max_m": 0.179,
+          "sigma_wave_m": 0.0,
+          "rel_weight": 0.415
+        },
+        {
+          "date": "2024-09-12",
+          "hs_mean_m": 0.379,
+          "hs_max_m": 0.519,
+          "sigma_wave_m": 0.0795,
+          "rel_weight": 0.1701
+        },
+        {
+          "date": "2024-11-24",
+          "hs_mean_m": 0.274,
+          "hs_max_m": 0.665,
+          "sigma_wave_m": 0.0,
+          "rel_weight": 0.415
+        }
+      ]
+    },
+    "hs_sanity": [
+      {
+        "scene": "2024-02-06",
+        "acq_utc": "2024-01-23T07:02:36Z",
+        "reported_hs_mean_m": 0.159,
+        "reported_hs_max_m": 0.179,
+        "openmeteo_pointcheck_hs_m": 0.139,
+        "openmeteo_day_max_hs_m": 0.14,
+        "source": "open-meteo/cmems"
+      },
+      {
+        "scene": "2024-09-12",
+        "acq_utc": "2024-08-30T07:02:40Z",
+        "reported_hs_mean_m": 0.379,
+        "reported_hs_max_m": 0.519,
+        "openmeteo_pointcheck_hs_m": 0.359,
+        "openmeteo_day_max_hs_m": 0.42,
+        "source": "open-meteo/cmems"
+      }
+    ],
+    "cross_scene_std_m": {
+      "median": 1.7195,
+      "p95": 3.4194,
+      "note": "std of retained per-scene stack; wave-QC re-weights the fusion, it does not alter per-scene depths, so std changes only if HS_REJECT drops a scene"
+    }
+  }
+}

@@ -94,6 +94,11 @@ through the adapter). `VMARCH_CORE_URL=http://127.0.0.1:8080`.
 - [x] Full-fidelity VMarch method port into the Abyss ROI path — kept as the honest
       offline "(port)" fallback engine.
 - [x] vmarch-core service: the actual platform code computes the studio products.
+- [x] Tide/wave MLE loop closed (railway 6b73176, synced): live per-scene tide + Hs
+      disclosure, σ_tide 0.15 m floor in fusion, IHO S-44 separated-bias
+      `datum_disclosure` (scene-set-relative datum, no MSL/LAT overclaim). Tide/wave
+      *corrections* stay default OFF — honest nulls on KP multibeam (≥500 m blocks);
+      residual limits are optical + data, not vertical referencing.
 - [ ] Admin PR review/merge `BathymetryVJuly` → `main`, then RunPod rebuild.
 - [ ] Planet imagery harvest (blocked: Insights OAuth / Orders provisioning).
 - [ ] Renew CDSE Sentinel-Hub credentials (currently 401 → GEE fallback path in use).
