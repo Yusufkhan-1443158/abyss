@@ -13,6 +13,9 @@
   :root[data-theme="light"] .btn,
   :root[data-theme="light"] .pin b,
   :root[data-theme="light"] .cmphandle::after{ color:#f4fbfd; }
+  /* ghost buttons sit on light panels — keep theme text colour (light mode only;
+     dark mode already uses var(--text) from the base .btn.ghost rule) */
+  :root[data-theme="light"] .btn.ghost{ color:var(--text); }
   *{ box-sizing:border-box; }
   html,body{ height:100%; margin:0; overflow:hidden; background:var(--bg); color:var(--text); font-family:var(--font-ui); }
   #map{ position:absolute; inset:0; } canvas{ display:block; }
