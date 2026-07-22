@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<script>(function(){var t=null;try{t=localStorage.getItem("glyph_theme");}catch(e){}document.documentElement.setAttribute("data-theme",t==="light"?"light":"dark");var l=localStorage.getItem("glyph_lang")||"en";if(l==="ar"){document.documentElement.setAttribute("dir","rtl");document.documentElement.setAttribute("lang","ar");}})()</script>
+<script>(function(){var t=null;try{t=localStorage.getItem("glyph_theme");if(!localStorage.getItem("glyph_theme_v2")){localStorage.setItem("glyph_theme_v2","1");localStorage.removeItem("glyph_theme");t=null;}}catch(e){}document.documentElement.setAttribute("data-theme",t==="dark"?"dark":"light");var l=localStorage.getItem("glyph_lang")||"en";if(l==="ar"){document.documentElement.setAttribute("dir","rtl");document.documentElement.setAttribute("lang","ar");}})()</script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Project Workspace — Abyss</title>
 <link rel="stylesheet" href="/libs/maplibre-gl.css">

@@ -17,10 +17,19 @@
 
   // ======================== THEME INIT (runs immediately) ========================
   (function initTheme() {
-    // Dark by default; honor a stored light preference (glyph_theme key).
+    // Light by default; honor a stored dark preference (glyph_theme key).
+    // One-time migration (glyph_theme_v2): clear preferences saved while dark
+    // was the default, so every user starts light once; a fresh toggle re-saves.
     var t = null;
-    try { t = localStorage.getItem('glyph_theme'); } catch (e) {}
-    document.documentElement.setAttribute('data-theme', t === 'light' ? 'light' : 'dark');
+    try {
+      t = localStorage.getItem('glyph_theme');
+      if (!localStorage.getItem('glyph_theme_v2')) {
+        localStorage.setItem('glyph_theme_v2', '1');
+        localStorage.removeItem('glyph_theme');
+        t = null;
+      }
+    } catch (e) {}
+    document.documentElement.setAttribute('data-theme', t === 'dark' ? 'dark' : 'light');
   })();
 
   // Shared theme API — pages and the topbar toggle both go through this.
@@ -29,7 +38,7 @@
       return document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
     },
     set: function (t) {
-      t = t === 'light' ? 'light' : 'dark';
+      t = t === 'dark' ? 'dark' : 'light';
       document.documentElement.setAttribute('data-theme', t);
       try { localStorage.setItem('glyph_theme', t); } catch (e) {}
       try { document.dispatchEvent(new CustomEvent('abyss-theme-change', { detail: { theme: t } })); } catch (e) {}

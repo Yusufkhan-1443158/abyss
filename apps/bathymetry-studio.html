@@ -304,7 +304,7 @@
 <script src="/libs/three.min.js"></script>
 <script src="/libs/abyss-logo.js"></script>
 <script>
-(function(){var t=null;try{t=localStorage.getItem('glyph_theme');}catch(e){}document.documentElement.setAttribute('data-theme',t==='light'?'light':'dark');})();
+(function(){var t=null;try{t=localStorage.getItem('glyph_theme');if(!localStorage.getItem('glyph_theme_v2')){localStorage.setItem('glyph_theme_v2','1');localStorage.removeItem('glyph_theme');t=null;}}catch(e){}document.documentElement.setAttribute('data-theme',t==='dark'?'dark':'light');})();
 document.getElementById('brand').innerHTML=AbyssLogo.lockup({size:26,href:'master-home.html'});
 // Day/night toggle removed — Abyss is dark-only (map basemap stays dark via cartoStyle()).
 function authHeaders(){var t=localStorage.getItem('intel_globe_token');return t?{'Authorization':'Bearer '+t}:{};}

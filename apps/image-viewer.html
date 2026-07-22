@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<script>(function(){var t=null;try{t=localStorage.getItem("glyph_theme");}catch(e){}document.documentElement.setAttribute("data-theme",t==="light"?"light":"dark");var l=localStorage.getItem("glyph_lang")||"en";if(l==="ar"){document.documentElement.setAttribute("dir","rtl");document.documentElement.setAttribute("lang","ar");}})()</script>
+<script>(function(){var t=null;try{t=localStorage.getItem("glyph_theme");if(!localStorage.getItem("glyph_theme_v2")){localStorage.setItem("glyph_theme_v2","1");localStorage.removeItem("glyph_theme");t=null;}}catch(e){}document.documentElement.setAttribute("data-theme",t==="dark"?"dark":"light");var l=localStorage.getItem("glyph_lang")||"en";if(l==="ar"){document.documentElement.setAttribute("dir","rtl");document.documentElement.setAttribute("lang","ar");}})()</script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Image Viewer — Abyss</title>
 <link rel="stylesheet" href="/fonts/outfit.css">
@@ -3274,7 +3274,7 @@ function generateReportHTML() {
     var html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>' + escapeHtml(d.title) + '</title>';
     // Theme-init for the standalone report. The closing script tag is split into two
     // string pieces so its verbatim sequence never appears here and cannot terminate this page.
-    html += '<scr' + 'ipt>(function(){var t=null;try{t=localStorage.getItem("glyph_theme");}catch(e){}document.documentElement.setAttribute("data-theme",t==="light"?"light":"dark");})()</scr' + 'ipt>';
+    html += '<scr' + 'ipt>(function(){var t=null;try{t=localStorage.getItem("glyph_theme");if(!localStorage.getItem("glyph_theme_v2")){localStorage.setItem("glyph_theme_v2","1");localStorage.removeItem("glyph_theme");t=null;}}catch(e){}document.documentElement.setAttribute("data-theme",t==="dark"?"dark":"light");})()</scr' + 'ipt>';
     html += '<style>body{font-family:Arial,sans-serif;max-width:900px;margin:0 auto;padding:20px;background:#fff;color:#333}';
     html += '.cls-banner{text-align:center;padding:6px;font-weight:700;letter-spacing:2px;color:' + clsColor + ';border:2px solid ' + clsColor + ';margin-bottom:16px}';
     html += 'h1{font-size:22px;margin-bottom:8px} .meta{display:flex;flex-wrap:wrap;gap:16px;margin-bottom:16px;font-size:13px;color:#666}';

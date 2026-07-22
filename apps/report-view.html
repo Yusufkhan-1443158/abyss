@@ -80,9 +80,10 @@
 
 <script src="/libs/abyss-logo.js"></script>
 <script>
-// Theme (shared key with the rest of Abyss) — dark by default, light if stored
-(function(){ var t; try{ t = localStorage.getItem('glyph_theme'); }catch(e){}
-  document.documentElement.setAttribute('data-theme', t === 'light' ? 'light' : 'dark'); })();
+// Theme (shared key with the rest of Abyss) — light by default, dark if stored
+(function(){ var t; try{ t = localStorage.getItem('glyph_theme');
+  if(!localStorage.getItem('glyph_theme_v2')){ localStorage.setItem('glyph_theme_v2','1'); localStorage.removeItem('glyph_theme'); t = null; } }catch(e){}
+  document.documentElement.setAttribute('data-theme', t === 'dark' ? 'dark' : 'light'); })();
 function abyssToggleTheme(){
   var h = document.documentElement, n = h.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
   h.setAttribute('data-theme', n);

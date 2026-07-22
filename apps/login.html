@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Login — Abyss</title>
 <link rel="stylesheet" href="/fonts.css">
-<script>(function(){var t=null;try{t=localStorage.getItem('glyph_theme');}catch(e){}document.documentElement.setAttribute('data-theme',t==='light'?'light':'dark');})();</script>
+<script>(function(){var t=null;try{t=localStorage.getItem('glyph_theme');if(!localStorage.getItem('glyph_theme_v2')){localStorage.setItem('glyph_theme_v2','1');localStorage.removeItem('glyph_theme');t=null;}}catch(e){}document.documentElement.setAttribute('data-theme',t==='dark'?'dark':'light');})();</script>
 <style>
 /* === DESIGN TOKENS === */
 :root {
