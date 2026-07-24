@@ -221,7 +221,11 @@
   .sweepwrap{ position:absolute; inset:0; display:flex; padding:62px 22px 22px; gap:16px; }
   .sweepmain{ flex:1; position:relative; border:1px solid var(--border); border-radius:14px; overflow:hidden; background:#04070b; display:flex; align-items:center; justify-content:center; }
   :root[data-theme="light"] .sweepmain{ background:#eef2f7; }
-  .sweepside{ width:280px; display:flex; flex-direction:column; gap:14px; }
+  /* The three cards need ~584px; on a short window that overflowed the column and
+     the stats card was silently cut off the bottom of the screen. Let it scroll. */
+  .sweepside{ width:280px; display:flex; flex-direction:column; gap:14px; min-height:0;
+              overflow-y:auto; overscroll-behavior:contain; padding-right:2px; }
+  .sweepside>*{ flex:0 0 auto; }
   .sweepside .card{ border:1px solid var(--border); border-radius:14px; background:var(--glass-bg); padding:14px; }
   .sweepside h4{ margin:0 0 8px; font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--accent); }
   .sweepside input[type=range]{ width:100%; accent-color:var(--accent); }
@@ -266,8 +270,7 @@
       <label class="toggle" id="swBareT" style="margin-top:12px"><span class="sw"></span> Bare-earth contours<i class="ifo" tabindex="0" role="img" aria-label="Info" data-tip="Drains the water entirely and draws the seabed as contour lines only.">i</i></label>
     </div>
     <div class="card"><h4>Hypsometry<i class="ifo" tabindex="0" role="img" aria-label="Info" data-tip="Curve of submerged area against water level. The marker shows the current level.">i</i></h4>
-      <canvas id="csweephyp" style="width:100%;height:150px"></canvas>
-      <div style="font-size:11px;color:var(--text-dim);margin-top:6px">Submerged area vs water level. Marker = current level.</div>
+      <canvas id="csweephyp" style="width:100%;height:132px"></canvas>
     </div>
     <div class="card" id="swStats" style="font-size:12px;color:var(--text-dim)"></div>
   </div>
