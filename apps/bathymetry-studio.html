@@ -21,17 +21,41 @@
   #map{ position:absolute; inset:0; } canvas{ display:block; }
   #c3d{ position:absolute; inset:0; width:100%; height:100%; }
 
+  /* The bar is a single non-wrapping row: every child keeps its own line and the
+     nav links (not the tabs or the buttons) absorb any shortfall. Without this a
+     narrow window wraps "Cross-section" / "New survey" onto two lines and the
+     52px bar overflows. */
   .top{ position:fixed; top:0; left:0; right:0; height:52px; z-index:40; display:flex; align-items:center; gap:14px;
+        flex-wrap:nowrap; white-space:nowrap; overflow:hidden;
         padding:0 16px; background:linear-gradient(180deg,rgba(var(--deep-rgb),.92),rgba(var(--deep-rgb),.4)); backdrop-filter:blur(12px); border-bottom:1px solid var(--border); }
-  .lab-tag{ font-size:10px; letter-spacing:.2em; text-transform:uppercase; color:var(--accent); border:1px solid var(--accent-dim); padding:3px 8px; border-radius:999px; }
-  .top a{ color:var(--text-dim); text-decoration:none; font-size:13px; padding:6px 10px; border-radius:8px; }
+  .top>*{ flex:0 0 auto; }
+  .lab-tag{ font-size:10px; letter-spacing:.2em; text-transform:uppercase; color:var(--accent); border:1px solid var(--accent-dim); padding:3px 8px; border-radius:999px; white-space:nowrap; }
+  .top a{ color:var(--text-dim); text-decoration:none; font-size:13px; padding:6px 10px; border-radius:8px; white-space:nowrap; min-width:0; }
   .top a:hover{ color:var(--text); background:rgba(var(--ink),.05); }
-  .spacer{ flex:1; }
-  .vtabs{ display:flex; gap:3px; padding:4px; border-radius:11px; background:rgba(var(--ink),.04); border:1px solid var(--border); }
-  .vtab{ font-size:12px; padding:6px 12px; border-radius:8px; cursor:pointer; color:var(--text-dim); border:none; background:none; font:inherit; }
+  .spacer{ flex:1 1 auto; min-width:0; }
+  .vtabs{ display:flex; gap:3px; padding:4px; border-radius:11px; background:rgba(var(--ink),.04); border:1px solid var(--border); flex-wrap:nowrap; }
+  .vtab{ font-size:12px; padding:6px 12px; border-radius:8px; cursor:pointer; color:var(--text-dim); border:none; background:none; font:inherit; white-space:nowrap; }
   .vtab.active{ background:var(--accent-dim); color:var(--accent); }
-  .ibtn{ width:32px; height:32px; border-radius:8px; border:1px solid var(--border); background:rgba(var(--ink),.04); color:var(--text); cursor:pointer; }
+  .ibtn{ width:32px; height:32px; border-radius:8px; border:1px solid var(--border); background:rgba(var(--ink),.04); color:var(--text); cursor:pointer; flex:0 0 auto; }
   .ibtn:hover{ border-color:var(--accent); color:var(--accent); }
+  /* Set inline to display:inline-flex, which blockifies to flex as a child of
+     .top. With no explicit alignment the label is stretch-aligned and rides the
+     top of the 32px box — pin it to the centre. */
+  #newSurveyBtn{ align-items:center; justify-content:center; line-height:1; white-space:nowrap; }
+  /* The bar needs ~1290px at full size. Rather than clip Sign Out on a narrower
+     window, tighten it in stages: spacing → the CORE badge → the nav links (the
+     brand logo still links Home). */
+  @media (max-width:1400px){
+    .top{ gap:9px; padding:0 12px; }
+    .vtab{ padding:6px 9px; font-size:11.5px; }
+    .top a{ padding:6px 7px; font-size:12.5px; }
+  }
+  @media (max-width:1200px){
+    .top .lab-tag{ display:none; }
+    .vtab{ padding:5px 7px; font-size:11px; }
+    #newSurveyBtn{ padding:0 8px !important; }
+  }
+  @media (max-width:1040px){ .top a:not(#signOut){ display:none; } }
 
   .pane{ position:fixed; top:52px; left:0; right:0; bottom:0; display:none; } .pane.active{ display:block; }
   .pane.chart{ background:var(--bg); padding:58px 28px 150px; overflow:auto; }
@@ -49,10 +73,20 @@
   .tool:hover::after{ opacity:1; }
 
   /* metrics — top right */
-  .metrics{ position:fixed; right:14px; top:64px; width:250px; z-index:30; display:none; border-radius:14px; background:var(--glass-bg);
-        backdrop-filter:var(--glass-blur); border:1px solid var(--border); }
+  /* Right rail — Metrics and Reference soundings share one column so they can
+     never overlap. Previously both were independently `fixed` (one anchored top,
+     one bottom) and collided as soon as the metrics list grew. Metrics takes the
+     leftover height and scrolls; soundings keeps its natural size. */
+  .rightrail{ position:fixed; right:14px; top:64px; bottom:22px; width:250px; z-index:30;
+        display:flex; flex-direction:column; align-items:stretch; gap:10px; pointer-events:none; }
+  .rightrail>*{ pointer-events:auto; }
+  .metrics{ position:relative; width:100%; display:none; border-radius:14px; background:var(--glass-bg);
+        backdrop-filter:var(--glass-blur); border:1px solid var(--border); min-height:0; overflow:auto; overscroll-behavior:contain; }
   .metrics.show{ display:block; }
-  .metrics h3{ margin:0; padding:12px 14px; font-size:11px; letter-spacing:.13em; text-transform:uppercase; color:var(--accent); border-bottom:1px solid var(--border); }
+  #metrics{ flex:1 1 auto; }
+  #sndPanel{ flex:0 0 auto; max-height:52vh; }
+  .metrics h3{ margin:0; padding:12px 14px; font-size:11px; letter-spacing:.13em; text-transform:uppercase; color:var(--accent);
+        border-bottom:1px solid var(--border); position:sticky; top:0; z-index:2; background:rgba(var(--panel-rgb),.97); backdrop-filter:blur(8px); }
   .metrics .b{ padding:12px 14px; }
   .mrow{ display:flex; justify-content:space-between; font-size:12px; padding:4px 0; } .mrow .k{ color:var(--text-dim); } .mrow .v{ font-family:var(--font-mono); }
   .iho{ display:flex; align-items:center; gap:8px; margin:5px 0; font-size:11px; } .iho .nm{ width:66px; color:var(--text-dim); }
@@ -101,6 +135,28 @@
   .cval{ font-family:var(--font-mono); font-size:11px; color:var(--text-dim); min-width:48px; }
   .miniGhost{ font:inherit; font-size:11px; padding:6px 10px; border-radius:8px; cursor:pointer; border:1px solid var(--border); background:rgba(var(--ink),.03); color:var(--text); }
   .miniGhost:hover{ border-color:var(--accent); color:var(--accent); }
+  /* ⓘ info icons — hover / keyboard-focus tooltips, theme-aware.
+     The bubble is ONE body-level element (#tipbox) driven by JS rather than an
+     ::after on each icon: most icons live inside panels that scroll
+     (.cb, .methods, #sndPanel), and an ::after bubble is clipped by those
+     overflow boxes. A fixed-position bubble also flips and clamps so it is
+     always fully on screen. */
+  .ifo{ display:inline-flex; align-items:center; justify-content:center; width:14px; height:14px; margin-left:6px;
+        border-radius:50%; border:1px solid var(--border); background:rgba(var(--ink),.04); color:var(--text-dim);
+        font-size:9px; font-weight:700; font-style:normal; line-height:1; text-transform:none; letter-spacing:0;
+        cursor:default; vertical-align:middle; flex:0 0 auto; user-select:none; transition:color .13s,border-color .13s,background .13s; }
+  .ifo:hover,.ifo:focus-visible{ color:var(--accent); border-color:var(--accent); background:var(--accent-dim); outline:none; }
+  /* An icon sitting beside a button: keep it on the button's line. A bare .ifo
+     after a full-width button wraps onto its own row. */
+  .btnrow{ display:flex; align-items:center; gap:6px; flex-wrap:nowrap; }
+  .ifo.side{ align-self:center; margin-left:0; }
+  #tipbox{ position:fixed; z-index:9999; max-width:252px; padding:8px 11px; border-radius:9px; display:none;
+        font-family:var(--font-ui); font-size:11.5px; line-height:1.5; font-weight:400; font-style:normal;
+        text-transform:none; letter-spacing:0; text-align:left; white-space:normal; pointer-events:none;
+        opacity:0; transition:opacity .13s ease;
+        background:rgba(8,14,26,.97); color:#e8f4ff; border:1px solid rgba(120,190,220,.28); box-shadow:0 10px 26px rgba(0,0,0,.45); }
+  #tipbox.show{ display:block; opacity:1; }
+  :root[data-theme="light"] #tipbox{ background:#fff; color:#12313f; border-color:rgba(10,60,90,.16); box-shadow:0 10px 28px rgba(20,60,90,.18); }
 
   .legend{ position:fixed; left:70px; bottom:22px; z-index:25; background:rgba(var(--deep-rgb),.78); border:1px solid var(--border); border-radius:11px; padding:9px 12px; backdrop-filter:blur(10px); font-size:11px; color:var(--text-dim); display:none; }
   .legend.show{ display:block; } .legend .ramp{ width:150px; height:9px; border-radius:3px; margin:5px 0 3px; } .legend .lr{ display:flex; justify-content:space-between; font-family:var(--font-mono); }
@@ -152,6 +208,7 @@
   .cmpbar .fld{ display:flex; flex-direction:column; gap:5px; } .cmpbar .fld label{ font-size:10px; text-transform:uppercase; letter-spacing:.08em; color:var(--text-dim); }
   .cmpbar select{ padding:8px 10px; border-radius:9px; font:inherit; font-size:12px; background:var(--bg-input,rgba(var(--ink),.05)); color:var(--text); border:1px solid var(--border); min-width:200px; }
   .cmpstage{ flex:1; position:relative; border:1px solid var(--border); border-radius:14px; overflow:hidden; background:#04070b; min-height:0; }
+  :root[data-theme="light"] .cmpstage{ background:#eef2f7; }
   .cmpstage canvas{ position:absolute; top:0; left:0; }
   .cmphandle{ position:absolute; top:0; bottom:0; width:2px; background:var(--accent); z-index:5; cursor:ew-resize; display:none; }
   .cmphandle::after{ content:'⇆'; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:var(--accent); color:#03121a; width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:13px; }
@@ -163,6 +220,7 @@
   /* ── NEW: Sweep pane ── */
   .sweepwrap{ position:absolute; inset:0; display:flex; padding:62px 22px 22px; gap:16px; }
   .sweepmain{ flex:1; position:relative; border:1px solid var(--border); border-radius:14px; overflow:hidden; background:#04070b; display:flex; align-items:center; justify-content:center; }
+  :root[data-theme="light"] .sweepmain{ background:#eef2f7; }
   .sweepside{ width:280px; display:flex; flex-direction:column; gap:14px; }
   .sweepside .card{ border:1px solid var(--border); border-radius:14px; background:var(--glass-bg); padding:14px; }
   .sweepside h4{ margin:0 0 8px; font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--accent); }
@@ -172,7 +230,7 @@
 </head>
 <body class="abyss-depth-bg">
 <div class="top">
-  <span id="brand"></span><span class="lab-tag" aria-current="page">CORE</span>
+  <span id="brand"></span><span class="lab-tag" aria-current="page" title="Bathymetry CORE — pick a sea area, run a satellite depth engine, then explore the seabed it produces.">CORE</span>
   <a href="master-home.html">Home</a><a href="collections-browse.html">Collections</a><a href="reports-browse.html">Reports</a>
   <span class="spacer"></span>
   <div class="vtabs" id="vtabs">
@@ -191,8 +249,8 @@
 <div class="pane active" data-v="map"><div id="map"></div></div>
 <div class="pane" data-v="d3"><canvas id="c3d"></canvas><div class="empty3d" id="empty3d">Generate a survey to explore the seafloor in 3D.</div></div>
 <div class="pane chart" data-v="prof"><canvas id="cprof" style="width:100%;height:calc(100% - 30px)"></canvas>
-  <div style="text-align:center;color:var(--text-dim);font-size:12px;margin-top:8px" id="profHint">Select the <b>Transect</b> tool on the map and draw lines (up to 5) to sample cross-sections.</div></div>
-<div class="pane chart" data-v="hist"><h2 style="font-size:14px;letter-spacing:.1em;text-transform:uppercase;color:var(--accent)">Depth distribution</h2>
+  <div style="text-align:center;color:var(--text-dim);font-size:12px;margin-top:8px"><span id="profHint">Select the <b>Transect</b> tool on the map and draw lines (up to 5) to sample cross-sections.</span><i class="ifo" tabindex="0" role="img" aria-label="Info" data-tip="A side-on slice through the seabed. Click two points on the map to cut a line; each transect gets its own colour.">i</i></div></div>
+<div class="pane chart" data-v="hist"><h2 style="font-size:14px;letter-spacing:.1em;text-transform:uppercase;color:var(--accent)">Depth distribution<i class="ifo" tabindex="0" role="img" aria-label="Info" data-tip="How much of the survey sits at each depth. Tall bars on the left mean mostly shallow water.">i</i></h2>
   <canvas id="chist" style="width:100%;max-width:900px;height:320px"></canvas><div id="histStats" style="margin-top:12px"></div>
   <div id="histEmpty" class="empty3d" style="inset:52px 0 0 0">Generate a survey to see the histogram.</div></div>
 
@@ -201,13 +259,13 @@
   <div class="sweepmain"><canvas id="csweep"></canvas>
     <div class="empty3d" id="emptySweep" style="position:absolute">Generate a survey to flood / drain the basin.</div></div>
   <div class="sweepside">
-    <div class="card"><h4>Water level</h4>
+    <div class="card"><h4>Water level<i class="ifo" tabindex="0" role="img" aria-label="Info" data-tip="Simulated sea level. Drag or play to flood/drain the basin and see which areas go dry.">i</i></h4>
       <div class="levelreadout"><span id="swLvl">12.0</span> m</div>
       <input type="range" id="swRange" min="0" max="25" step="0.2" value="12">
-      <div class="crow"><button class="btn ghost" id="swPlay" style="flex:1">▶ Flood / drain</button></div>
-      <label class="toggle" id="swBareT" style="margin-top:12px"><span class="sw"></span> Bare-earth contours</label>
+      <div class="crow"><button class="btn ghost" id="swPlay" style="flex:1">▶ Flood / drain</button><i class="ifo side" tabindex="0" role="img" aria-label="Info" data-tip="Animates the water level up and down so you can watch banks and channels appear.">i</i></div>
+      <label class="toggle" id="swBareT" style="margin-top:12px"><span class="sw"></span> Bare-earth contours<i class="ifo" tabindex="0" role="img" aria-label="Info" data-tip="Drains the water entirely and draws the seabed as contour lines only.">i</i></label>
     </div>
-    <div class="card"><h4>Hypsometry</h4>
+    <div class="card"><h4>Hypsometry<i class="ifo" tabindex="0" role="img" aria-label="Info" data-tip="Curve of submerged area against water level. The marker shows the current level.">i</i></h4>
       <canvas id="csweephyp" style="width:100%;height:150px"></canvas>
       <div style="font-size:11px;color:var(--text-dim);margin-top:6px">Submerged area vs water level. Marker = current level.</div>
     </div>
@@ -218,10 +276,10 @@
 <!-- NEW: Compare -->
 <div class="pane" data-v="cmp"><div class="cmpwrap">
   <div class="cmpbar">
-    <div class="fld"><label>Survey A (older)</label><select id="cmpA"><option value="">— pick a survey —</option></select></div>
-    <div class="fld"><label>Survey B (newer)</label><select id="cmpB"><option value="">— pick a survey —</option></select></div>
-    <div class="fld"><label>Mode</label><div class="seg" id="cmpMode"><button data-m="swipe" class="active">Swipe</button><button data-m="side">Side by side</button><button data-m="diff">Δ Difference</button></div></div>
-    <button class="miniGhost" id="cmpReload">↻ Refresh list</button>
+    <div class="fld"><label>Survey A (older)<i class="ifo" tabindex="0" role="img" aria-label="Info" data-tip="Baseline survey — the earlier date in the comparison.">i</i></label><select id="cmpA"><option value="">— pick a survey —</option></select></div>
+    <div class="fld"><label>Survey B (newer)<i class="ifo" tabindex="0" role="img" aria-label="Info" data-tip="Comparison survey — the later date. Δ shows B minus A.">i</i></label><select id="cmpB"><option value="">— pick a survey —</option></select></div>
+    <div class="fld"><label>Mode<i class="ifo" tabindex="0" role="img" aria-label="Info" data-tip="Swipe drags a divider between the two. Side by side shows both. Δ maps the depth change (erosion vs accretion).">i</i></label><div class="seg" id="cmpMode"><button data-m="swipe" class="active">Swipe</button><button data-m="side">Side by side</button><button data-m="diff">Δ Difference</button></div></div>
+    <button class="miniGhost" id="cmpReload">↻ Refresh list</button><i class="ifo side" tabindex="0" role="img" aria-label="Info" data-tip="Re-reads your saved surveys. Use it after generating a new one so it shows up in the dropdowns.">i</i>
   </div>
   <div class="cmpstage" id="cmpStage">
     <canvas id="cmpCanA"></canvas><canvas id="cmpCanB"></canvas>
@@ -240,51 +298,53 @@
   <button class="tool" data-tool="contour" data-tip="Toggle contours" title="Toggle contours" aria-label="Toggle contours"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12c4-6 14-6 18 0M3 16c4-4 14-4 18 0M3 8c4-8 14-8 18 0"/></svg></button>
 </div>
 
-<div class="metrics" id="metrics"><h3>Metrics</h3><div class="b" id="metricsB"></div></div>
+<div class="rightrail" id="rightrail">
+<div class="metrics" id="metrics"><h3>Metrics<i class="ifo r" tabindex="0" role="img" aria-label="Info" data-tip="Summary of the generated survey: engine used, mean/max depth and the share of the area with a valid depth (coverage).">i</i></h3><div class="b" id="metricsB"></div></div>
 
 <!-- reference soundings: IHO S-44 validation + local calibration -->
-<div class="metrics" id="sndPanel" style="top:auto;bottom:22px;max-height:60vh;overflow:auto"><h3>Reference soundings</h3><div class="b">
+<div class="metrics" id="sndPanel"><h3>Reference soundings<i class="ifo r" tabindex="0" role="img" aria-label="Info" data-tip="Upload known depth measurements to score this survey against IHO S-44, or calibrate the depths to match your points.">i</i></h3><div class="b">
   <input type="file" id="sndFile" accept=".xyz,.csv,.txt" style="display:none">
-  <button class="miniGhost" id="sndPick" style="width:100%">⤒ Upload .xyz / .csv / .txt</button>
-  <div class="cg" style="margin-top:9px"><span class="lab">Column order</span>
+  <div class="btnrow"><button class="miniGhost" id="sndPick" style="flex:1">⤒ Upload .xyz / .csv / .txt</button><i class="ifo side" tabindex="0" role="img" aria-label="Info" data-tip="A plain text file, one sounding per line: longitude, latitude, depth. Blank lines and # comments are ignored.">i</i></div>
+  <div class="cg" style="margin-top:9px"><span class="lab">Column order<i class="ifo r" tabindex="0" role="img" aria-label="Info" data-tip="Tells the parser how your file’s columns are ordered. Depth is positive-down, in metres.">i</i></span>
     <div class="seg" id="sndOrder"><button data-o="lonlat" class="active">lon,lat,depth</button><button data-o="latlon">lat,lon,depth</button></div></div>
   <div id="sndInfo" style="font-size:11px;color:var(--text-dim);margin-top:8px">No file loaded.</div>
-  <div class="crow" style="margin-top:10px"><button class="btn" id="valBtn" disabled>✓ Validate (S-44)</button></div>
-  <div class="crow" style="margin-top:6px"><button class="btn ghost" id="calBtn" disabled style="flex:1">⚙ Calibrate depth to my points</button></div>
+  <div class="btnrow" style="margin-top:10px"><button class="btn" id="valBtn" disabled style="flex:1">✓ Validate (S-44)</button><i class="ifo side" tabindex="0" role="img" aria-label="Info" data-tip="Scores this survey against your soundings and reports the IHO S-44 order it meets. Nothing is changed.">i</i></div>
+  <div class="btnrow" style="margin-top:6px"><button class="btn ghost" id="calBtn" disabled style="flex:1">⚙ Calibrate depth to my points</button><i class="ifo side" tabindex="0" role="img" aria-label="Info" data-tip="Fits the depths to your measurements and saves a new corrected survey. Needs 10+ points; the original is kept.">i</i></div>
   <div id="valOut"></div>
   <div id="calOut"></div>
 </div></div>
+</div>
 
 <!-- bottom-center frame -->
 <div class="frame" id="console">
   <div class="ph active" id="ph1">
-    <div class="ch"><span class="ctitle">① Survey area</span><span class="stepdots"><span class="dot on"></span><span class="dot"></span></span></div>
+    <div class="ch"><span class="ctitle">① Survey area</span><i class="ifo up" tabindex="0" role="img" aria-label="Info" data-tip="The sea area to survey. Pick a preset, draw a rectangle, or type W/S/E/N coordinates — the map follows as you type.">i</i><span class="stepdots"><span class="dot on"></span><span class="dot"></span></span></div>
     <div class="cb"><div class="chips" id="presets"></div>
       <div class="roifields">
-        <div><label>West</label><input type="number" step="0.001" id="bbW" placeholder="lon"></div>
-        <div><label>South</label><input type="number" step="0.001" id="bbS" placeholder="lat"></div>
-        <div><label>East</label><input type="number" step="0.001" id="bbE" placeholder="lon"></div>
-        <div><label>North</label><input type="number" step="0.001" id="bbN" placeholder="lat"></div>
+        <div><label>West<i class="ifo" tabindex="0" role="img" aria-label="Info" data-tip="Left edge of the box — longitude in decimal degrees, e.g. 54.643. Must be smaller than East.">i</i></label><input type="number" step="0.001" id="bbW" placeholder="lon"></div>
+        <div><label>South<i class="ifo" tabindex="0" role="img" aria-label="Info" data-tip="Bottom edge — latitude in decimal degrees, e.g. 24.792. Must be smaller than North.">i</i></label><input type="number" step="0.001" id="bbS" placeholder="lat"></div>
+        <div><label>East<i class="ifo" tabindex="0" role="img" aria-label="Info" data-tip="Right edge — longitude in decimal degrees. The map re-centres as soon as you stop typing.">i</i></label><input type="number" step="0.001" id="bbE" placeholder="lon"></div>
+        <div><label>North<i class="ifo" tabindex="0" role="img" aria-label="Info" data-tip="Top edge — latitude in decimal degrees. Press Enter to jump to the box straight away.">i</i></label><input type="number" step="0.001" id="bbN" placeholder="lat"></div>
       </div>
-      <div class="crow"><button class="btn ghost" id="drawBtn">▭ Draw rectangle</button><button class="btn" id="toStep2" disabled>Next →</button></div>
+      <div class="crow"><button class="btn ghost" id="drawBtn">▭ Draw rectangle</button><i class="ifo side" tabindex="0" role="img" aria-label="Info" data-tip="Draw: drag a box straight on the map (ESC cancels). Keep areas under ~40 km² for the highest resolution.">i</i><button class="btn" id="toStep2" disabled>Next →</button></div>
       <div style="font-size:11px;color:var(--text-dim);margin-top:9px" id="areaNote">Pick a UAE preset, draw a rectangle, or type coordinates.</div></div>
   </div>
   <div class="ph" id="ph2">
-    <div class="ch"><button class="ibtn" id="back2" style="width:26px;height:26px" title="Back to survey area" aria-label="Back to survey area">←</button><span class="ctitle">② Method &amp; parameters</span><span class="stepdots"><span class="dot on"></span><span class="dot on"></span></span></div>
+    <div class="ch"><button class="ibtn" id="back2" style="width:26px;height:26px" title="Back to survey area" aria-label="Back to survey area">←</button><span class="ctitle">② Method &amp; parameters</span><i class="ifo up" tabindex="0" role="img" aria-label="Info" data-tip="Choose the depth engine and the satellite imagery filters, then generate. ‘live platform’ engines run on the Bathymetry-from-Space platform.">i</i><span class="stepdots"><span class="dot on"></span><span class="dot on"></span></span></div>
     <div class="cb">
       <div class="methods" id="engines">
-        <div class="mcard active" data-m="vmarch-core-standard" data-name="VMarch SDB Standard"><div><div class="nm">VMarch SDB Standard</div><div class="ds">Bathymetry-from-Space platform standard run — the platform's own imagery, masks &amp; calibration chain</div></div><span class="tag core-tag">live platform</span></div>
-        <div class="mcard" data-m="vmarch-core-clustered" data-name="Very-HR Clustered"><div><div class="nm">Very-HR Clustered</div><div class="ds">Platform Very-HR Clustered SDB pipeline (Sentinel-2 source)</div></div><span class="tag core-tag">live platform</span></div>
-        <div class="mcard" data-m="vmarch-core-mle" data-name="Multi-Scene MLE"><div><div class="nm">Multi-Scene MLE</div><div class="ds">Platform multi-scene MLE composite over the end-date year — 2–12 scenes (default 10), per-scene QC + inter-scene σ</div></div><span class="tag core-tag">live platform</span></div>
-        <div class="mcard" data-m="vmarch-core-wave" data-name="Wave-Kinematics SDB"><div><div class="nm">Wave-Kinematics SDB</div><div class="ds">Platform S2Shores/Almar wave-dispersion physics — best on swell-exposed coasts (e.g. east coast); scenes = ranked+fused</div></div><span class="tag core-tag">live platform</span></div>
-        <div class="mcard disabled" data-m="icesat2"><div><div class="nm">ICESat-2 Photon</div><div class="ds">Available on the platform (EarthData creds OK, granule search verified) — produces along-track soundings, not a survey grid, so it is not wired to the studio raster pipeline</div></div><span class="tag">not wired</span></div>
-        <div class="mcard" data-m="vmarch-sdb" data-name="VMarch SDB (port)"><div><div class="nm">VMarch SDB (port)</div><div class="ds">Ported Lyzenga+Stumpf+UAE ensemble chain — offline fallback when the platform is unreachable · registry v1</div></div><span class="tag">port</span></div>
-        <div class="mcard" data-m="dl-pro-v3" data-name="DL-Pro v3"><div><div class="nm">DL-Pro v3</div><div class="ds">Turbidity-aware MLP · RMSE 2.84 m</div></div><span class="tag">fallback</span></div></div>
-      <div class="cgrid" style="margin-top:12px"><div><label>Start</label><input type="date" id="sd" value="2023-01-01"></div><div><label>End</label><input type="date" id="ed" value="2024-12-31"></div></div>
-      <div style="margin-top:10px"><label>Max cloud · <span id="ccv">20</span>%</label><input type="range" id="cc" min="5" max="80" value="20" style="width:100%"></div>
-      <div style="margin-top:10px"><label>Scenes · multi-temporal composite</label><div class="seg" id="nsc"><button data-n="1" class="active">1</button><button data-n="3">3</button><button data-n="5">5</button><button data-n="7">7</button><button data-n="10">10</button><button data-n="12">12</button></div>
+        <div class="mcard active" data-m="vmarch-core-standard" data-name="VMarch SDB Standard"><div><div class="nm">VMarch SDB Standard</div><div class="ds">Bathymetry-from-Space platform standard run — the platform's own imagery, masks &amp; calibration chain</div></div><i class="ifo" tabindex="0" role="img" aria-label="Info" data-tip="The safe default. Fastest full-quality run, works on any clear-water coast.">i</i><span class="tag core-tag">live platform</span></div>
+        <div class="mcard" data-m="vmarch-core-clustered" data-name="Very-HR Clustered"><div><div class="nm">Very-HR Clustered</div><div class="ds">Platform Very-HR Clustered SDB pipeline (Sentinel-2 source)</div></div><i class="ifo" tabindex="0" role="img" aria-label="Info" data-tip="Groups the seabed into similar-looking patches before fitting depth — sharper detail over mixed sand and seagrass.">i</i><span class="tag core-tag">live platform</span></div>
+        <div class="mcard" data-m="vmarch-core-mle" data-name="Multi-Scene MLE"><div><div class="nm">Multi-Scene MLE</div><div class="ds">Platform multi-scene MLE composite over the end-date year — 2–12 scenes (default 10), per-scene QC + inter-scene σ</div></div><i class="ifo" tabindex="0" role="img" aria-label="Info" data-tip="Fuses many dates into one depth map and reports an uncertainty (σ). Most accurate, slowest to run.">i</i><span class="tag core-tag">live platform</span></div>
+        <div class="mcard" data-m="vmarch-core-wave" data-name="Wave-Kinematics SDB"><div><div class="nm">Wave-Kinematics SDB</div><div class="ds">Platform S2Shores/Almar wave-dispersion physics — best on swell-exposed coasts (e.g. east coast); scenes = ranked+fused</div></div><i class="ifo" tabindex="0" role="img" aria-label="Info" data-tip="Reads depth from how ocean waves slow down, not water colour — the one to use in murky or swell-exposed water.">i</i><span class="tag core-tag">live platform</span></div>
+        <div class="mcard disabled" data-m="icesat2"><div><div class="nm">ICESat-2 Photon</div><div class="ds">Available on the platform (EarthData creds OK, granule search verified) — produces along-track soundings, not a survey grid, so it is not wired to the studio raster pipeline</div></div><i class="ifo" tabindex="0" role="img" aria-label="Info" data-tip="Satellite laser soundings. Not selectable here: it returns points along a track, not the full grid this studio draws.">i</i><span class="tag">not wired</span></div>
+        <div class="mcard" data-m="vmarch-sdb" data-name="VMarch SDB (port)"><div><div class="nm">VMarch SDB (port)</div><div class="ds">Ported Lyzenga+Stumpf+UAE ensemble chain — offline fallback when the platform is unreachable · registry v1</div></div><i class="ifo" tabindex="0" role="img" aria-label="Info" data-tip="Runs inside Abyss with no platform connection. Use it if the live platform is offline.">i</i><span class="tag">port</span></div>
+        <div class="mcard" data-m="dl-pro-v3" data-name="DL-Pro v3"><div><div class="nm">DL-Pro v3</div><div class="ds">Turbidity-aware MLP · RMSE 2.84 m</div></div><i class="ifo" tabindex="0" role="img" aria-label="Info" data-tip="Older neural-net engine kept for comparison. Typical error ≈2.8 m — prefer a VMarch engine.">i</i><span class="tag">fallback</span></div></div>
+      <div class="cgrid" style="margin-top:12px"><div><label>Start<i class="ifo up" tabindex="0" role="img" aria-label="Info" data-tip="Earliest capture date for the satellite imagery search.">i</i></label><input type="date" id="sd" value="2023-01-01"></div><div><label>End<i class="ifo up r" tabindex="0" role="img" aria-label="Info" data-tip="Latest capture date. Multi-Scene MLE composites over this end date’s year.">i</i></label><input type="date" id="ed" value="2024-12-31"></div></div>
+      <div style="margin-top:10px"><label>Max cloud · <span id="ccv">20</span>%<i class="ifo up" tabindex="0" role="img" aria-label="Info" data-tip="Rejects scenes cloudier than this. Lower = cleaner water signal, but fewer scenes to choose from.">i</i></label><input type="range" id="cc" min="5" max="80" value="20" style="width:100%"></div>
+      <div style="margin-top:10px"><label>Scenes · multi-temporal composite<i class="ifo up" tabindex="0" role="img" aria-label="Info" data-tip="How many dates to fuse. More scenes cut noise and give an inter-scene uncertainty (σ), but take longer to run.">i</i></label><div class="seg" id="nsc"><button data-n="1" class="active">1</button><button data-n="3">3</button><button data-n="5">5</button><button data-n="7">7</button><button data-n="10">10</button><button data-n="12">12</button></div>
         <div style="font-size:10px;color:var(--text-dim);margin-top:5px" id="nscNote">Single least-cloudy scene.</div></div>
-      <div class="crow"><button class="btn" id="genBtn">⚡ Generate Bathymetry</button></div>
+      <div class="crow"><button class="btn" id="genBtn">⚡ Generate Bathymetry</button><i class="ifo side" tabindex="0" role="img" aria-label="Info" data-tip="Fetches the satellite scenes and runs the chosen engine. Usually 1–5 minutes; multi-scene runs take longer.">i</i></div>
       <div id="prog" style="display:none"><div style="font-size:11px;color:var(--text-dim);margin-top:9px" id="progTxt">Fetching Sentinel-2 &amp; running the depth engine…</div><div class="barwrap"><i></i></div></div>
     </div>
   </div>
@@ -292,9 +352,9 @@
 <div class="frame" id="ctlbar"></div>
 
 <!-- NEW: ramp gallery popover -->
-<div class="rampgal" id="rampgal"><h4>Colour ramp</h4><div class="rg-grid" id="rgGrid"></div></div>
+<div class="rampgal" id="rampgal"><h4>Colour ramp<i class="ifo" tabindex="0" role="img" aria-label="Info" data-tip="Every ramp shows the same depths — pick one that suits your eyes, your audience or a printed chart.">i</i></h4><div class="rg-grid" id="rgGrid"></div></div>
 
-<div class="legend" id="legend"><div id="legTitle">Depth (m)</div><div class="ramp" id="legRamp"></div><div class="lr"><span>0</span><span id="legMax">25</span></div></div>
+<div class="legend" id="legend"><div style="display:flex;align-items:center"><span id="legTitle">Depth (m)</span><i class="ifo" tabindex="0" role="img" aria-label="Info" data-tip="Colour scale for the depth layer, in metres below the sea surface. Left = shallow, right = deepest in this survey.">i</i></div><div class="ramp" id="legRamp"></div><div class="lr"><span>0</span><span id="legMax">25</span></div></div>
 <div class="inspect" id="inspect"><div class="d" id="insD">—</div><div class="s" id="insS"></div></div>
 <canvas class="locator" id="locator" width="128" height="80"></canvas>
 <div class="northarrow" id="northarrow">▲<br>N</div>
@@ -306,10 +366,44 @@
 <script>
 (function(){var t=null;try{t=localStorage.getItem('glyph_theme');if(!localStorage.getItem('glyph_theme_v2')){localStorage.setItem('glyph_theme_v2','1');localStorage.removeItem('glyph_theme');t=null;}}catch(e){}document.documentElement.setAttribute('data-theme',t==='dark'?'dark':'light');})();
 document.getElementById('brand').innerHTML=AbyssLogo.lockup({size:26,href:'master-home.html'});
+
+// ───── ⓘ tooltips ─────
+// Every element with class "ifo" and a data-tip shares one body-level bubble.
+// Delegation means icons injected later (controls bar, metrics, validation
+// output) work with no extra wiring, and a fixed-position bubble escapes the
+// scrolling panels the icons sit in.
+(function(){
+  var box=document.createElement('div'); box.id='tipbox'; box.setAttribute('role','tooltip'); document.body.appendChild(box);
+  var cur=null;
+  function hide(){ if(!cur)return; cur=null; box.classList.remove('show'); }
+  function show(el){
+    var tip=el.getAttribute('data-tip'); if(!tip)return; cur=el;
+    box.textContent=tip; box.style.left='0px'; box.style.top='0px'; box.classList.add('show');
+    var r=el.getBoundingClientRect(), b=box.getBoundingClientRect(), M=8;
+    var left=Math.max(M,Math.min(r.left+r.width/2-b.width/2, window.innerWidth-b.width-M));
+    var top=r.bottom+M; if(top+b.height>window.innerHeight-M) top=Math.max(M,r.top-b.height-M);
+    box.style.left=Math.round(left)+'px'; box.style.top=Math.round(top)+'px';
+  }
+  function hit(e){ return (e.target&&e.target.closest)?e.target.closest('.ifo'):null; }
+  document.addEventListener('mouseover',function(e){ var el=hit(e); if(el&&el!==cur)show(el); });
+  document.addEventListener('mouseout',function(e){ var el=hit(e); if(el&&el===cur)hide(); });
+  document.addEventListener('focusin',function(e){ var el=hit(e); if(el)show(el); else hide(); });
+  document.addEventListener('focusout',hide);
+  document.addEventListener('keydown',function(e){ if(e.key==='Escape')hide(); });
+  document.addEventListener('click',function(e){ if(!hit(e))hide(); });
+  window.addEventListener('scroll',hide,true); window.addEventListener('resize',hide);
+})();
 // Day/night toggle removed — Abyss is dark-only (map basemap stays dark via cartoStyle()).
 function authHeaders(){var t=localStorage.getItem('intel_globe_token');return t?{'Authorization':'Bearer '+t}:{};}
 // resolved accent token (canvas needs a real colour, not a var())
 var ACCENT=(getComputedStyle(document.documentElement).getPropertyValue('--accent')||'').trim()||'#00f5ff';
+// Canvas takes literal colours, not CSS variables, so every chart used to be
+// painted in hardcoded white — invisible on the light theme. Resolve the ink at
+// DRAW time instead. Light ink is nudged up slightly because dark-on-light needs
+// a touch more alpha to read as clearly as white-on-dark at the same value.
+function isLight(){ return document.documentElement.getAttribute('data-theme')==='light'; }
+function ink(a){ return isLight() ? 'rgba(15,23,42,'+Math.min(.92,a*1.35).toFixed(3)+')' : 'rgba(255,255,255,'+a+')'; }
+function accent(){ return (getComputedStyle(document.documentElement).getPropertyValue('--accent')||'').trim()||ACCENT; }
 // Sign out (shared AbyssAuth if present, else clear tokens + go to login)
 document.getElementById('signOut').onclick=function(e){ e.preventDefault();
   try{ if(window.AbyssAuth&&typeof AbyssAuth.logout==='function'){ AbyssAuth.logout(); return; } }catch(_){}
@@ -333,7 +427,13 @@ function cartoStyle(){var th=document.documentElement.getAttribute('data-theme')
     sources:{c:{type:'raster',tiles:['https://a.basemaps.cartocdn.com/'+th+'/{z}/{x}/{y}.png','https://b.basemaps.cartocdn.com/'+th+'/{z}/{x}/{y}.png','https://c.basemaps.cartocdn.com/'+th+'/{z}/{x}/{y}.png'],tileSize:256,attribution:'© OpenStreetMap © CARTO'}},
     layers:[{id:'bg',type:'background',paint:{'background-color':document.documentElement.getAttribute('data-theme')==='light'?'#eef2f7':'#0a0a0f'}},{id:'c',type:'raster',source:'c'}]};}
 var map=new maplibregl.Map({container:'map',style:cartoStyle(),center:[54.66,24.81],zoom:11});
-map.on('style.load',function(){ if(state.grid){ renderOverlay(); if(state.contoursOn)renderContours(); drawTransectLines(); } if(state.bbox)drawRoi(state.bbox); });
+// Until 'style.load' fires, addSource/addLayer throw ("Style is not done
+// loading") AND maplibre's render loop is not running, so *animated* camera
+// moves are silently dropped. Both matter when the basemap CDN is slow or
+// unreachable: overlays and fly-tos would just never happen. Track it.
+var styleReady=false;
+map.on('style.load',function(){ styleReady=true;
+  if(state.grid){ renderOverlay(); if(state.contoursOn)renderContours(); drawTransectLines(); } if(state.bbox)drawRoi(state.bbox); });
 // Live day/night: retint the carto basemap in place when [data-theme] flips —
 // setTiles + background paint only, so every overlay layer/source is untouched.
 new MutationObserver(function(){
@@ -343,6 +443,15 @@ new MutationObserver(function(){
     if(src&&src.setTiles) src.setTiles(['https://a.basemaps.cartocdn.com/'+th+'/{z}/{x}/{y}.png','https://b.basemaps.cartocdn.com/'+th+'/{z}/{x}/{y}.png','https://c.basemaps.cartocdn.com/'+th+'/{z}/{x}/{y}.png']);
     if(map.getLayer('bg')) map.setPaintProperty('bg','background-color',th==='light_all'?'#eef2f7':'#0a0a0f');
   }catch(e){}
+  // The charts are canvas: their ink is baked in at draw time, so they have to
+  // be repainted or they keep the old theme's (now invisible) colours.
+  try{ if(state.grid){
+    if(state.view==='prof')drawProfiles();
+    else if(state.view==='hist')renderHist();
+    else if(state.view==='sweep')renderSweep();
+    else if(state.view==='cmp')renderCompare();
+    else if(state.view==='d3')drawLocator();
+  } }catch(e){}
 }).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
 
 var TRCOLORS=['#00f5ff','#ffd166','#ff6b6b','#a78bfa','#4ade80'];
@@ -366,6 +475,7 @@ var PRESETS=[['Khalifa Port',[54.643,24.792,54.681,24.835]],['Saadiyat / Lulu',[
 var pc=document.getElementById('presets');
 PRESETS.forEach(function(p){var b=document.createElement('button');b.className='chip';b.textContent=p[0];
   b.onclick=function(){document.querySelectorAll('#presets .chip').forEach(x=>x.classList.remove('active'));b.classList.add('active');setBbox(p[1],p[0]);};pc.appendChild(b);});
+pc.insertAdjacentHTML('beforeend','<i class="ifo side" tabindex="0" role="img" aria-label="Info" data-tip="Ready-made UAE survey areas. One click fills the coordinates and flies the map there.">i</i>');
 // ───── ROI: km² readout + two-way field sync + rectangle draw ─────
 var SOFT_HIRES_KM2=40; // vmarch-core soft high-res band: bigger ROIs run at coarser native resolution
 function bboxKm2(bb){var mid=(bb[1]+bb[3])/2;return Math.abs(bb[2]-bb[0])*111.320*Math.cos(mid*Math.PI/180)*Math.abs(bb[3]-bb[1])*110.574;}
@@ -377,19 +487,71 @@ function updateAreaNote(bb){var el=document.getElementById('areaNote');
     (over?' — above the platform’s '+SOFT_HIRES_KM2+' km² high-res band; runs continue at coarser native resolution':'');}
 function setFields(bb){[['bbW',bb[0]],['bbS',bb[1]],['bbE',bb[2]],['bbN',bb[3]]].forEach(function(f){
   var el=document.getElementById(f[0]); if(document.activeElement!==el)el.value=(Math.round(f[1]*1e5)/1e5);});}
+// Camera padding that keeps the ROI clear of the fixed chrome — the 52px top
+// bar and, crucially, the bottom-centre wizard/controls frame. With uniform
+// padding the survey rectangle lands centred *behind* that panel, which reads
+// as "the map didn't go where I typed".
+function mapPad(){
+  var pad={top:64,left:56,right:56,bottom:40};
+  // NB: these panels are position:fixed, so offsetParent is always null —
+  // measure the rendered box instead to tell "visible" from "hidden".
+  ['console','ctlbar'].forEach(function(id){var el=document.getElementById(id); if(!el)return;
+    var r=el.getBoundingClientRect(); if(r.height>0&&getComputedStyle(el).display!=='none')pad.bottom=Math.max(pad.bottom,r.height+34);});
+  var m=document.getElementById('metrics'); if(m&&m.classList.contains('show'))pad.right=286;
+  // maplibre needs the paddings to leave a usable viewport — clamp hard.
+  var h=map.getContainer().clientHeight||window.innerHeight, w=map.getContainer().clientWidth||window.innerWidth;
+  if(pad.top+pad.bottom>h-120)pad.bottom=Math.max(20,h-120-pad.top);
+  if(pad.left+pad.right>w-120){pad.left=pad.right=Math.max(10,(w-120)/2);}
+  return pad;
+}
+// Fly the camera onto a bbox, framed inside the visible part of the map.
+// duration:0 before the style is ready — an animated move would be dropped, and
+// landing on the coordinates instantly beats not landing on them at all.
+function focusBbox(bb,dur){ if(!bb)return;
+  try{ map.fitBounds([[bb[0],bb[1]],[bb[2],bb[3]]],{padding:mapPad(),duration:styleReady?(dur==null?600:dur):0,maxZoom:16}); }catch(_){}}
+// Same guard for a single point (partially typed coordinates).
+function focusPoint(lon,lat){
+  try{ map.easeTo({center:[lon,lat],zoom:Math.max(map.getZoom(),12),duration:styleReady?500:0}); }catch(_){}}
 function setBbox(bb,name,opts){opts=opts||{};state.bbox=bb;state.areaName=name||'Survey area';document.getElementById('toStep2').disabled=false;
   updateAreaNote(bb);setFields(bb);drawRoi(bb);
-  if(!opts.noFit)map.fitBounds([[bb[0],bb[1]],[bb[2],bb[3]]],{padding:80,duration:600});}
-function drawRoi(bb){var gj={type:'Feature',geometry:{type:'Polygon',coordinates:[[[bb[0],bb[1]],[bb[2],bb[1]],[bb[2],bb[3]],[bb[0],bb[3]],[bb[0],bb[1]]]]}};
+  if(!opts.noFit)focusBbox(bb);}
+function drawRoi(bb){
+  // Too early to touch the style — the 'style.load' handler above replays this
+  // with the current state.bbox as soon as it is safe.
+  if(!styleReady)return;
+  var gj={type:'Feature',geometry:{type:'Polygon',coordinates:[[[bb[0],bb[1]],[bb[2],bb[1]],[bb[2],bb[3]],[bb[0],bb[3]],[bb[0],bb[1]]]]}};
   ['roi-l','roi'].forEach(id=>{if(map.getLayer(id))map.removeLayer(id);});if(map.getSource('roi'))map.removeSource('roi');
   map.addSource('roi',{type:'geojson',data:gj});map.addLayer({id:'roi',type:'fill',source:'roi',paint:{'fill-color':'#00f5ff','fill-opacity':.06}});
   map.addLayer({id:'roi-l',type:'line',source:'roi',paint:{'line-color':'#00f5ff','line-width':1.3,'line-dasharray':[2,1]}});}
-// editable W/S/E/N → rectangle (live)
-['bbW','bbS','bbE','bbN'].forEach(function(id){document.getElementById(id).addEventListener('input',function(){
-  var w=parseFloat(bbW.value),s=parseFloat(bbS.value),e=parseFloat(bbE.value),n=parseFloat(bbN.value);
-  if(![w,s,e,n].every(isFinite)||e<=w||n<=s||Math.abs(s)>90||Math.abs(n)>90||Math.abs(w)>180||Math.abs(e)>180)return;
-  document.querySelectorAll('#presets .chip').forEach(x=>x.classList.remove('active'));
-  setBbox([w,s,e,n],'Custom area',{noFit:true});});});
+// ───── editable W/S/E/N → live rectangle + the map follows what you type ─────
+// The rectangle and km² readout update on every keystroke; the camera move is
+// debounced ~180 ms so it glides once you pause rather than jerking per digit.
+// Every later edit re-fires this, so corrections are reflected immediately.
+var bbFlyT=null;
+function bbNum(id){ var v=parseFloat(document.getElementById(id).value); return isFinite(v)?v:null; }
+function coordsEdited(){
+  var w=bbNum('bbW'),s=bbNum('bbS'),e=bbNum('bbE'),n=bbNum('bbN');
+  var lon=function(v){return v!=null&&Math.abs(v)<=180;}, lat=function(v){return v!=null&&Math.abs(v)<=90;};
+  var all=lon(w)&&lat(s)&&lon(e)&&lat(n), full=all&&e>w&&n>s;
+  // try/catch: if the ROI overlay hiccups (style mid-reload → addSource throws)
+  // the camera move below must still be scheduled.
+  if(full){ document.querySelectorAll('#presets .chip').forEach(x=>x.classList.remove('active'));
+    try{ setBbox([w,s,e,n],'Custom area',{noFit:true}); }catch(_){} }     // rectangle + area, instantly
+  else if(all){ document.getElementById('areaNote').textContent='East must be greater than West, and North greater than South.'; }
+  clearTimeout(bbFlyT);
+  bbFlyT=setTimeout(function(){
+    if(full){ focusBbox([w,s,e,n]); return; }
+    // Partially typed (or reversed) corners still tell us *where* — centre there
+    // so the map tracks you from the very first lon/lat pair.
+    if(all){ focusBbox([Math.min(w,e),Math.min(s,n),Math.max(w,e),Math.max(s,n)]); return; }
+    var clon=lon(w)?w:(lon(e)?e:null), clat=lat(s)?s:(lat(n)?n:null);
+    if(clon!=null&&clat!=null)focusPoint(clon,clat);
+  },180);
+}
+['bbW','bbS','bbE','bbN'].forEach(function(id){var el=document.getElementById(id);
+  ['input','change'].forEach(function(ev){el.addEventListener(ev,coordsEdited);});
+  // Enter = "go there now", skipping the debounce.
+  el.addEventListener('keydown',function(ev){ if(ev.key==='Enter'){ coordsEdited(); clearTimeout(bbFlyT); if(state.bbox)focusBbox(state.bbox,500); } });});
 // rectangle draw: drag OR click-click; ESC cancels; redraw replaces
 var rectDraw={on:false,anchor:null,moved:false,btn:null};
 function rectPreview(a,b){var gj={type:'Feature',geometry:{type:'Polygon',coordinates:[[[a.lng,a.lat],[b.lng,a.lat],[b.lng,b.lat],[a.lng,b.lat],[a.lng,a.lat]]]}};
@@ -495,7 +657,7 @@ function computeShade(grid,exag,azDeg){ var R=grid.length,C=grid[0].length,cm=ce
   }} return sh; }
 
 // ───── 2D overlay (extended: flat/relief/chart/uncertainty) ─────
-function renderOverlay(){ if(!state.grid)return; var grid=grid2D(),R=grid.length,C=grid[0].length,cv=document.createElement('canvas');cv.width=C;cv.height=R;
+function renderOverlay(){ if(!state.grid||!styleReady)return; var grid=grid2D(),R=grid.length,C=grid[0].length,cv=document.createElement('canvas');cv.width=C;cv.height=R;
   var ctx=cv.getContext('2d'),img=ctx.createImageData(C,R),sl=state.slice,mode=state.mapMode;
   var shade=(mode==='relief')?computeShade(grid,state.reliefExag,state.sunAz):null;
   var sig=state.sigma, sigM=(mode==='uncertainty'&&sig)?sigStats(sig):1, zc=state.zoneCount;
@@ -523,6 +685,7 @@ function renderOverlay(){ if(!state.grid)return; var grid=grid2D(),R=grid.length
 
 // ───── 02: nautical chart layers (isobaths + safety + soundings) ─────
 function updateChartLayers(){
+  if(!styleReady)return;
   ['chartiso-lbl','chartiso','safety-lbl','safety','sound'].forEach(id=>{if(map.getLayer(id))map.removeLayer(id);});
   ['chartiso','safety','sound'].forEach(id=>{if(map.getSource(id))map.removeSource(id);});
   if(state.mapMode!=='chart'||!state.grid)return;
@@ -555,7 +718,7 @@ function contoursGeoJSON(levels){var grid=grid2D(),R=grid.length,C=grid[0].lengt
       ls.forEach(function(ln){segs.push([ll.apply(null,ed(ln[0])),ll.apply(null,ed(ln[1]))]);});}
     if(segs.length)feats.push({type:'Feature',properties:{level:lev,label:lev+' m'},geometry:{type:'MultiLineString',coordinates:segs}});});
   return {type:'FeatureCollection',features:feats};}
-function renderContours(){ if(!state.grid)return; var gj=contoursGeoJSON();
+function renderContours(){ if(!state.grid||!styleReady)return; var gj=contoursGeoJSON();
   ['cont-lbl','cont'].forEach(id=>{if(map.getLayer(id))map.removeLayer(id);}); if(map.getSource('cont'))map.removeSource('cont');
   map.addSource('cont',{type:'geojson',data:gj});
   map.addLayer({id:'cont',type:'line',source:'cont',paint:{'line-color':'rgba(255,255,255,.55)','line-width':0.9}});
@@ -600,7 +763,7 @@ function addTransect(p0,p1){var N=180,ys=[];for(var k=0;k<N;k++){var t=k/(N-1);y
   var distM=haversine(p0[1],p0[0],p1[1],p1[0]); if(state.transects.length>=5)state.transects.shift();
   state.transects.push({p0:p0,p1:p1,data:ys,distM:distM,color:TRCOLORS[state.transects.length%TRCOLORS.length]});
   drawTransectLines(); }
-function drawTransectLines(){ if(map.getLayer('tr'))map.removeLayer('tr'); if(map.getSource('tr'))map.removeSource('tr');
+function drawTransectLines(){ if(!styleReady)return; if(map.getLayer('tr'))map.removeLayer('tr'); if(map.getSource('tr'))map.removeSource('tr');
   if(!state.transects.length)return; var feats=state.transects.map(function(tr){return {type:'Feature',properties:{color:tr.color},geometry:{type:'LineString',coordinates:[tr.p0,tr.p1]}};});
   map.addSource('tr',{type:'geojson',data:{type:'FeatureCollection',features:feats}});
   map.addLayer({id:'tr',type:'line',source:'tr',paint:{'line-color':['get','color'],'line-width':2.4}}); }
@@ -610,9 +773,9 @@ function haversine(la1,lo1,la2,lo2){var R=6371000,d=Math.PI/180,dla=(la2-la1)*d,
 function drawProfiles(){var cv=document.getElementById('cprof');var W=cv.clientWidth,H=cv.clientHeight;cv.width=W;cv.height=H;var ctx=cv.getContext('2d');ctx.clearRect(0,0,W,H);
   var pad=52,maxD=state.maxDepth; var maxDist=1; state.transects.forEach(t=>{if(t.distM>maxDist)maxDist=t.distM;});
   function Y(v){return pad+v/maxD*(H-2*pad);}
-  for(var gd=0;gd<=maxD;gd+=5){var y=Y(gd);ctx.strokeStyle='rgba(255,255,255,.07)';ctx.beginPath();ctx.moveTo(pad,y);ctx.lineTo(W-pad,y);ctx.stroke();ctx.fillStyle='rgba(255,255,255,.45)';ctx.font='10px monospace';ctx.fillText(gd+'m',8,y+3);}
-  ctx.strokeStyle='rgba(255,255,255,.12)';ctx.beginPath();ctx.moveTo(pad,pad);ctx.lineTo(pad,H-pad);ctx.lineTo(W-pad,H-pad);ctx.stroke();
-  if(!state.transects.length){ ctx.fillStyle='rgba(255,255,255,.4)';ctx.font='13px sans-serif';ctx.fillText('Draw transects on the map with the Transect tool.',pad+10,H/2); document.getElementById('profHint').textContent='Select the Transect tool on the map and draw lines (up to 5) to sample cross-sections.'; return; }
+  for(var gd=0;gd<=maxD;gd+=5){var y=Y(gd);ctx.strokeStyle=ink(.07);ctx.beginPath();ctx.moveTo(pad,y);ctx.lineTo(W-pad,y);ctx.stroke();ctx.fillStyle=ink(.45);ctx.font='10px monospace';ctx.fillText(gd+'m',8,y+3);}
+  ctx.strokeStyle=ink(.12);ctx.beginPath();ctx.moveTo(pad,pad);ctx.lineTo(pad,H-pad);ctx.lineTo(W-pad,H-pad);ctx.stroke();
+  if(!state.transects.length){ ctx.fillStyle=ink(.4);ctx.font='13px sans-serif';ctx.fillText('Draw transects on the map with the Transect tool.',pad+10,H/2); document.getElementById('profHint').textContent='Select the Transect tool on the map and draw lines (up to 5) to sample cross-sections.'; return; }
   state.transects.forEach(function(tr){ var data=tr.data,C=data.length; function X(k){return pad+(k/(C-1))*(tr.distM/maxDist)*(W-2*pad);}
     ctx.beginPath();var s=false;for(var k=0;k<C;k++){var v=data[k];if(v==null){s=false;continue;}var x=X(k),y=Y(v);if(!s){ctx.moveTo(x,y);s=true;}else ctx.lineTo(x,y);}
     ctx.strokeStyle=tr.color;ctx.lineWidth=2;ctx.stroke();
@@ -622,66 +785,82 @@ function drawProfiles(){var cv=document.getElementById('cprof');var W=cv.clientW
   // legend + stats
   var lx=W-pad-180,ly=pad+6; state.transects.forEach(function(tr,i){ var vals=tr.data.filter(v=>v!=null);
     var mn=vals.length?Math.min.apply(null,vals):0,mx=vals.length?Math.max.apply(null,vals):0,me=vals.length?vals.reduce((a,b)=>a+b,0)/vals.length:0;
-    ctx.fillStyle=tr.color;ctx.fillRect(lx,ly+i*18,12,4);ctx.fillStyle='rgba(255,255,255,.75)';ctx.font='11px monospace';
+    ctx.fillStyle=tr.color;ctx.fillRect(lx,ly+i*18,12,4);ctx.fillStyle=ink(.75);ctx.font='11px monospace';
     ctx.fillText('T'+(i+1)+'  '+(tr.distM/1000).toFixed(2)+'km  μ'+me.toFixed(1)+' / max'+mx.toFixed(1),lx+18,ly+i*18+5); });
   document.getElementById('profHint').textContent=state.transects.length+' transect(s) · re-select the Transect tool to add more (max 5).'; }
 
 function renderHist(){if(!state.grid)return;var cv=document.getElementById('chist');var W=cv.clientWidth,H=cv.clientHeight;cv.width=W;cv.height=H;var ctx=cv.getContext('2d');ctx.clearRect(0,0,W,H);
   var g=grid2D(),NB=40,bins=new Array(NB).fill(0),md=state.maxDepth;for(var i=0;i<g.length;i++)for(var j=0;j<g[0].length;j++){var v=g[i][j];if(v==null)continue;bins[Math.min(NB-1,Math.floor(v/md*NB))]++;}
   var mx=Math.max.apply(null,bins),pad=40;bins.forEach(function(c,b){var x=pad+b/NB*(W-2*pad),w=(W-2*pad)/NB-1,h=(c/mx)*(H-2*pad),col=cmap((b+.5)/NB);ctx.fillStyle='rgb('+col[0]+','+col[1]+','+col[2]+')';ctx.fillRect(x,H-pad-h,w,h);});
-  ctx.strokeStyle='rgba(255,255,255,.15)';ctx.beginPath();ctx.moveTo(pad,H-pad);ctx.lineTo(W-pad,H-pad);ctx.stroke();ctx.fillStyle='rgba(255,255,255,.5)';ctx.font='11px monospace';for(var d=0;d<=md;d+=5){var x=pad+d/md*(W-2*pad);ctx.fillText(d+'m',x-6,H-pad+16);}
-  document.getElementById('histStats').innerHTML='<div class="statcards">'+[['mean_m','Mean'],['max_m','Max'],['min_m','Min'],['std_m','Std'],['coverage_pct','Coverage %']].map(c=>'<div class="c"><div class="v">'+(state.stats[c[0]]!=null?state.stats[c[0]]:'—')+'</div><div class="l">'+c[1]+'</div></div>').join('')+'</div>';}
+  ctx.strokeStyle=ink(.15);ctx.beginPath();ctx.moveTo(pad,H-pad);ctx.lineTo(W-pad,H-pad);ctx.stroke();ctx.fillStyle=ink(.5);ctx.font='11px monospace';for(var d=0;d<=md;d+=5){var x=pad+d/md*(W-2*pad);ctx.fillText(d+'m',x-6,H-pad+16);}
+  document.getElementById('histStats').innerHTML='<div class="statcards">'+[
+    ['mean_m','Mean','Average depth over the whole survey, in metres.'],
+    ['max_m','Max','Deepest reading in this survey, in metres.'],
+    ['min_m','Min','Shallowest reading — usually right at the shoreline.'],
+    ['std_m','Std','Spread of the depths. Large = varied seabed or a noisy result.'],
+    ['coverage_pct','Coverage %','Percentage of the box that returned a usable depth.']]
+    .map(c=>'<div class="c"><div class="v">'+(state.stats[c[0]]!=null?state.stats[c[0]]:'—')+'</div><div class="l">'+c[1]+ifo(c[2])+'</div></div>').join('')+'</div>';}
 
+// ⓘ helper — builds an info icon anywhere a string of HTML is assembled.
+function ifo(tip,extra){ return '<i class="ifo'+(extra||'')+'" tabindex="0" role="img" aria-label="Info" data-tip="'+String(tip).replace(/"/g,'&quot;')+'">i</i>'; }
+var IHO_TIP={ Special:'Strictest IHO S-44 grade — harbours and critical under-keel clearance. % of the area meeting it.',
+  Order_1a:'Standard grade for ports and shipping lanes shallower than 100 m.',
+  Order_2:'General-purpose charting grade for areas with plenty of clearance.',
+  Order_2b:'Lowest grade — reconnaissance / broad-scale mapping only.' };
 function renderMetrics(){var st=state.stats,iho=st.iho_s44_pct||{},hold=st.holdout_metrics||{};var h='';
   if(st.model){var legacyEng=!st.model_label&&(st.model==='dl-pro-v3'||st.model==='uae-sdb-ensemble');
-    h+='<div class="mrow" style="align-items:flex-start"><span class="k">Engine</span><span class="v" style="font-size:10px;max-width:155px;text-align:right;white-space:normal">'+(st.model_label||st.model+(st.model_version?' '+st.model_version:''))+'</span></div>';
+    h+='<div class="mrow" style="align-items:flex-start"><span class="k">Engine'+ifo('The depth engine that produced this survey, with its version.')+'</span><span class="v" style="font-size:10px;max-width:155px;text-align:right;white-space:normal">'+(st.model_label||st.model+(st.model_version?' '+st.model_version:''))+'</span></div>';
     if(legacyEng)h+='<div style="font-size:10px;color:var(--danger,#ff6b6b);margin:2px 0 4px;text-align:right">legacy engine — re-run this survey for the VMarch method</div>';}
-  [['mean_m','Mean depth','m'],['max_m','Max depth','m'],['coverage_pct','Coverage','%'],['std_m','Std dev','m']].forEach(c=>h+='<div class="mrow"><span class="k">'+c[1]+'</span><span class="v">'+(st[c[0]]!=null?st[c[0]]+' '+c[2]:'—')+'</span></div>');
-  h+='<div style="height:8px"></div>';['Special','Order_1a','Order_2','Order_2b'].forEach(function(k){var v=iho[k];if(v==null)return;h+='<div class="iho"><span class="nm">'+k.replace('_',' ')+'</span><span class="tr"><span class="fl" style="width:'+v+'%"></span></span><span class="p">'+v+'%</span></div>';});
-  h+='<div class="mrow" style="margin-top:8px"><span class="k">Hold-out RMSE</span><span class="v">'+(hold.rmse!=null?hold.rmse+' m':'—')+'</span></div>';
+  [['mean_m','Mean depth','m','Average depth across every pixel with a valid reading.'],
+   ['max_m','Max depth','m','Deepest point found. Satellite depth fades out in dark or murky water.'],
+   ['coverage_pct','Coverage','%','Share of the survey box that got a usable depth. Land, cloud and glint leave gaps.'],
+   ['std_m','Std dev','m','How much the depths vary. High values mean rugged seabed or a noisy result.']]
+    .forEach(c=>h+='<div class="mrow"><span class="k">'+c[1]+ifo(c[3])+'</span><span class="v">'+(st[c[0]]!=null?st[c[0]]+' '+c[2]:'—')+'</span></div>');
+  h+='<div style="height:8px"></div>';['Special','Order_1a','Order_2','Order_2b'].forEach(function(k){var v=iho[k];if(v==null)return;h+='<div class="iho"><span class="nm">'+k.replace('_',' ')+'</span><span class="tr"><span class="fl" style="width:'+v+'%"></span></span><span class="p">'+v+'%</span>'+ifo(IHO_TIP[k])+'</div>';});
+  h+='<div class="mrow" style="margin-top:8px"><span class="k">Hold-out RMSE'+ifo('Typical error against depths the engine was not trained on — the headline accuracy number.')+'</span><span class="v">'+(hold.rmse!=null?hold.rmse+' m':'—')+'</span></div>';
   var comp=st.composite;
   if(comp){ var per=comp.per_scene||[],dropped=per.filter(p=>!p.kept).length;
     h+='<div style="height:8px;border-bottom:1px solid var(--border);margin-bottom:8px"></div>';
-    h+='<div class="mrow"><span class="k">Composite</span><span class="v">'+(comp.n_scenes_used||'—')+' of '+(comp.n_scenes_requested||'—')+' scenes</span></div>';
-    if(dropped)h+='<div class="mrow"><span class="k">Glint-dropped</span><span class="v" style="color:var(--danger,#ff6b6b)">'+dropped+'</span></div>';
+    h+='<div class="mrow"><span class="k">Composite'+ifo('How many satellite scenes actually made it into the blend, out of those requested.')+'</span><span class="v">'+(comp.n_scenes_used||'—')+' of '+(comp.n_scenes_requested||'—')+' scenes</span></div>';
+    if(dropped)h+='<div class="mrow"><span class="k">Glint-dropped'+ifo('Scenes thrown out because sun reflecting off the water hid the seabed.')+'</span><span class="v" style="color:var(--danger,#ff6b6b)">'+dropped+'</span></div>';
     per.forEach(function(p){var d=String(p.acquired||p.scene_id||'?').slice(0,10);
-      h+='<div class="mrow" style="font-size:11px'+(p.kept?'':';opacity:.45')+'"><span class="k">'+d+(p.kept?'':' ✕')+'</span><span class="v">σ '+(p.sigma_med!=null?p.sigma_med:'—')+(p.glint!=null?' · g '+p.glint:'')+'</span></div>';});
-    h+='<div class="mrow"><span class="k">Agreement (med σₚₓ)</span><span class="v">'+(comp.px_std_median_m!=null?comp.px_std_median_m+' m':'—')+'</span></div>';
-    h+='<div class="mrow"><span class="k">Agreement (p95 σₚₓ)</span><span class="v">'+(comp.px_std_p95_m!=null?comp.px_std_p95_m+' m':'—')+'</span></div>'; }
+      h+='<div class="mrow" style="font-size:11px'+(p.kept?'':';opacity:.45')+'"><span class="k">'+d+(p.kept?'':' ✕')+ifo('Capture date of one scene. σ = its depth spread, g = its glint score. ✕ means it was dropped.')+'</span><span class="v">σ '+(p.sigma_med!=null?p.sigma_med:'—')+(p.glint!=null?' · g '+p.glint:'')+'</span></div>';});
+    h+='<div class="mrow"><span class="k">Agreement (med σₚₓ)'+ifo('Typical disagreement between scenes at the same spot. Lower = more trustworthy depths.')+'</span><span class="v">'+(comp.px_std_median_m!=null?comp.px_std_median_m+' m':'—')+'</span></div>';
+    h+='<div class="mrow"><span class="k">Agreement (p95 σₚₓ)'+ifo('Worst-case disagreement — 95% of pixels are better than this.')+'</span><span class="v">'+(comp.px_std_p95_m!=null?comp.px_std_p95_m+' m':'—')+'</span></div>'; }
   var val=st.validation;
-  if(val)h+='<div class="mrow" style="margin-top:4px"><span class="k">Validated</span><span class="v">'+(val.rmse!=null?'RMSE '+val.rmse+' m':'')+(val.catzoc?' · CATZOC '+val.catzoc:'')+'</span></div>';
-  h+='<div style="margin-top:8px"><a href="report-view.html?id='+state.code+'" style="color:var(--accent);font-size:12px;text-decoration:none">📄 Full report →</a></div>';
+  if(val)h+='<div class="mrow" style="margin-top:4px"><span class="k">Validated'+ifo('Result of checking this survey against reference soundings you uploaded.')+'</span><span class="v">'+(val.rmse!=null?'RMSE '+val.rmse+' m':'')+(val.catzoc?' · CATZOC '+val.catzoc:'')+'</span></div>';
+  h+='<div style="margin-top:8px"><a href="report-view.html?id='+state.code+'" style="color:var(--accent);font-size:12px;text-decoration:none">📄 Full report →</a>'+ifo('Opens the printable report for this survey: full method, parameters and provenance.')+'</div>';
   document.getElementById('metricsB').innerHTML=h;}
 
 // ───── CONTEXT-AWARE controls (bottom-center) ─────
-function cgRamp(){return '<div class="cg"><span class="lab">Colour ramp</span><div class="ctl"><div class="seg" id="cmaps"><button data-c="bathy" class="'+(state.cmap==='bathy'?'active':'')+'">Bathy</button><button data-c="deep" class="'+(state.cmap==='deep'?'active':'')+'">Deep</button><button data-c="viridis" class="'+(state.cmap==='viridis'?'active':'')+'">Viridis</button></div><button class="miniGhost" id="rampMore">⊞ All</button></div></div>';}
-function cgNorm(){return '<div class="cg"><span class="lab">Data</span><div class="toggle '+(state.normalize?'on':'')+'" id="normT"><span class="sw"></span>Normalize</div></div>';}
-function renderControls(){var v=state.view,h='<div class="cg"><span class="lab">View</span><div style="font-size:13px;font-weight:700;color:var(--accent);text-transform:capitalize">'+({map:'Map',d3:'3D surface',prof:'Cross-section',hist:'Histogram',sweep:'Depth sweep',cmp:'Compare'}[v]||v)+'</div></div><div class="vsep"></div>';
+function cgRamp(){return '<div class="cg"><span class="lab">Colour ramp<i class="ifo up" tabindex="0" role="img" aria-label="Info" data-tip="Colour scheme for the depth map.">i</i></span><div class="ctl"><div class="seg" id="cmaps"><button data-c="bathy" class="'+(state.cmap==='bathy'?'active':'')+'">Bathy</button><button data-c="deep" class="'+(state.cmap==='deep'?'active':'')+'">Deep</button><button data-c="viridis" class="'+(state.cmap==='viridis'?'active':'')+'">Viridis</button></div><button class="miniGhost" id="rampMore">⊞ All</button></div></div>';}
+function cgNorm(){return '<div class="cg"><span class="lab">Data<i class="ifo up" tabindex="0" role="img" aria-label="Info" data-tip="Normalize stretches colours across this survey’s own depth range for more contrast.">i</i></span><div class="toggle '+(state.normalize?'on':'')+'" id="normT"><span class="sw"></span>Normalize</div></div>';}
+function renderControls(){var v=state.view,h='<div class="cg"><span class="lab">View<i class="ifo up" tabindex="0" role="img" aria-label="Info" data-tip="Which visualisation of the survey you are looking at.">i</i></span><div style="font-size:13px;font-weight:700;color:var(--accent);text-transform:capitalize">'+({map:'Map',d3:'3D surface',prof:'Cross-section',hist:'Histogram',sweep:'Depth sweep',cmp:'Compare'}[v]||v)+'</div></div><div class="vsep"></div>';
   if(v==='map'){
-    h+='<div class="cg"><span class="lab">Map style</span><div class="seg" id="mmode"><button data-m="flat" class="'+(state.mapMode==='flat'?'active':'')+'">Flat</button><button data-m="relief" class="'+(state.mapMode==='relief'?'active':'')+'">Relief</button><button data-m="chart" class="'+(state.mapMode==='chart'?'active':'')+'">Chart</button><button data-m="uncertainty" class="'+(state.mapMode==='uncertainty'?'active':'')+'">σ</button></div></div>';
-    if(state.mapMode==='relief'){ h+='<div class="vsep"></div><div class="cg"><span class="lab">Relief blend · <span id="blv">'+Math.round(state.blend*100)+'</span>%</span><div class="ctl"><input type="range" id="bl" min="0" max="100" value="'+Math.round(state.blend*100)+'"></div></div>'+
-      '<div class="cg"><span class="lab">Exaggeration · <span id="rev">'+state.reliefExag+'</span>×</span><div class="ctl"><input type="range" id="re" min="0.5" max="8" step="0.5" value="'+state.reliefExag+'"></div></div>'+
-      '<div class="cg"><span class="lab">Sun az · <span id="saz">'+state.sunAz+'</span>°</span><div class="ctl"><input type="range" id="sa" min="0" max="360" step="5" value="'+state.sunAz+'"></div></div>'; }
-    else if(state.mapMode==='chart'){ h+='<div class="vsep"></div><div class="cg"><span class="lab">Safety contour · <span id="sfv">'+state.safetyDepth+'</span> m</span><div class="ctl"><input type="range" id="sf" min="1" max="'+(state.maxDepth-1)+'" step="0.5" value="'+state.safetyDepth+'"></div></div>'+
-      '<div class="cg"><span class="lab">Depth zones · <span id="zcv">'+state.zoneCount+'</span></span><div class="ctl"><input type="range" id="zc" min="3" max="8" step="1" value="'+state.zoneCount+'"></div></div>'; }
-    else if(state.mapMode==='uncertainty'){ h+='<div class="vsep"></div>'; if(!state.sigma){ h+='<div class="cg"><span class="lab">σ grid</span><div style="font-size:11px;color:var(--text-dim)">not available in this survey</div></div>'; }
-      else { h+='<div class="cg"><span class="lab">Encoding</span><div class="seg" id="uenc"><button data-u="opacity" class="'+(state.uncEnc==='opacity'?'active':'')+'">Opacity</button><button data-u="desat" class="'+(state.uncEnc==='desat'?'active':'')+'">Desat</button><button data-u="hatch" class="'+(state.uncEnc==='hatch'?'active':'')+'">Hatch</button><button data-u="bivariate" class="'+(state.uncEnc==='bivariate'?'active':'')+'">Bivar</button></div></div>'+
-        '<div class="cg"><span class="lab">σ threshold · <span id="stv">'+state.sigThresh+'</span> m</span><div class="ctl"><input type="range" id="st" min="0.5" max="8" step="0.5" value="'+state.sigThresh+'"></div></div>'; } }
-    h+='<div class="vsep"></div><div class="cg wide"><span class="lab">Opacity · <span id="opv">'+Math.round(state.opacity*100)+'</span>%</span><div class="ctl"><input type="range" id="op" min="0" max="100" value="'+Math.round(state.opacity*100)+'"></div></div>';
-    h+='<div class="cg wide"><span class="lab">Depth slice · <span id="slv">'+state.slice[0]+'–'+state.slice[1]+' m</span></span><div class="ctl"><input type="range" id="sl0" min="0" max="'+state.maxDepth+'" step="0.5" value="'+state.slice[0]+'"><input type="range" id="sl1" min="0" max="'+state.maxDepth+'" step="0.5" value="'+state.slice[1]+'"></div></div>';
+    h+='<div class="cg"><span class="lab">Map style<i class="ifo up" tabindex="0" role="img" aria-label="Info" data-tip="Flat = plain depth colours. Relief = shaded seabed. Chart = nautical depth zones. σ = uncertainty.">i</i></span><div class="seg" id="mmode"><button data-m="flat" class="'+(state.mapMode==='flat'?'active':'')+'">Flat</button><button data-m="relief" class="'+(state.mapMode==='relief'?'active':'')+'">Relief</button><button data-m="chart" class="'+(state.mapMode==='chart'?'active':'')+'">Chart</button><button data-m="uncertainty" class="'+(state.mapMode==='uncertainty'?'active':'')+'">σ</button></div></div>';
+    if(state.mapMode==='relief'){ h+='<div class="vsep"></div><div class="cg"><span class="lab">Relief blend<i class="ifo up" tabindex="0" role="img" aria-label="Info" data-tip="How strongly the shaded relief blends over the depth colours.">i</i> · <span id="blv">'+Math.round(state.blend*100)+'</span>%</span><div class="ctl"><input type="range" id="bl" min="0" max="100" value="'+Math.round(state.blend*100)+'"></div></div>'+
+      '<div class="cg"><span class="lab">Exaggeration<i class="ifo up" tabindex="0" role="img" aria-label="Info" data-tip="Vertical exaggeration of the shading — higher makes subtle seabed features pop.">i</i> · <span id="rev">'+state.reliefExag+'</span>×</span><div class="ctl"><input type="range" id="re" min="0.5" max="8" step="0.5" value="'+state.reliefExag+'"></div></div>'+
+      '<div class="cg"><span class="lab">Sun az<i class="ifo up" tabindex="0" role="img" aria-label="Info" data-tip="Direction the simulated sunlight comes from, in degrees.">i</i> · <span id="saz">'+state.sunAz+'</span>°</span><div class="ctl"><input type="range" id="sa" min="0" max="360" step="5" value="'+state.sunAz+'"></div></div>'; }
+    else if(state.mapMode==='chart'){ h+='<div class="vsep"></div><div class="cg"><span class="lab">Safety contour<i class="ifo up" tabindex="0" role="img" aria-label="Info" data-tip="Depth of the safety line. Water shallower than this is flagged as hazardous.">i</i> · <span id="sfv">'+state.safetyDepth+'</span> m</span><div class="ctl"><input type="range" id="sf" min="1" max="'+(state.maxDepth-1)+'" step="0.5" value="'+state.safetyDepth+'"></div></div>'+
+      '<div class="cg"><span class="lab">Depth zones<i class="ifo up" tabindex="0" role="img" aria-label="Info" data-tip="Number of shaded depth bands on the nautical chart.">i</i> · <span id="zcv">'+state.zoneCount+'</span></span><div class="ctl"><input type="range" id="zc" min="3" max="8" step="1" value="'+state.zoneCount+'"></div></div>'; }
+    else if(state.mapMode==='uncertainty'){ h+='<div class="vsep"></div>'; if(!state.sigma){ h+='<div class="cg"><span class="lab">σ grid<i class="ifo up" tabindex="0" role="img" aria-label="Info" data-tip="Per-pixel uncertainty. Only produced by multi-scene runs.">i</i></span><div style="font-size:11px;color:var(--text-dim)">not available in this survey</div></div>'; }
+      else { h+='<div class="cg"><span class="lab">Encoding<i class="ifo up" tabindex="0" role="img" aria-label="Info" data-tip="How uncertainty is drawn over the depths — fade, desaturate, hatch, or two-colour.">i</i></span><div class="seg" id="uenc"><button data-u="opacity" class="'+(state.uncEnc==='opacity'?'active':'')+'">Opacity</button><button data-u="desat" class="'+(state.uncEnc==='desat'?'active':'')+'">Desat</button><button data-u="hatch" class="'+(state.uncEnc==='hatch'?'active':'')+'">Hatch</button><button data-u="bivariate" class="'+(state.uncEnc==='bivariate'?'active':'')+'">Bivar</button></div></div>'+
+        '<div class="cg"><span class="lab">σ threshold<i class="ifo up" tabindex="0" role="img" aria-label="Info" data-tip="Depths with uncertainty above this are de-emphasised as unreliable.">i</i> · <span id="stv">'+state.sigThresh+'</span> m</span><div class="ctl"><input type="range" id="st" min="0.5" max="8" step="0.5" value="'+state.sigThresh+'"></div></div>'; } }
+    h+='<div class="vsep"></div><div class="cg wide"><span class="lab">Opacity<i class="ifo up" tabindex="0" role="img" aria-label="Info" data-tip="Transparency of the depth layer over the basemap.">i</i> · <span id="opv">'+Math.round(state.opacity*100)+'</span>%</span><div class="ctl"><input type="range" id="op" min="0" max="100" value="'+Math.round(state.opacity*100)+'"></div></div>';
+    h+='<div class="cg wide"><span class="lab">Depth slice<i class="ifo up" tabindex="0" role="img" aria-label="Info" data-tip="Show only depths inside this range — useful to isolate a channel or shoal.">i</i> · <span id="slv">'+state.slice[0]+'–'+state.slice[1]+' m</span></span><div class="ctl"><input type="range" id="sl0" min="0" max="'+state.maxDepth+'" step="0.5" value="'+state.slice[0]+'"><input type="range" id="sl1" min="0" max="'+state.maxDepth+'" step="0.5" value="'+state.slice[1]+'"></div></div>';
     h+='<div class="vsep"></div>'+cgRamp()+cgNorm();
-    if(state.contoursOn){ h+='<div class="vsep"></div><div class="cg"><span class="lab">Contour · <span id="civ">'+state.contourInt+' m</span></span><div class="ctl"><input type="range" id="ci" min="1" max="5" step="1" value="'+state.contourInt+'"></div></div>';
-      h+='<div class="cg"><span class="lab">Labels</span><div class="toggle '+(state.labels?'on':'')+'" id="lblT"><span class="sw"></span></div></div>'; }
+    if(state.contoursOn){ h+='<div class="vsep"></div><div class="cg"><span class="lab">Contour<i class="ifo up" tabindex="0" role="img" aria-label="Info" data-tip="Spacing between depth contour lines, in metres.">i</i> · <span id="civ">'+state.contourInt+' m</span></span><div class="ctl"><input type="range" id="ci" min="1" max="5" step="1" value="'+state.contourInt+'"></div></div>';
+      h+='<div class="cg"><span class="lab">Labels<i class="ifo up" tabindex="0" role="img" aria-label="Info" data-tip="Show depth values on the contour lines.">i</i></span><div class="toggle '+(state.labels?'on':'')+'" id="lblT"><span class="sw"></span></div></div>'; }
   } else if(v==='d3'){
-    h+='<div class="cg"><span class="lab">Texture</span><div class="seg" id="texs"><button data-t="depth" class="'+(state.tex==='depth'?'active':'')+'">Depth</button><button data-t="imagery" class="'+(state.tex==='imagery'?'active':'')+'">Imagery</button><button data-t="blend" class="'+(state.tex==='blend'?'active':'')+'">Blend</button></div></div>';
-    h+='<div class="cg"><span class="lab">Vertical exag · <span id="zev">'+state.zexag+'</span>×</span><div class="ctl"><input type="range" id="ze" min="1" max="6" step="0.5" value="'+state.zexag+'"></div></div>';
-    h+='<div class="vsep"></div><div class="cg"><span class="lab">Sun az · <span id="s3az">'+state.sun3dAz+'</span>°</span><div class="ctl"><input type="range" id="s3a" min="0" max="360" step="5" value="'+state.sun3dAz+'"></div></div>';
-    h+='<div class="cg"><span class="lab">Sun elev · <span id="s3el">'+state.sun3dEl+'</span>°</span><div class="ctl"><input type="range" id="s3e" min="5" max="85" step="5" value="'+state.sun3dEl+'"></div></div>';
-    h+='<div class="cg"><span class="lab">Sea surface</span><div class="toggle '+(state.seaSurf?'on':'')+'" id="seaT"><span class="sw"></span></div></div>';
-    h+='<div class="cg"><span class="lab">Geo context</span><div class="toggle '+(state.ctx3d?'on':'')+'" id="ctxT"><span class="sw"></span></div></div>';
+    h+='<div class="cg"><span class="lab">Texture<i class="ifo up" tabindex="0" role="img" aria-label="Info" data-tip="What is draped on the 3D surface: depth colours, satellite imagery, or a blend.">i</i></span><div class="seg" id="texs"><button data-t="depth" class="'+(state.tex==='depth'?'active':'')+'">Depth</button><button data-t="imagery" class="'+(state.tex==='imagery'?'active':'')+'">Imagery</button><button data-t="blend" class="'+(state.tex==='blend'?'active':'')+'">Blend</button></div></div>';
+    h+='<div class="cg"><span class="lab">Vertical exag<i class="ifo up" tabindex="0" role="img" aria-label="Info" data-tip="Stretches the 3D surface vertically so the seabed shape is easier to read.">i</i> · <span id="zev">'+state.zexag+'</span>×</span><div class="ctl"><input type="range" id="ze" min="1" max="6" step="0.5" value="'+state.zexag+'"></div></div>';
+    h+='<div class="vsep"></div><div class="cg"><span class="lab">Sun az'+ifo('Compass direction the light comes from. Rotate it to bring out different seabed features.')+' · <span id="s3az">'+state.sun3dAz+'</span>°</span><div class="ctl"><input type="range" id="s3a" min="0" max="360" step="5" value="'+state.sun3dAz+'"></div></div>';
+    h+='<div class="cg"><span class="lab">Sun elev<i class="ifo up" tabindex="0" role="img" aria-label="Info" data-tip="Height of the simulated sun above the horizon, in degrees.">i</i> · <span id="s3el">'+state.sun3dEl+'</span>°</span><div class="ctl"><input type="range" id="s3e" min="5" max="85" step="5" value="'+state.sun3dEl+'"></div></div>';
+    h+='<div class="cg"><span class="lab">Sea surface<i class="ifo up" tabindex="0" role="img" aria-label="Info" data-tip="Draw a translucent water plane over the 3D seabed.">i</i></span><div class="toggle '+(state.seaSurf?'on':'')+'" id="seaT"><span class="sw"></span></div></div>';
+    h+='<div class="cg"><span class="lab">Geo context'+ifo('Adds a bounding frame, grid lines and a world locator inset so you can tell where you are.')+'</span><div class="toggle '+(state.ctx3d?'on':'')+'" id="ctxT"><span class="sw"></span></div></div>';
     h+='<div class="vsep"></div>'+cgRamp()+cgNorm();
-  } else if(v==='prof'){ h+='<button class="miniGhost" id="clrTr">✕ Clear transects</button><div class="vsep"></div>'+cgRamp()+cgNorm();
-  } else if(v==='sweep'||v==='cmp'){ h+='<div style="font-size:11px;color:var(--text-dim)">Controls are in the panel.</div>';
+  } else if(v==='prof'){ h+='<button class="miniGhost" id="clrTr">✕ Clear transects</button>'+ifo('Removes every cross-section line from the map and this chart.')+'<div class="vsep"></div>'+cgRamp()+cgNorm();
+  } else if(v==='sweep'||v==='cmp'){ h+='<div style="font-size:11px;color:var(--text-dim)">Controls are in the panel.'+ifo('This view has its own settings panel on the right of the screen.')+'</div>';
   } else { h+=cgRamp()+cgNorm(); }
   var bar=document.getElementById('ctlbar'); bar.innerHTML=h; bar.classList.add('show'); document.getElementById('console').style.display='none';
   wireControls();
@@ -771,11 +950,11 @@ function anim3D(){requestAnimationFrame(anim3D);if(!three.r)return;three.grp.rot
   if(three.sea&&three.seaBase){var p=three.sea.geometry.attributes.position,b=three.seaBase,tt=Date.now()*0.001;for(var k=0;k<p.count;k++){var bx=b[k*3],by=b[k*3+1];p.setZ(k,Math.sin(bx*6+tt*1.4)*0.012+Math.cos(by*5+tt*1.1)*0.012);}p.needsUpdate=true;}
   var d=three.dist;three.cam.position.set(0,-d*.04,d);three.cam.lookAt(0,0,-0.3);three.r.render(three.scene,three.cam);}
 function drawLocator(){ var cv=document.getElementById('locator'); if(!cv||!state.bounds)return; var ctx=cv.getContext('2d'),W=cv.width,H=cv.height; ctx.clearRect(0,0,W,H);
-  ctx.fillStyle='rgba(10,25,45,.9)';ctx.fillRect(0,0,W,H); ctx.strokeStyle='rgba(120,170,200,.3)';ctx.strokeRect(0,0,W,H);
+  ctx.fillStyle=isLight()?'rgba(240,245,250,.94)':'rgba(10,25,45,.9)';ctx.fillRect(0,0,W,H); ctx.strokeStyle=ink(.28);ctx.strokeRect(0,0,W,H);
   var cx=(state.bounds.west+state.bounds.east)/2,cy=(state.bounds.north+state.bounds.south)/2; var x=(cx+180)/360*W,y=(90-cy)/180*H;
   // true projected location marker (fake "coast hint" box removed — it matched no real coastline)
   ctx.fillStyle='#00f5ff';ctx.beginPath();ctx.arc(x,y,3,0,7);ctx.fill(); ctx.strokeStyle='rgba(0,245,255,.5)';ctx.beginPath();ctx.arc(x,y,7,0,7);ctx.stroke();
-  ctx.fillStyle='rgba(255,255,255,.6)';ctx.font='9px monospace';ctx.fillText(cy.toFixed(1)+'°N '+cx.toFixed(1)+'°E',6,H-6); }
+  ctx.fillStyle=ink(.6);ctx.font='9px monospace';ctx.fillText(cy.toFixed(1)+'°N '+cx.toFixed(1)+'°E',6,H-6); }
 
 // ───── 09: depth sweep + bare-earth ─────
 var sweepRAF=null;
@@ -794,15 +973,15 @@ function renderSweep(){ if(!state.grid){return;} document.getElementById('emptyS
     for(var L=iv;L<state.maxDepth;L+=iv){ for(var i2=0;i2<R-1;i2++)for(var j2=0;j2<C-1;j2++){var a=grid[i2][j2],b=grid[i2][j2+1],c=grid[i2+1][j2+1],dd2=grid[i2+1][j2];if([a,b,c,dd2].some(x=>x==null))continue;var idx=(a>L?8:0)|(b>L?4:0)|(c>L?2:0)|(dd2>L?1:0);var ls=MS[idx];if(!ls)continue;
       ls.forEach(function(ln){function ed(en){if(en===0)return[j2+(L-a)/(b-a),i2];if(en===1)return[j2+1,i2+(L-b)/(c-b)];if(en===2)return[j2+(L-dd2)/(c-dd2),i2+1];return[j2,i2+(L-a)/(dd2-a)];}var p=ed(ln[0]),q=ed(ln[1]);ctx.beginPath();ctx.moveTo(p[0],p[1]);ctx.lineTo(q[0],q[1]);ctx.stroke();}); } } }
   renderHypso(); var sub=0,tot=0; for(var i3=0;i3<R;i3++)for(var j3=0;j3<C;j3++){var v3=grid[i3][j3];if(v3==null)continue;tot++;if(v3>lvl)sub++;}
-  document.getElementById('swStats').innerHTML='<b style="color:var(--accent)">'+(tot?Math.round(100*sub/tot):0)+'%</b> of the basin is submerged below <b>'+lvl.toFixed(1)+' m</b>. Exposed highs are hill-shaded.';
+  document.getElementById('swStats').innerHTML='<b style="color:var(--accent)">'+(tot?Math.round(100*sub/tot):0)+'%</b> of the basin is submerged below <b>'+lvl.toFixed(1)+' m</b>. Exposed highs are hill-shaded.'+ifo('Share of the seabed still under water at the current level. Tan areas are dry land at that level.');
 }
 function renderHypso(){ var cv=document.getElementById('csweephyp'),W=cv.clientWidth,H=cv.clientHeight;cv.width=W;cv.height=H;var ctx=cv.getContext('2d');ctx.clearRect(0,0,W,H);
   var grid=grid2D(),R=grid.length,C=grid[0].length,md=state.maxDepth,NB=50,sub=new Array(NB).fill(0),tot=0;
   for(var i=0;i<R;i++)for(var j=0;j<C;j++){var v=grid[i][j];if(v==null)continue;tot++;for(var b=0;b<NB;b++){var lev=(b/(NB-1))*md;if(v>lev)sub[b]++;}}
-  var pad=6;ctx.strokeStyle=ACCENT;ctx.lineWidth=2;ctx.beginPath();
+  var pad=6;ctx.strokeStyle=accent();ctx.lineWidth=2;ctx.beginPath();
   for(var b2=0;b2<NB;b2++){var x=pad+(b2/(NB-1))*(W-2*pad),y=pad+(tot?sub[b2]/tot:0)*(H-2*pad);if(b2===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);}ctx.stroke();
-  var lx=pad+(state.swLevel/md)*(W-2*pad);ctx.strokeStyle='rgba(255,255,255,.5)';ctx.beginPath();ctx.moveTo(lx,pad);ctx.lineTo(lx,H-pad);ctx.stroke();
-  ctx.fillStyle='rgba(255,255,255,.45)';ctx.font='9px monospace';ctx.fillText('0m',pad,H-1);ctx.fillText(md+'m',W-26,H-1);}
+  var lx=pad+(state.swLevel/md)*(W-2*pad);ctx.strokeStyle=ink(.5);ctx.beginPath();ctx.moveTo(lx,pad);ctx.lineTo(lx,H-pad);ctx.stroke();
+  ctx.fillStyle=ink(.45);ctx.font='9px monospace';ctx.fillText('0m',pad,H-1);ctx.fillText(md+'m',W-26,H-1);}
 document.getElementById('swRange').oninput=function(){state.swLevel=+this.value;document.getElementById('swLvl').textContent=(+this.value).toFixed(1);if(state.view==='sweep')renderSweep();};
 document.getElementById('swPlay').onclick=function(){ state.swPlaying=!state.swPlaying; this.textContent=state.swPlaying?'⏸ Pause':'▶ Flood / drain';
   if(state.swPlaying)sweepLoop(); else if(sweepRAF){cancelAnimationFrame(sweepRAF);sweepRAF=null;} };
@@ -835,7 +1014,7 @@ function renderCompare(){ var c=state.cmp; var stEmpty=document.getElementById('
     D=Math.max(0.5,D); var cv=document.createElement('canvas');cv.width=CA;cv.height=RA;var cx=cv.getContext('2d'),img=cx.createImageData(CA,RA);
     var sumA=0; for(var i2=0;i2<RA;i2++)for(var j2=0;j2<CA;j2++){var o=(i2*CA+j2)*4,dv=diff[i2][j2];if(dv==null){img.data[o+3]=0;continue;}var col=divcol(dv/D);sumA+=Math.abs(dv);img.data[o]=col[0];img.data[o+1]=col[1];img.data[o+2]=col[2];img.data[o+3]=255;}
     cx.putImageData(img,0,0); fitCanvasToStage(cA,CA,RA); var actx=cA.getContext('2d');actx.imageSmoothingEnabled=true;actx.clearRect(0,0,CA,RA);actx.drawImage(cv,0,0);
-    document.getElementById('cmpStats').innerHTML='<div class="s"><b>'+(cnt?Math.round(100*deep/cnt):0)+'%</b>deepened (erosion)</div><div class="s"><b>'+(cnt?Math.round(100*shoaled/cnt):0)+'%</b>shoaled (accretion)</div><div class="s"><b>'+(cnt?(sumA/cnt).toFixed(2):0)+' m</b>mean |Δ|</div><div class="s" style="align-self:center"><div class="cmpdiv"></div><div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-dim)"><span>−'+D.toFixed(1)+' shoaled</span><span>deepened +'+D.toFixed(1)+'</span></div></div>';
+    document.getElementById('cmpStats').innerHTML='<div class="s"><b>'+(cnt?Math.round(100*deep/cnt):0)+'%</b>deepened (erosion)'+ifo('Area that got deeper between the two surveys — sediment was carried away.')+'</div><div class="s"><b>'+(cnt?Math.round(100*shoaled/cnt):0)+'%</b>shoaled (accretion)'+ifo('Area that got shallower — sediment built up there.')+'</div><div class="s"><b>'+(cnt?(sumA/cnt).toFixed(2):0)+' m</b>mean |Δ|'+ifo('Average size of the depth change, ignoring direction.')+'</div><div class="s" style="align-self:center"><div class="cmpdiv"></div><div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-dim)"><span>−'+D.toFixed(1)+' shoaled</span><span>deepened +'+D.toFixed(1)+'</span></div></div>';
     return; }
   // swipe / side use both color canvases
   document.getElementById('cmpLabB').style.display='block';document.getElementById('cmpLabA').textContent='A · '+c.nameA;document.getElementById('cmpLabB').textContent='B · '+c.nameB;
@@ -846,7 +1025,7 @@ function renderCompare(){ var c=state.cmp; var stEmpty=document.getElementById('
     cB.style.display='block'; fitCanvasToStage(cA,canA.width,canA.height); var ax=cA.getContext('2d');ax.imageSmoothingEnabled=true;ax.clearRect(0,0,canA.width,canA.height);ax.drawImage(canA,0,0);
     fitCanvasToStage(cB,canB.width,canB.height); var bx=cB.getContext('2d');bx.imageSmoothingEnabled=true;bx.clearRect(0,0,canB.width,canB.height);bx.drawImage(canB,0,0);
     var SW=document.getElementById('cmpStage').clientWidth; var clipX=c.swipe*SW; cB.style.clipPath='inset(0 0 0 '+clipX+'px)'; handle.style.display='block'; handle.style.left=clipX+'px'; }
-  document.getElementById('cmpStats').innerHTML='<div class="s">Survey A: <b>'+c.nameA+'</b></div><div class="s">Survey B: <b>'+c.nameB+'</b></div><div class="s" style="color:var(--text-dim);align-self:center">Drag the handle (swipe) or switch to Δ for change magnitude.</div>';
+  document.getElementById('cmpStats').innerHTML='<div class="s">Survey A: <b>'+c.nameA+'</b>'+ifo('The baseline survey, shown on the left of the swipe.')+'</div><div class="s">Survey B: <b>'+c.nameB+'</b>'+ifo('The newer survey, revealed as you drag the handle right.')+'</div><div class="s" style="color:var(--text-dim);align-self:center">Drag the handle (swipe) or switch to Δ for change magnitude.'+ifo('Δ mode subtracts A from B and colours the result: blue = deepened, red = shoaled.')+'</div>';
 }
 function gridLLb(jf,iff,R,C,b){return [b.west+jf/(C-1)*(b.east-b.west), b.north-iff/(R-1)*(b.north-b.south)];}
 document.getElementById('cmpReload').onclick=loadSurveyList;
@@ -896,13 +1075,19 @@ document.getElementById('valBtn').onclick=async function(){var out=document.getE
   }catch(e){out.innerHTML='<div style="font-size:11px;color:var(--danger,#ff6b6b);margin-top:10px">'+e.message+'</div>';}
   finally{sndRefresh();}};
 function renderValidation(v){var h='<div style="height:8px;border-bottom:1px solid var(--border);margin:10px 0 8px"></div>';
-  h+='<div class="mrow"><span class="k">Matched pairs</span><span class="v">'+v.n_pairs+'</span></div>';
-  [['rmse','RMSE',' m'],['mae','MAE',' m'],['medae','MedAE',' m'],['bias','Bias',' m'],['r2','R²',''],['pearson_r','Pearson r',''],['p95_error_m','p95 error',' m']]
-    .forEach(function(c){var x=v[c[0]];h+='<div class="mrow"><span class="k">'+c[1]+'</span><span class="v">'+(x!=null?x+c[2]:'—')+'</span></div>';});
+  h+='<div class="mrow"><span class="k">Matched pairs'+ifo('How many of your soundings fell inside the survey and could be compared.')+'</span><span class="v">'+v.n_pairs+'</span></div>';
+  [['rmse','RMSE',' m','Typical size of the error. The single number to quote.'],
+   ['mae','MAE',' m','Average error ignoring sign — less punishing of rare big misses than RMSE.'],
+   ['medae','MedAE',' m','The middle error: half your points are closer than this.'],
+   ['bias','Bias',' m','Systematic offset. Positive = the survey reads deeper than your soundings.'],
+   ['r2','R²','','How much of the depth variation the survey explains. 1.0 is perfect.'],
+   ['pearson_r','Pearson r','','How well the two rise and fall together, ignoring any offset.'],
+   ['p95_error_m','p95 error',' m','95% of points are within this error — the worst-case figure IHO grades on.']]
+    .forEach(function(c){var x=v[c[0]];h+='<div class="mrow"><span class="k">'+c[1]+ifo(c[3])+'</span><span class="v">'+(x!=null?x+c[2]:'—')+'</span></div>';});
   var ord=v.iho_orders||{};[['special','Special'],['order1a','Order 1a'],['order2','Order 2']].forEach(function(o){var e=ord[o[0]];if(!e)return;
-    h+='<div class="iho"><span class="nm">'+o[1]+'</span><span class="tr"><span class="fl" style="width:'+e.pass_pct+'%"></span></span><span class="p">'+e.pass_pct+'%</span></div>';});
-  h+='<div class="mrow"><span class="k">IHO order (p95≤TVU)</span><span class="v">'+(v.order_label||'—')+'</span></div>';
-  h+='<div class="mrow"><span class="k">CATZOC</span><span class="v">'+(v.catzoc||'—')+'</span></div>';
+    h+='<div class="iho"><span class="nm">'+o[1]+'</span><span class="tr"><span class="fl" style="width:'+e.pass_pct+'%"></span></span><span class="p">'+e.pass_pct+'%</span>'+ifo(IHO_TIP[o[1].replace(' ','_')]||'Share of your soundings meeting this IHO S-44 accuracy grade.')+'</div>';});
+  h+='<div class="mrow"><span class="k">IHO order (p95≤TVU)'+ifo('The strictest survey grade this result actually passes.')+'</span><span class="v">'+(v.order_label||'—')+'</span></div>';
+  h+='<div class="mrow"><span class="k">CATZOC'+ifo('Nautical-chart confidence band (A1 best → D). What a chart would print for this data.')+'</span><span class="v">'+(v.catzoc||'—')+'</span></div>';
   if(v.datum_mismatch_note)h+='<div style="font-size:10px;color:var(--danger,#ff6b6b);margin-top:6px">'+v.datum_mismatch_note+'</div>';
   if(v.detection_capability_note)h+='<div style="font-size:10px;color:var(--text-dim);margin-top:6px">'+v.detection_capability_note+'</div>';
   if(v.tpu_caveat)h+='<div style="font-size:10px;color:var(--text-dim);margin-top:6px">'+v.tpu_caveat+'</div>';
@@ -915,11 +1100,11 @@ document.getElementById('calBtn').onclick=async function(){var out=document.getE
     var j=await r.json(); if(!r.ok)throw new Error(j.detail||('API '+r.status));
     var c=j.calibration||{},hb=(c.holdout||{}).before||{},ha=(c.holdout||{}).after||{};
     var h='<div style="height:8px;border-bottom:1px solid var(--border);margin:10px 0 8px"></div>';
-    h+='<div class="mrow"><span class="k">Points (fit/holdout)</span><span class="v">'+(c.n_train||'—')+' / '+(c.n_holdout||'—')+'</span></div>';
-    h+='<div class="mrow"><span class="k">Holdout RMSE</span><span class="v">'+(hb.rmse_m!=null?hb.rmse_m:'—')+' → <b style="color:var(--accent)">'+(ha.rmse_m!=null?ha.rmse_m:'—')+'</b> m</span></div>';
-    h+='<div class="mrow"><span class="k">Holdout bias</span><span class="v">'+(hb.bias_m!=null?hb.bias_m:'—')+' → '+(ha.bias_m!=null?ha.bias_m:'—')+' m</span></div>';
+    h+='<div class="mrow"><span class="k">Points (fit/holdout)'+ifo('Your soundings were split: most fit the correction, the rest were held back to test it honestly.')+'</span><span class="v">'+(c.n_train||'—')+' / '+(c.n_holdout||'—')+'</span></div>';
+    h+='<div class="mrow"><span class="k">Holdout RMSE'+ifo('Error before → after calibration, measured on the held-back points. Lower on the right means it worked.')+'</span><span class="v">'+(hb.rmse_m!=null?hb.rmse_m:'—')+' → <b style="color:var(--accent)">'+(ha.rmse_m!=null?ha.rmse_m:'—')+'</b> m</span></div>';
+    h+='<div class="mrow"><span class="k">Holdout bias'+ifo('Systematic offset before → after. Calibration should pull this close to zero.')+'</span><span class="v">'+(hb.bias_m!=null?hb.bias_m:'—')+' → '+(ha.bias_m!=null?ha.bias_m:'—')+' m</span></div>';
     h+='<div style="font-size:10px;color:var(--text-dim);margin-top:6px">New derived layer created — the original survey is preserved.</div>';
-    h+='<div class="crow" style="margin-top:8px"><button class="btn" id="calOpen">↳ Open calibrated survey</button></div>';
+    h+='<div class="btnrow" style="margin-top:8px"><button class="btn" id="calOpen" style="flex:1">↳ Open calibrated survey</button>'+ifo('Loads the corrected survey into the studio. The original stays in your Reports list.',' side')+'</div>';
     out.innerHTML=h;
     document.getElementById('calOpen').onclick=async function(){await loadReport(j.report_code);document.getElementById('calOut').innerHTML='';document.getElementById('valOut').innerHTML='';};
   }catch(e){out.innerHTML='<div style="font-size:11px;color:var(--danger,#ff6b6b);margin-top:10px">'+e.message+'</div>';}
