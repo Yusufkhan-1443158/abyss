@@ -31,6 +31,22 @@ from .tasks import process_raster_upload
 BATHYMETRY_SERVICE_URL = os.getenv("BATHYMETRY_SERVICE_URL", "http://bathymetry:8002")
 
 
+def _acq_datetime(data: dict):
+    """First source-imagery acquisition timestamp from the inference payload
+    → aware datetime for RasterCatalog.acquisition_date (or None)."""
+    from datetime import datetime
+    v = data.get("acquired") or next(iter(data.get("acquisition_dates") or []), None)
+    if not v:
+        return None
+    s = str(v).replace("Z", "+00:00")
+    for cand in (s, s[:10]):
+        try:
+            return datetime.fromisoformat(cand)
+        except ValueError:
+            continue
+    return None
+
+
 @celery.task(name="run_bathymetry", bind=True, max_retries=0)
 def run_bathymetry(self, source_raster_id: str) -> dict:
     db = SessionLocal()
@@ -94,6 +110,7 @@ def run_bathymetry(self, source_raster_id: str) -> dict:
             minio_raw_path=raw_key,
             processing_status="pending",
             uploaded_by=src.uploaded_by,
+            acquisition_date=_acq_datetime(data) or src.acquisition_date,
             metadata_={
                 "source_kind": "bathymetry",
                 "parent_raster_id": source_raster_id,
@@ -104,6 +121,9 @@ def run_bathymetry(self, source_raster_id: str) -> dict:
                     "confidence": data.get("confidence"),
                     "stats": data.get("stats"),
                     "max_depth_m": data.get("max_depth_m"),
+                    "acquired": data.get("acquired"),
+                    "acquisition_dates": data.get("acquisition_dates"),
+                    "imagery": data.get("imagery"),
                 },
             },
         )
@@ -203,10 +223,14 @@ def run_bathymetry_roi(self, job_id, bbox, start_date="2023-01-01",
             description=f"SDB depth product for {name}",
             original_filename=f"depth_{job_id}.tif", original_format="GTiff",
             minio_raw_path=raw_key, processing_status="pending",
+            acquisition_date=_acq_datetime(data),
             metadata_={"source_kind": "bathymetry", "parent_raster_id": None,
                        "bathymetry": {"model": data.get("model"),
                                       "stats": data.get("stats"),
-                                      "max_depth_m": data.get("max_depth_m")}},
+                                      "max_depth_m": data.get("max_depth_m"),
+                                      "acquired": data.get("acquired"),
+                                      "acquisition_dates": data.get("acquisition_dates"),
+                                      "imagery": data.get("imagery")}},
         )
         db.add(derived)
         db.commit()

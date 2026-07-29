@@ -408,6 +408,17 @@ def _infer_from_raster(reqp: InferRequest, bbox):
         "iho_s44_pct": {},
         "holdout_metrics": {},
         "source": {"bucket": reqp.source_bucket, "key": reqp.source_key},
+        "acquired": reqp.acquisition_datetime,
+        "acquisition_dates": [reqp.acquisition_datetime]
+                             if reqp.acquisition_datetime else [],
+        "imagery": {
+            "sensor": "uploaded scene",
+            "provider": "user upload",
+            "acquired": reqp.acquisition_datetime,
+            "acquisition_dates": [reqp.acquisition_datetime]
+                                 if reqp.acquisition_datetime else [],
+            "n_scenes": 1,
+        },
         "tide": tide,
     }
     return _products_payload(client, reqp.raster_id, depth, sigma,
@@ -787,6 +798,23 @@ def infer(reqp: InferRequest):
         "scene_id": s2.get("scene_id"),
         "cloud_cover": s2.get("cloud_cover"),
         "acquired": s2.get("acquired"),
+        "acquisition_dates": [d for d in
+                              (s2_i.get("acquired") for s2_i, _ in scene_runs)
+                              if d],
+        "imagery": {
+            "sensor": "Sentinel-2 L2A",
+            "provider": "Microsoft Planetary Computer",
+            "acquired": s2.get("acquired"),
+            "acquisition_dates": [d for d in
+                                  (s2_i.get("acquired")
+                                   for s2_i, _ in scene_runs) if d],
+            "n_scenes": len(scene_runs),
+            "scene_id": s2.get("scene_id"),
+            "cloud_cover_pct": s2.get("cloud_cover"),
+            "search_window": [reqp.start_date, reqp.end_date],
+            "max_cloud_pct": reqp.max_cloud,
+            "resolution_m": res_m,
+        },
         "tide": tide,
         "mask_coastline": coast_info,
     }

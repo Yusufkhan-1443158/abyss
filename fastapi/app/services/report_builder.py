@@ -136,8 +136,26 @@ def _metadata_rows(report_code, site, model, infer_data, stats, acquisition,
             ["Sentinel-2 scene", infer_data.get("scene_id")],
             ["Cloud cover", f"{infer_data.get('cloud_cover', '—')} %"],
         ]
+    imagery = infer_data.get("imagery") or {}
+    if imagery.get("sensor"):
+        rows.append(["Imagery", imagery["sensor"]
+                     + (f" ({imagery['provider']})"
+                        if imagery.get("provider") else "")])
+    acq_dates = (infer_data.get("acquisition_dates")
+                 or imagery.get("acquisition_dates") or [])
     rows += [
         ["Acquired", (infer_data.get("acquired") or acquisition or "—")],
+    ]
+    if len(acq_dates) > 1:
+        rows.append([f"Acquisition dates ({len(acq_dates)} scenes)",
+                     ", ".join(str(d)[:10] for d in acq_dates)])
+    if imagery.get("search_window"):
+        sw = imagery["search_window"]
+        rows.append(["Imagery search window",
+                     f"{sw[0] or '—'} → {sw[1] or '—'}"
+                     + (f" (≤{imagery['max_cloud_pct']}% cloud)"
+                        if imagery.get("max_cloud_pct") is not None else "")])
+    rows += [
         ["CRS", infer_data.get("crs") or src_crs or "EPSG:4326"],
         ["Depth coverage", f"{stats.get('coverage_pct', '—')} %"],
         ["Max modelled depth", f"{infer_data.get('max_depth_m', '—')} m"],
@@ -260,14 +278,31 @@ def build_report(
                      "caption": "Source scene used for depth inference."},
         }
     else:
+        img = infer_data.get("imagery") or {}
+        acq_dates = (infer_data.get("acquisition_dates")
+                     or img.get("acquisition_dates") or [])
+        src_rows = [
+            ["Sensor", img.get("sensor") or "Sentinel-2 L2A"],
+            ["Scene", img.get("scene_id")
+             or infer_data.get("scene_id") or "—"],
+            ["Acquired", infer_data.get("acquired") or "—"],
+        ]
+        if len(acq_dates) > 1:
+            src_rows.append([f"All acquisition dates ({len(acq_dates)})",
+                             ", ".join(str(d)[:10] for d in acq_dates)])
+        cloud = img.get("cloud_cover_pct")
+        if cloud is None:
+            cloud = infer_data.get("cloud_cover")
+        src_rows += [
+            ["Cloud cover", f"{cloud} %" if cloud is not None else "—"],
+            ["Provider", img.get("provider")
+             or "Microsoft Planetary Computer (free)"],
+        ]
+        if img.get("resolution_m"):
+            src_rows.append(["Native resolution", f"{img['resolution_m']} m"])
         source_section = {
             "type": "kv", "title": "Source Imagery",
-            "data": {"rows": [
-                ["Sentinel-2 scene", infer_data.get("scene_id") or "—"],
-                ["Acquired", infer_data.get("acquired") or "—"],
-                ["Cloud cover", f"{infer_data.get('cloud_cover', '—')} %"],
-                ["Provider", "Microsoft Planetary Computer (free)"],
-            ]},
+            "data": {"rows": src_rows},
         }
 
     sections = [
@@ -417,6 +452,10 @@ def build_report(
                 "holdout_metrics": infer_data.get("holdout_metrics"),
                 "grid": infer_data.get("grid"),
                 "scene_id": infer_data.get("scene_id"),
+                "acquired": infer_data.get("acquired"),
+                "acquisition_dates": infer_data.get("acquisition_dates"),
+                **({"imagery": infer_data["imagery"]}
+                   if infer_data.get("imagery") else {}),
                 "max_depth_m": infer_data.get("max_depth_m"),
                 "model": model,
                 "model_version": infer_data.get("model_version"),

@@ -124,8 +124,46 @@ def _tide_block(tc: dict) -> dict:
     }
 
 
+def _acquisition_dates(r: dict) -> list:
+    """Ordered, deduped ISO acquisition dates/timestamps of the source imagery,
+    harvested from every shape the platform endpoints use: sdb-pro/clustered
+    fast path (`acquisition_datetimes`), MLE (`stability.kept_dates`,
+    `augmentation.mle_scenes[].date`), tide disclosure (`acquisition_utc`),
+    wave (`s2shores.scene_time_ms`)."""
+    out = []
+
+    def _add(v):
+        if isinstance(v, (list, tuple)):
+            for x in v:
+                _add(x)
+        elif v:
+            s = str(v)
+            if s not in out:
+                out.append(s)
+
+    _add(r.get("acquisition_datetimes"))
+    _add(r.get("acquisition_dates"))
+    stab = r.get("stability") if isinstance(r.get("stability"), dict) else {}
+    _add(stab.get("kept_dates"))
+    for sc in ((r.get("augmentation") or {}).get("mle_scenes") or []):
+        if isinstance(sc, dict):
+            _add(sc.get("date"))
+    if not out:
+        _add((r.get("tide_correction") or {}).get("acquisition_utc"))
+    tms = (r.get("s2shores") or {}).get("scene_time_ms")
+    if not out and tms:
+        from datetime import datetime, timezone
+        try:
+            out.append(datetime.fromtimestamp(
+                float(tms) / 1000.0, tz=timezone.utc).isoformat())
+        except (ValueError, OSError, OverflowError):
+            pass
+    return out
+
+
 def _provenance_extra(engine: str, endpoint: str, r: dict,
-                      health: dict | None) -> dict:
+                      health: dict | None, request_meta: dict | None = None)\
+        -> dict:
     """Assemble the Abyss `extra` payload with the platform's own method
     labels/metrics passed through verbatim."""
     metrics = r.get("metrics") or {}
@@ -134,6 +172,25 @@ def _provenance_extra(engine: str, endpoint: str, r: dict,
     label = r.get("method") or ml.get("method") or "VMarch platform product"
     if version:
         label = f"{label} · Bathymetry-from-Space v{version}"
+    rm = request_meta or {}
+    acq_dates = _acquisition_dates(r)
+    n_scenes = (r.get("scenes_kept") or ml.get("n_scenes")
+                or (len(acq_dates) if acq_dates else None))
+    imagery = {
+        "sensor": "Sentinel-2 L2A",
+        "provider": "Copernicus — fetched by Bathymetry-from-Space platform",
+        "acquisition_dates": acq_dates,
+        "acquired": acq_dates[0] if acq_dates else None,
+        "n_scenes": n_scenes,
+        "search_window": [rm.get("start_date"), rm.get("end_date")]
+                         if rm.get("start_date") or rm.get("end_date") else None,
+        "max_cloud_pct": rm.get("max_cloud"),
+        "resolution_m": r.get("resolution_m")
+                        or (r.get("s2shores") or {}).get("resolution_m")
+                        or rm.get("resolution_m"),
+        "scene_id": (r.get("s2shores") or {}).get("scene_id")
+                    or r.get("scene_id"),
+    }
     extra = {
         "model": engine,
         "model_version": version,
@@ -144,6 +201,10 @@ def _provenance_extra(engine: str, endpoint: str, r: dict,
         "resolution_m": r.get("resolution_m")
                         or (r.get("s2shores") or {}).get("resolution_m"),
         "holdout_metrics": _holdout_from_metrics(metrics),
+        # Source-imagery acquisition metadata (report + catalog).
+        "acquired": imagery["acquired"],
+        "acquisition_dates": acq_dates,
+        "imagery": {k: v for k, v in imagery.items() if v not in (None, [], "")},
         "iho_s44_pct": {},
         "calibration": {
             "augmentation": r.get("augmentation"),
@@ -232,16 +293,41 @@ def run_core_engine(engine: str, bbox, start_date: str, end_date: str,
         blob = _fetch_download(comp_name)
     else:
         b64 = r.get("geotiff_b64")
-        if not b64:
+        if b64:
+            import base64
+            blob = base64.b64decode(b64)
+        elif engine in (CORE_ENGINE_STANDARD, CORE_ENGINE_CLUSTERED):
+            # The platform's fast path no longer inlines geotiff_b64 in the
+            # JSON response — fetch the product from the dedicated GeoTIFF
+            # endpoint (same body contract; S2 fetch is cached server-side).
+            gt_body = {"bbox": bd, "start_date": start_date,
+                       "end_date": end_date, "max_cloud": int(max_cloud)}
+            if resolution_m:
+                gt_body["resolution_m"] = int(resolution_m)
+            try:
+                gr = requests.post(f"{VMARCH_CORE_URL}/api/sdb-pro/geotiff",
+                                   json=gt_body, timeout=_TIMEOUT_STANDARD)
+                gr.raise_for_status()
+            except Exception as ex:
+                raise VMarchCoreError(
+                    f"{endpoint} returned no geotiff_b64 and "
+                    f"/api/sdb-pro/geotiff failed: {ex}") from ex
+            if "image/tiff" not in gr.headers.get("Content-Type", ""):
+                raise VMarchCoreError(
+                    f"/api/sdb-pro/geotiff returned non-TIFF: {gr.text[:200]}")
+            blob = gr.content
+        else:
             raise VMarchCoreError(f"{endpoint} returned no geotiff_b64")
-        import base64
-        blob = base64.b64decode(b64)
 
     depth, transform, bbox4326 = _decode_geotiff(blob)
     if not np.isfinite(depth).any():
         raise VMarchCoreError("platform product has no valid water pixels")
 
-    extra = _provenance_extra(engine, endpoint, r, health)
+    extra = _provenance_extra(engine, endpoint, r, health,
+                              request_meta={"start_date": start_date,
+                                            "end_date": end_date,
+                                            "max_cloud": max_cloud,
+                                            "resolution_m": resolution_m})
     if engine == CORE_ENGINE_MLE:
         extra["vmarch_core"]["stability"] = {
             k: (r.get("stability") or {}).get(k)
