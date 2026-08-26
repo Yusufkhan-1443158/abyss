@@ -49,13 +49,17 @@ RUN python3 -m venv /opt/venv-api \
     && /opt/venv-api/bin/pip install --no-cache-dir -c /tmp/constraints.txt -r /tmp/req-api.clean.txt
 
 # ---- Bathymetry python env (/opt/venv-bathy) --------------------------------
-# CPU-only torch (separate index → no CUDA wheel), then the service deps.
+# CPU-only torch 2.7.0 (numpy-2 compatible, matches the sdb_engine training env),
+# then the service deps. numpy<2 is NOT pinned here — the SDB model bundles
+# (sdb_engine/models/*.pkl) were pickled under numpy 2.x / scikit-learn 1.7.x, so
+# requirements.txt pulls numpy>=2.0,<3. Pinning numpy<2 (as the old block did)
+# conflicts with requirements.txt and leaves the .pkl bundles un-loadable at
+# runtime. Separate venv from venv-api, which keeps numpy<2 for its osgeo ABI.
 COPY bathymetry-service/requirements.txt /tmp/req-bathy.txt
 RUN python3 -m venv /opt/venv-bathy \
     && /opt/venv-bathy/bin/pip install --no-cache-dir -U pip setuptools wheel \
-    && /opt/venv-bathy/bin/pip install --no-cache-dir -c /tmp/constraints.txt "numpy<2" \
-    && /opt/venv-bathy/bin/pip install --no-cache-dir torch==2.2.2 --index-url https://download.pytorch.org/whl/cpu \
-    && /opt/venv-bathy/bin/pip install --no-cache-dir -c /tmp/constraints.txt -r /tmp/req-bathy.txt
+    && /opt/venv-bathy/bin/pip install --no-cache-dir torch==2.7.0 --index-url https://download.pytorch.org/whl/cpu \
+    && /opt/venv-bathy/bin/pip install --no-cache-dir -r /tmp/req-bathy.txt
 
 # ---- VMarch platform python env (/opt/venv-vmarch) --------------------------
 # The user's actual Bathymetry_VMarch platform (vmarch-core) — the

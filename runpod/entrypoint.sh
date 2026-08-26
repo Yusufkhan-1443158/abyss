@@ -26,6 +26,10 @@ cp -f "$KEYS/jwt-secret.txt"            "$SECRETS/jwt_secret"
 cp -f "$KEYS/seed-admin-password.txt"   "$SECRETS/seed_admin_password"
 cp -f "$KEYS/seed-analyst-password.txt" "$SECRETS/seed_analyst_password"
 cp -f "$KEYS/seed-viewer-password.txt"  "$SECRETS/seed_viewer_password"
+# Fixed admin password (override the random one GENERATE.sh just wrote), so the
+# admin login is stable across every boot/redeploy instead of regenerating.
+# Override without a rebuild by setting SEED_ADMIN_PASSWORD in the pod env.
+printf '%s' "${SEED_ADMIN_PASSWORD:-Orbion26}" > "$SECRETS/seed_admin_password"
 # Anthropic key: operator-supplied via env; empty ⇒ assistant "not configured".
 if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
   printf '%s' "$ANTHROPIC_API_KEY" > "$SECRETS/anthropic_api_key"
